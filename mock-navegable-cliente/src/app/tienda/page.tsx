@@ -1,0 +1,152 @@
+import Link from "next/link";
+import { MOCK_SCORES } from "@/lib/mock-data";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
+
+export default function TiendaPage() {
+  return (
+    <div className="min-h-screen bg-[#F9F9FF] text-[#111C2D] flex flex-col font-inter antialiased selection:bg-[#FBB03B]/30 selection:text-[#111C2D]">
+      
+      {/* Header Fijo con Estilo Stitch */}
+      <Header activePage="tienda" />
+
+      {/* Main Content */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-10 flex flex-col md:flex-row gap-8 min-w-0">
+        
+        {/* Sidebar Filtros */}
+        <aside className="w-full md:w-64 space-y-6 shrink-0">
+          <div className="bg-white p-6 rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)]">
+            <h3 className="font-montserrat font-extrabold text-lg mb-4 text-[#111C2D] flex items-center gap-2">
+              <span className="material-symbols-outlined text-[#0071BC]">tune</span>
+              Filtros
+            </h3>
+
+            {/* Categorías */}
+            <div className="mb-6">
+              <label className="text-xs font-extrabold uppercase tracking-wider text-[#0071BC] block mb-3 font-montserrat">Categoría</label>
+              <div className="space-y-2.5 text-xs text-[#4C4546] font-medium">
+                {["Todas", "Piano Solo", "Piano 4 Manos", "Piano y Orquesta", "Música de Cámara", "Piezas Pedagógicas"].map((cat, i) => (
+                  <label key={i} className="flex items-center gap-2.5 cursor-pointer hover:text-[#111C2D] transition">
+                    <input type="checkbox" defaultChecked={i === 0} className="w-4 h-4 rounded accent-[#0071BC] border-black/10" />
+                    <span>{cat}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Nivel */}
+            <div className="mb-6">
+              <label className="text-xs font-extrabold uppercase tracking-wider text-[#0071BC] block mb-3 font-montserrat">Nivel de Dificultad</label>
+              <div className="space-y-2.5 text-xs text-[#4C4546] font-medium">
+                {["Principiante", "Intermedio", "Avanzado", "Virtuoso"].map((lvl, i) => (
+                  <label key={i} className="flex items-center gap-2.5 cursor-pointer hover:text-[#111C2D] transition">
+                    <input type="checkbox" className="w-4 h-4 rounded accent-[#0071BC] border-black/10" />
+                    <span>{lvl}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Rango de precio */}
+            <div>
+              <label className="text-xs font-extrabold uppercase tracking-wider text-[#0071BC] block mb-3 font-montserrat">Precio COP</label>
+              <input type="range" min="10000" max="150000" step="5000" className="w-full accent-[#0071BC]" />
+              <div className="flex justify-between text-xs text-[#4C4546] mt-2 font-bold font-montserrat">
+                <span>$10.000</span>
+                <span>$150.000+</span>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        {/* Catalog Grid */}
+        <section className="flex-1 min-w-0">
+          
+          {/* Header Banner del Catálogo */}
+          <div className="bg-white p-6 rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#F0F3FF] text-[10px] font-extrabold text-[#0071BC] uppercase tracking-wider font-montserrat mb-2 border border-[#0071BC]/10">
+                <span className="material-symbols-outlined text-xs">verified</span> Edición Filológica & Urtext
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-black font-montserrat text-[#111C2D]">Catálogo de Partituras</h1>
+              <p className="text-xs text-[#4C4546] mt-1 font-medium">Repertorio revisado con marcaciones de digitación y licencias legalmente firmadas.</p>
+            </div>
+            <span className="text-xs text-[#4C4546] font-bold font-montserrat bg-[#F0F3FF] px-3.5 py-1.5 rounded-full shrink-0 border border-black/5">
+              {MOCK_SCORES.length} partituras disponibles
+            </span>
+          </div>
+
+          {/* Product Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {MOCK_SCORES.map((score) => (
+              <div key={score.id} className="group flex flex-col rounded-2xl bg-white border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 overflow-hidden">
+                
+                {/* Miniature Preview Container */}
+                <div className="relative aspect-[4/3] bg-[#F9F9FF] p-4 flex flex-col justify-between overflow-hidden border-b border-black/5">
+                  <div className="flex items-center justify-between z-10">
+                    <span className="px-2.5 py-1 rounded-full bg-[#FBB03B]/20 text-[#111C2D] font-montserrat font-extrabold text-[10px] uppercase">
+                      {score.category}
+                    </span>
+                    <span className="text-[10px] font-bold px-2.5 py-1 bg-white border border-black/10 text-[#4C4546] rounded-full shadow-2xs font-montserrat">
+                      {score.level}
+                    </span>
+                  </div>
+
+                  {/* Stylized Miniature Score Staves */}
+                  <div className="py-2 opacity-40 select-none text-center">
+                    <div className="h-0.5 w-full bg-slate-300 my-1"></div>
+                    <div className="h-0.5 w-full bg-slate-300 my-1"></div>
+                    <div className="h-0.5 w-full bg-slate-300 my-1"></div>
+                    <div className="h-0.5 w-full bg-slate-300 my-1"></div>
+                    <div className="mt-2 font-serif italic text-[#111C2D] font-bold text-sm">{score.title}</div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-[#4C4546] font-medium z-10">
+                    <span className="flex items-center gap-1">
+                      <span className="material-symbols-outlined text-sm text-[#0071BC]">picture_as_pdf</span>
+                      Formato Vectorial
+                    </span>
+                    <span className="text-[#0071BC] font-bold">PDF Imprimible</span>
+                  </div>
+                </div>
+
+                {/* Body */}
+                <div className="p-5 flex-1 flex flex-col justify-between">
+                  <div>
+                    <h3 className="text-base font-bold text-[#111C2D] font-montserrat group-hover:text-[#0071BC] transition-colors leading-snug">
+                      {score.title}
+                    </h3>
+                    <p className="text-xs text-[#4C4546] font-semibold mt-1">Por {score.composer}</p>
+                    <p className="text-xs text-[#4C4546] mt-2 line-clamp-2 leading-relaxed font-normal">
+                      {score.description}
+                    </p>
+                  </div>
+
+                  <div className="mt-5 pt-3 border-t border-black/5 flex justify-between items-center">
+                    <div>
+                      <span className="text-base font-black text-[#111C2D] font-montserrat">${score.priceCOP.toLocaleString('es-CO')} COP</span>
+                      <span className="text-[10px] text-[#4C4546] block font-medium">~${score.priceUSD} USD</span>
+                    </div>
+                    <Link
+                      href={`/partitura/${score.slug}`}
+                      className="px-3.5 py-2 bg-[#FBB03B] hover:bg-[#e09b2d] text-[#111C2D] font-extrabold text-xs uppercase tracking-wider rounded-xl transition shadow-xs font-montserrat flex items-center gap-1"
+                    >
+                      <span>Ver Detalle</span>
+                      <span className="material-symbols-outlined text-xs">north_east</span>
+                    </Link>
+                  </div>
+                </div>
+
+              </div>
+            ))}
+          </div>
+        </section>
+
+      </main>
+
+      {/* Footer Elegante Stitch */}
+      <Footer />
+
+    </div>
+  );
+}

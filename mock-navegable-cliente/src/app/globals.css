@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+/* -------------------------------------------------------------------------- */
+/*  Piano Colombia — Stitch Design System (Project ID: 224120254794803236)   */
+/* -------------------------------------------------------------------------- */
+
+:root {
+  /* Brand Accent Colors */
+  --pc-yellow: #FBB03B;
+  --pc-gold: #F5A623;
+  --pc-gold-hover: #D98E18;
+  --pc-blue: #0071BC;
+  --pc-blue-hover: #005691;
+  --pc-crimson: #C1272D;
+
+  /* Paper & Ebony Neutrals */
+  --pc-canvas: #F9F9FF;
+  --pc-surface: #FFFFFF;
+  --pc-surface-low: #F0F3FF;
+  --pc-surface-container: #E7EEFF;
+  --pc-surface-high: #DEE8FF;
+  --pc-surface-highest: #D8E3FB;
+  
+  --pc-text-dark: #111C2D;
+  --pc-text-muted: #4C4546;
+  --pc-text-light: #7E7576;
+  --pc-hairline: rgba(0, 0, 0, 0.06);
+
+  --background: var(--pc-canvas);
+  --foreground: var(--pc-text-dark);
+}
+
+body {
+  background: var(--pc-canvas);
+  color: var(--pc-text-dark);
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, sans-serif;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4, .font-adam, .font-montserrat {
+  font-family: var(--font-montserrat), 'Adam', sans-serif;
+}
+
+/* Stitch Elevation & UI Utilities */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.04);
+}
+
+.glass-card {
+  background: #FFFFFF;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02), 0 4px 12px rgba(0, 0, 0, 0.03);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card:hover {
+  border-color: rgba(0, 113, 188, 0.3);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06), 0 2px 6px rgba(0, 0, 0, 0.04);
+  transform: translateY(-2px);
+}

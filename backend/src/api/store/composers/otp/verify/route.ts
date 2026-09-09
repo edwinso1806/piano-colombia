@@ -1,0 +1,135 @@
+import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
+import { COMPOSER_MODULE } from "../../../../../modules/composer"
+import { verifyComposerRegistrationOtp } from "../../../../../lib/otp-service"
+import { hashPassword } from "../../../../../lib/auth-security"
+import { getAdminAndModeratorEmailsFromDB } from "../../../../../lib/admin-recipient-service"
+import { sendEmail, generateNewComposerAdminNotificationHTML } from "../../../../../lib/resend-mailer"
+
+export async function POST(req: MedusaRequest, res: MedusaResponse) {
+  try {
+    const composerModuleService = req.scope.resolve(COMPOSER_MODULE)
+    const { email, code } = (req.body as any) || {}
+
+    if (!email || !code) {
+      return res.status(400).json({
+        message: "El correo electrónico y el código de 6 dígitos son obligatorios",
+      })
+    }
+
+    const normalizedEmail = email.trim().toLowerCase()
+
+    // 1. Validar código OTP
+    const verification = verifyComposerRegistrationOtp(normalizedEmail, code)
+    if (!verification.valid || !verification.payload) {
+      return res.status(400).json({
+        message: verification.error || "Código de verificación inválido o expirado.",
+      })
+    }
+
+    const data = verification.payload
+    const docNumber = data.bank_account?.document_number?.trim()
+
+    // 2. Re-verificar que no exista duplicado en DB justo antes de insertar
+    const [existingComposers] = await composerModuleService.listAndCountComposers({
+      email: normalizedEmail,
+    })
+
+    if (existingComposers && existingComposers.length > 0) {
+      return res.status(400).json({
+        message: "Este correo electrónico ya fue registrado previamente como compositor.",
+      })
+    }
+
+    if (docNumber) {
+      const [existingAccounts] = await composerModuleService.listAndCountComposerBankAccounts({
+        document_number: docNumber,
+      })
+
+      if (existingAccounts && existingAccounts.length > 0) {
+        return res.status(400).json({
+          message: "Este número de documento ya fue registrado previamente por otro compositor.",
+        })
+      }
+    }
+
+    // Hash de contraseña si aplica
+    let password_hash: string | undefined = undefined
+    let salt: string | undefined = undefined
+    if (data.password) {
+      const security = hashPassword(data.password)
+      password_hash = security.hash
+      salt = security.salt
+    }
+
+    const baseSlug = `${data.first_name}-${data.last_name || ""}`
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+    const uniqueSlug = `${baseSlug}-${Date.now().toString().slice(-4)}`
+
+    // 3. Crear perfil de compositor en PostgreSQL DB
+    const composer = await composerModuleService.createComposers({
+      first_name: data.first_name,
+      last_name: data.last_name || "",
+      artistic_name: data.artistic_name || `${data.first_name} ${data.last_name || ""}`.trim(),
+      slug: uniqueSlug,
+      email: normalizedEmail,
+      phone: data.phone || null,
+      region: data.region || null,
+      status: "PENDING_APPROVAL",
+    })
+
+    // 4. Crear cuenta bancaria vinculada
+    if (data.bank_account) {
+      await composerModuleService.createComposerBankAccounts({
+        ...data.bank_account,
+        holder_name: data.bank_account.holder_name || `${data.first_name} ${data.last_name || ""}`.trim(),
+        composer_id: composer.id,
+      })
+    }
+
+    console.log(`✅ [COMPOSER VERIFIED] Solicitud de compositor verificada y guardada para ${normalizedEmail}`)
+
+    // 5. Consultar DINÁMICAMENTE los correos de Super Administradores y Moderadores desde la BD
+    try {
+      const adminRecipients = await getAdminAndModeratorEmailsFromDB(req)
+      const composerFullName = `${data.first_name} ${data.last_name || ""}`.trim()
+      const artisticName = data.artistic_name || composerFullName
+
+      console.log(`📧 Enviando notificaciones a ${adminRecipients.length} casillas administrativas/moderadoras de la BD...`)
+
+      for (const recipient of adminRecipients) {
+        await sendEmail({
+          to: recipient.email,
+          subject: `🚨 Nueva Solicitud de Compositor Pendiente de Aprobación - ${artisticName}`,
+          html: generateNewComposerAdminNotificationHTML({
+            adminName: recipient.name,
+            composerName: composerFullName,
+            artisticName,
+            email: normalizedEmail,
+            phone: data.phone,
+            region: data.region,
+            documentType: data.bank_account?.document_type,
+            documentNumber: data.bank_account?.document_number,
+            bankName: data.bank_account?.bank_name,
+            accountType: data.bank_account?.account_type,
+            accountNumber: data.bank_account?.account_number,
+          }),
+        })
+      }
+    } catch (emailErr) {
+      console.warn("⚠️ Advertencia notificando a los administradores por correo:", emailErr)
+    }
+
+    return res.status(201).json({
+      success: true,
+      composer,
+      message: "¡Correo electrónico verificado exitosamente! Tu solicitud de registro de compositor ha sido ingresada para moderación.",
+    })
+  } catch (error: any) {
+    console.error("❌ Error verificando OTP de compositor:", error)
+    return res.status(500).json({
+      message: error.message || "Error al completar el registro del compositor",
+    })
+  }
+}

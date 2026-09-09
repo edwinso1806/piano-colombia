@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment Variables & Secrets
+.env
+.env*
+**/.env
+**/.env*
+!.env.template
+!**/.env.template
+
+# Next.js Build
+.next/
+**/.next/
+out/
+**/out/
+
+# Medusa Build & Cache
+.medusa/
+**/.medusa/
+dist/
+**/dist/
+build/
+**/build/
+.cache/
+**/.cache/
+coverage/
+**/coverage/
+
+# Logs & Debug
+*.log
+**/*.log
+yarn-error.log*
+npm-debug.log*
+
+# OS & IDE
+.DS_Store
+**/.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.tsbuildinfo
