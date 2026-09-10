@@ -1,11 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
-import { getComposerScoresApi } from "@/lib/api-client";
+import {
+  getComposerScoresApi,
+  updateScoreApi,
+  uploadFileApi,
+} from "@/lib/api-client";
+import { generateScoreBlurredPreviews } from "@/lib/pdf-preview-generator";
+import {
+  getUsdCopExchangeRate,
+  convertCopToUsd,
+  convertUsdToCop,
+} from "@/lib/exchange-rate-service";
 
 function CompositorDashboardContent() {
   const { composer } = useAuth();
@@ -17,6 +27,140 @@ function CompositorDashboardContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const [scores, setScores] = useState<any[]>([]);
   const [loadingScores, setLoadingScores] = useState(true);
+
+  // Exchange rate (TRM)
+  const [usdRate, setUsdRate] = useState<number>(3900);
+
+  // Edit/Correction Modal State
+  const [editingScore, setEditingScore] = useState<any | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editCategory, setEditCategory] = useState("");
+  const [editDifficulty, setEditDifficulty] = useState("");
+  const [editPriceCOP, setEditPriceCOP] = useState(45000);
+  const [editPriceUSD, setEditPriceUSD] = useState(12);
+  const [editAudioLink, setEditAudioLink] = useState("");
+  const [editTonality, setEditTonality] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editPagesCount, setEditPagesCount] = useState(4);
+  const [editPdfFile, setEditPdfFile] = useState<File | null>(null);
+  const [editPreviewImages, setEditPreviewImages] = useState<string[]>([]);
+  const [isProcessingEditPdf, setIsProcessingEditPdf] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [feedbackMsg, setFeedbackMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const editFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load TRM rate on mount
+  useEffect(() => {
+    async function fetchTrm() {
+      const { rate } = await getUsdCopExchangeRate();
+      setUsdRate(rate);
+    }
+    fetchTrm();
+  }, []);
+
+  const openEditModal = (score: any) => {
+    setEditingScore(score);
+    setEditTitle(score.title || "");
+    setEditCategory(score.genre || "Pasillo");
+    setEditDifficulty(score.difficulty || "Intermedio");
+    setEditPriceCOP(score.price_cop || 45000);
+    setEditPriceUSD(score.price_usd || convertCopToUsd(score.price_cop || 45000, usdRate));
+    setEditAudioLink(score.audio_sample_url || score.audio_preview_url || "");
+    setEditTonality(score.tonality || "");
+    setEditDescription(score.description_es || score.description || "");
+    setEditPagesCount(score.pages_count || 4);
+    setEditPdfFile(null);
+    setEditPreviewImages(score.preview_images || []);
+    setEditError(null);
+  };
+
+  const handleEditPdfSelected = async (file: File) => {
+    if (!file) return;
+    setEditPdfFile(file);
+    setIsProcessingEditPdf(true);
+    try {
+      const { previewImages: generatedImages, pagesCount: count } = await generateScoreBlurredPreviews(
+        file,
+        editTitle || file.name
+      );
+      setEditPreviewImages(generatedImages);
+      if (count > 0) setEditPagesCount(count);
+    } catch (err: any) {
+      console.warn("Aviso generando previas en edición:", err.message);
+    } finally {
+      setIsProcessingEditPdf(false);
+    }
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingScore) return;
+    setEditError(null);
+    setIsSavingEdit(true);
+
+    try {
+      let masterPdfUrl = editingScore.original_pdf_url;
+      let previewPdfUrl = editingScore.preview_pdf_url;
+      let newPreviews = editPreviewImages;
+
+      // Si se seleccionó un nuevo PDF maestro, subirlo a Cloudflare R2
+      if (editPdfFile) {
+        const fileBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error("Error al leer el archivo PDF local."));
+          reader.readAsDataURL(editPdfFile);
+        });
+
+        const uploadRes = await uploadFileApi({
+          base64: fileBase64,
+          fileName: editPdfFile.name,
+          fileType: editPdfFile.type || "application/pdf",
+          folder: "master-scores",
+        });
+
+        if (!uploadRes || (!uploadRes.url && !uploadRes.key)) {
+          throw new Error("No se pudo subir el nuevo archivo PDF a Cloudflare R2.");
+        }
+
+        masterPdfUrl = uploadRes.url || `/store/media?key=${encodeURIComponent(uploadRes.key)}`;
+        previewPdfUrl = masterPdfUrl;
+      }
+
+      await updateScoreApi(editingScore.id, {
+        title: editTitle,
+        genre: editCategory,
+        difficulty: editDifficulty,
+        price_cop: editPriceCOP,
+        price_usd: editPriceUSD,
+        audio_preview_url: editAudioLink || null,
+        description: editDescription || null,
+        tonality: editTonality || null,
+        pages_count: editPagesCount,
+        preview_images: newPreviews,
+        original_pdf_url: masterPdfUrl,
+        preview_pdf_url: previewPdfUrl,
+      });
+
+      setFeedbackMsg({
+        type: "success",
+        text: `✅ Obra "${editTitle}" corregida y reenviada a revisión técnica. Se notificó al equipo de curaduría.`,
+      });
+      setEditingScore(null);
+
+      // Re-cargar lista de partituras desde la base de datos
+      if (composer?.id) {
+        const data = await getComposerScoresApi(composer.id);
+        setScores(data || []);
+      }
+    } catch (err: any) {
+      setEditError(err.message || "Error al actualizar la partitura.");
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
 
   // Leer parámetros de URL (?tab=partituras&filter=revision)
   useEffect(() => {
@@ -487,6 +631,26 @@ function CompositorDashboardContent() {
 
                         <td className="py-4 px-6 text-right">
                           <div className="flex items-center justify-end gap-2">
+                            {score.status === "REJECTED" && (
+                              <button
+                                onClick={() => openEditModal(score)}
+                                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs transition font-montserrat inline-flex items-center gap-1 shadow-sm"
+                              >
+                                <span className="material-symbols-outlined text-sm">edit_note</span>
+                                {t("dashboard.correct_score_btn", "Ver Observaciones & Corregir")}
+                              </button>
+                            )}
+
+                            {score.status === "IN_REVIEW" && (
+                              <button
+                                onClick={() => openEditModal(score)}
+                                className="px-3 py-1.5 bg-[#F0F3FF] hover:bg-slate-200/80 text-[#111C2D] rounded-xl font-bold text-xs transition font-montserrat inline-flex items-center gap-1 border border-black/5"
+                              >
+                                <span className="material-symbols-outlined text-sm">edit</span>
+                                {t("dashboard.edit_score_btn", "Editar")}
+                              </button>
+                            )}
+
                             {score.status === "APPROVED" && score.slug && (
                               <Link
                                 href={`/partitura/${score.slug}`}
@@ -504,6 +668,257 @@ function CompositorDashboardContent() {
                 </table>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE EDICIÓN Y SUBSANACIÓN DE PARTITURAS */}
+      {editingScore && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl space-y-6 my-8 border border-black/10 text-[#111C2D]">
+            <div className="flex items-center justify-between border-b border-black/5 pb-4">
+              <div>
+                <h3 className="text-xl font-black font-montserrat text-[#111C2D]">
+                  {editingScore.status === "REJECTED" ? "Corregir & Reenviar Partitura" : "Editar Partitura"}
+                </h3>
+                <p className="text-xs text-[#4C4546]">
+                  Obra: <span className="font-bold">{editingScore.title}</span>
+                </p>
+              </div>
+              <button
+                onClick={() => setEditingScore(null)}
+                className="p-1 rounded-lg text-[#4C4546] hover:bg-slate-100 transition"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            {/* BANNER DE NOTAS DE RECHAZO SI APLICA */}
+            {editingScore.status === "REJECTED" && (
+              <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl space-y-1 text-xs">
+                <div className="flex items-center gap-1.5 font-bold text-rose-800 font-montserrat">
+                  <span className="material-symbols-outlined text-base">warning</span>
+                  <span>Observaciones del Equipo de Curaduría:</span>
+                </div>
+                <p className="text-rose-900 leading-relaxed font-medium pl-5">
+                  {editingScore.rejection_notes || "Por favor revisa el archivo PDF cargado o la información técnica suministrada para cumplir los estándares de edición Urtext."}
+                </p>
+              </div>
+            )}
+
+            {editError && (
+              <div className="p-3 bg-rose-50 text-rose-700 text-xs font-bold rounded-xl border border-rose-200 font-montserrat">
+                ⚠️ {editError}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveEdit} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-[#111C2D] mb-1 font-montserrat">
+                  Título de la Obra *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-[#F0F3FF] border border-black/5 rounded-xl font-medium text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-bold text-[#111C2D] mb-1 font-montserrat">
+                    Género / Estilo *
+                  </label>
+                  <select
+                    value={editCategory}
+                    onChange={(e) => setEditCategory(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-[#F0F3FF] border border-black/5 rounded-xl font-medium text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                  >
+                    <option value="Pasillo">Pasillo</option>
+                    <option value="Bambuco">Bambuco</option>
+                    <option value="Cumbia">Cumbia</option>
+                    <option value="Guabina">Guabina</option>
+                    <option value="Joropo">Joropo</option>
+                    <option value="Vallenato">Vallenato</option>
+                    <option value="Porro">Porro</option>
+                    <option value="Currulao">Currulao</option>
+                    <option value="Danza">Danza</option>
+                    <option value="Vals">Vals</option>
+                    <option value="Sinfónico / Clásico">Sinfónico / Clásico</option>
+                    <option value="Otro">Otro Ritmo</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-[#111C2D] mb-1 font-montserrat">
+                    Dificultad *
+                  </label>
+                  <select
+                    value={editDifficulty}
+                    onChange={(e) => setEditDifficulty(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-[#F0F3FF] border border-black/5 rounded-xl font-medium text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                  >
+                    <option value="Principiante">Principiante (Nivel 1 - 3)</option>
+                    <option value="Intermedio">Intermedio (Nivel 4 - 6)</option>
+                    <option value="Avanzado">Avanzado (Nivel 7 - 9)</option>
+                    <option value="Virtuoso">Virtuoso (Nivel 10+)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Precios COP y USD con TRM Dinámica */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-bold text-[#111C2D] mb-1 font-montserrat">
+                    Precio en Pesos Colombianos (COP) *
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-[#4C4546]">$</span>
+                    <input
+                      type="number"
+                      min={5000}
+                      max={1000000}
+                      step="any"
+                      required
+                      value={editPriceCOP}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value) || 0;
+                        setEditPriceCOP(val);
+                        setEditPriceUSD(convertCopToUsd(val, usdRate));
+                      }}
+                      className="w-full pl-7 pr-12 py-2.5 bg-[#F0F3FF] border border-black/5 rounded-xl font-bold font-mono text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-[10px] text-[#4C4546]">COP</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-[#111C2D] mb-1 font-montserrat">
+                    Precio en Dólares (USD)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-[#4C4546]">$</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={300}
+                      step="any"
+                      required
+                      value={editPriceUSD}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value) || 0;
+                        setEditPriceUSD(val);
+                        setEditPriceCOP(convertUsdToCop(val, usdRate));
+                      }}
+                      className="w-full pl-7 pr-12 py-2.5 bg-[#F0F3FF] border border-black/5 rounded-xl font-bold font-mono text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-[10px] text-[#4C4546]">USD</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tonalidad y Muestra de Audio */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-bold text-[#111C2D] mb-1 font-montserrat">
+                    Tonalidad
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ej. Do menor / C minor"
+                    value={editTonality}
+                    onChange={(e) => setEditTonality(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-[#F0F3FF] border border-black/5 rounded-xl font-medium text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-[#111C2D] mb-1 font-montserrat">
+                    Enlace de Audio / Video (Spotify/YouTube/Drive)
+                  </label>
+                  <input
+                    type="url"
+                    placeholder="https://..."
+                    value={editAudioLink}
+                    onChange={(e) => setEditAudioLink(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-[#F0F3FF] border border-black/5 rounded-xl font-medium text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                  />
+                </div>
+              </div>
+
+              {/* Descripción */}
+              <div>
+                <label className="block font-bold text-[#111C2D] mb-1 font-montserrat">
+                  Descripción / Notas de la Obra
+                </label>
+                <textarea
+                  rows={3}
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  placeholder="Detalles sobre el arreglo, contexto histórico, indicación de tempo..."
+                  className="w-full px-3.5 py-2.5 bg-[#F0F3FF] border border-black/5 rounded-xl font-medium text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                />
+              </div>
+
+              {/* Cargar o Reemplazar PDF Maestro */}
+              <div>
+                <label className="block font-bold text-[#111C2D] mb-1 font-montserrat">
+                  Reemplazar Archivo PDF Maestro (Opcional si solo corriges metadatos)
+                </label>
+                <div
+                  onClick={() => editFileInputRef.current?.click()}
+                  className="p-4 bg-[#F0F3FF] border-2 border-dashed border-[#0071BC]/30 hover:border-[#0071BC] rounded-xl text-center cursor-pointer transition"
+                >
+                  <input
+                    ref={editFileInputRef}
+                    type="file"
+                    accept="application/pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) handleEditPdfSelected(e.target.files[0]);
+                    }}
+                  />
+                  <div className="flex items-center justify-center gap-2 text-[#0071BC] font-bold font-montserrat">
+                    <span className="material-symbols-outlined">upload_file</span>
+                    <span>{editPdfFile ? editPdfFile.name : "Seleccionar nuevo PDF en tu equipo"}</span>
+                  </div>
+                  {isProcessingEditPdf && (
+                    <p className="text-[10px] text-amber-700 font-bold mt-1 animate-pulse">
+                      ⏳ Procesando PDF y generando muestras difuminadas...
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-black/5">
+                <button
+                  type="button"
+                  onClick={() => setEditingScore(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-[#111C2D] font-bold rounded-xl transition font-montserrat"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingEdit || isProcessingEditPdf}
+                  className="px-5 py-2 bg-[#0071BC] hover:bg-[#005a96] disabled:opacity-50 text-white font-bold rounded-xl transition font-montserrat flex items-center gap-2"
+                >
+                  {isSavingEdit ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Guardando y Subiendo a Cloudflare...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-sm">send</span>
+                      <span>Guardar & Reenviar a Revisión</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -184,31 +184,39 @@ export default function NuevaPartituraPage() {
 
     try {
       // 1. Subir archivo maestro PDF a Cloudflare R2 en la nube
-      let masterPdfUrl = `/master-scores/${Date.now()}-${pdfFile?.name || "score.pdf"}`;
-
-      if (pdfFile) {
-        try {
-          const fileBase64 = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = (e) => reject(e);
-            reader.readAsDataURL(pdfFile);
-          });
-
-          const uploadRes = await uploadFileApi({
-            base64: fileBase64,
-            fileName: pdfFile.name,
-            fileType: pdfFile.type || "application/pdf",
-            folder: "master-scores",
-          });
-
-          if (uploadRes && (uploadRes.url || uploadRes.key)) {
-            masterPdfUrl = uploadRes.url || `/store/media?key=${encodeURIComponent(uploadRes.key)}`;
-          }
-        } catch (uploadErr: any) {
-          console.warn("Aviso al subir PDF a Cloudflare R2, utilizando referencia predeterminada:", uploadErr.message);
-        }
+      if (!pdfFile) {
+        setPdfError(
+          language === "en"
+            ? "Please upload the score's master PDF file."
+            : "Por favor adjunta el archivo PDF maestro de la partitura."
+        );
+        setIsSubmitting(false);
+        return;
       }
+
+      const fileBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error("Error al leer el archivo PDF local."));
+        reader.readAsDataURL(pdfFile);
+      });
+
+      const uploadRes = await uploadFileApi({
+        base64: fileBase64,
+        fileName: pdfFile.name,
+        fileType: pdfFile.type || "application/pdf",
+        folder: "master-scores",
+      });
+
+      if (!uploadRes || (!uploadRes.url && !uploadRes.key)) {
+        throw new Error(
+          language === "en"
+            ? "Failed to store PDF file in Cloudflare R2 cloud storage. Please try again."
+            : "No se pudo guardar el archivo PDF maestro en Cloudflare R2. Por favor verifica tu conexión e intenta de nuevo."
+        );
+      }
+
+      const masterPdfUrl = uploadRes.url || `/store/media?key=${encodeURIComponent(uploadRes.key)}`;
 
       // 2. Crear partitura en el catálogo a través de createScoreApi
       await createScoreApi({
