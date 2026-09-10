@@ -23,6 +23,10 @@ function customCorsMiddleware(req: MedusaRequest, res: MedusaResponse, next: Med
 export default defineMiddlewares({
   routes: [
     {
+      matcher: "/media*",
+      middlewares: [customCorsMiddleware],
+    },
+    {
       matcher: "/store/media*",
       middlewares: [customCorsMiddleware],
     },

@@ -38,6 +38,13 @@ const getPdfUrl = (url?: string) => {
   if (!url) return "#";
   if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) return url;
   const backendUrl = process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL || "http://localhost:9000";
+
+  // Si no incluye el endpoint /media?key=, convertirlo a la URL de transmisión
+  if (!url.includes("/media?key=")) {
+    const cleanKey = url.replace(/^\//, "");
+    return `${backendUrl}/media?key=${encodeURIComponent(cleanKey)}`;
+  }
+
   return `${backendUrl}${url.startsWith("/") ? "" : "/"}${url}`;
 };
 
