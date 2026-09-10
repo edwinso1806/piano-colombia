@@ -741,14 +741,21 @@ export async function updateAdminCatalogMetadata(payload: { categories?: string[
 // ----------------------------------------------------------------------
 
 export async function createScoreApi(scoreData: Record<string, unknown>) {
-  const res = await fetch(`${MEDUSA_URL}/store/scores`, {
-    method: "POST",
-    headers: defaultHeaders,
-    body: JSON.stringify(scoreData),
-  })
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(data.message || "Error al enviar la partitura")
-  return data
+  try {
+    const res = await fetch(`${MEDUSA_URL}/store/scores`, {
+      method: "POST",
+      headers: defaultHeaders,
+      body: JSON.stringify(scoreData),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.message || "Error al enviar la partitura")
+    return data
+  } catch (err: any) {
+    if (err.name === "TypeError" && (err.message.includes("Failed to fetch") || err.message.includes("fetch failed"))) {
+      throw new Error("No se pudo conectar con el backend de Medusa. Verifique que el servicio esté corriendo en http://localhost:9000")
+    }
+    throw err
+  }
 }
 
 export async function updateScoreApi(slugOrId: string, scoreData: Record<string, unknown>) {

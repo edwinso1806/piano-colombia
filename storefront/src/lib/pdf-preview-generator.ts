@@ -210,7 +210,7 @@ function generateFallbackPreview(pageNum: number, scoreTitle: string): string {
   // Aplicar protección y marca de agua
   applyProtectionWatermarkAndBlur(ctx, canvas.width, canvas.height, pageNum)
 
-  return canvas.toDataURL("image/jpeg", 0.85)
+  return canvas.toDataURL("image/jpeg", 0.65)
 }
 
 export interface GeneratedScorePreviewsResult {
@@ -255,8 +255,8 @@ export async function generateScoreBlurredPreviews(
       const pageIndex = targetPages[i]
       const page = await pdfDoc.getPage(pageIndex)
 
-      // Escala para alta definición (viewport 1.5x a 2x)
-      const viewport = page.getViewport({ scale: 1.6 })
+      // Escala optimizada para vista previa clara y ligera (700-900px de ancho)
+      const viewport = page.getViewport({ scale: 1.1 })
 
       const canvas = document.createElement("canvas")
       canvas.width = viewport.width
@@ -275,7 +275,7 @@ export async function generateScoreBlurredPreviews(
       // Estampar la marca de agua y el difuminado protector
       applyProtectionWatermarkAndBlur(ctx, canvas.width, canvas.height, i + 1)
 
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.85)
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.65)
       previewImages.push(dataUrl)
     }
 

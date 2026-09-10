@@ -42,6 +42,9 @@ export default defineMiddlewares({
     },
     {
       matcher: "/store/scores*",
+      bodyParser: {
+        sizeLimit: "30mb",
+      },
       middlewares: [customCorsMiddleware],
     },
     {
