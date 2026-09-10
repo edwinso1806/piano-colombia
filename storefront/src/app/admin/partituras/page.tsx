@@ -34,6 +34,13 @@ interface ScoreItem {
   };
 }
 
+const getPdfUrl = (url?: string) => {
+  if (!url) return "#";
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) return url;
+  const backendUrl = process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL || "http://localhost:9000";
+  return `${backendUrl}${url.startsWith("/") ? "" : "/"}${url}`;
+};
+
 export default function AdminPartiturasPage() {
   const [scores, setScores] = useState<ScoreItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -291,7 +298,21 @@ export default function AdminPartiturasPage() {
 
                   {/* Botones de Acción */}
                   <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
-                    {/* Botón Inspeccionar */}
+                    {/* Botón Descargar PDF Maestro */}
+                    {(s.original_pdf_url || s.preview_pdf_url) && (
+                      <a
+                        href={getPdfUrl(s.original_pdf_url || s.preview_pdf_url)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        download={`${s.slug || "partitura"}-master.pdf`}
+                        className="px-4 py-2.5 bg-[#0071BC] hover:bg-[#005a96] text-white font-extrabold text-xs rounded-xl transition font-montserrat flex items-center gap-1.5 cursor-pointer shadow-xs"
+                      >
+                        <span className="material-symbols-outlined text-base">picture_as_pdf</span>
+                        <span>Descargar PDF Maestro</span>
+                      </a>
+                    )}
+
+                    {/* Botón Inspeccionar Muestras */}
                     <button
                       type="button"
                       onClick={() => setInspectingScore(s)}
@@ -474,6 +495,35 @@ export default function AdminPartiturasPage() {
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
+
+            {/* Banner de Descarga del Archivo Maestro PDF */}
+            {(inspectingScore.original_pdf_url || inspectingScore.preview_pdf_url) && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-2xl flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#0071BC] text-white flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-xl">picture_as_pdf</span>
+                  </div>
+                  <div>
+                    <span className="text-xs font-black text-[#111C2D] block font-montserrat">
+                      Documento Maestro PDF Completo
+                    </span>
+                    <span className="text-[11px] text-slate-500 font-medium leading-tight block">
+                      Archivo original en alta resolución sin marcas de agua para la revisión del curador editorial.
+                    </span>
+                  </div>
+                </div>
+                <a
+                  href={getPdfUrl(inspectingScore.original_pdf_url || inspectingScore.preview_pdf_url)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  download={`${inspectingScore.slug || "partitura"}-master.pdf`}
+                  className="px-4 py-2.5 bg-[#0071BC] hover:bg-[#005a96] text-white text-xs font-extrabold rounded-xl font-montserrat flex items-center gap-1.5 shadow-xs shrink-0"
+                >
+                  <span className="material-symbols-outlined text-base">download</span>
+                  <span>Descargar PDF Maestro</span>
+                </a>
+              </div>
+            )}
 
             {/* Muestras con marca de agua */}
             <div className="space-y-4">
