@@ -603,8 +603,8 @@ export default function NuevaPartituraPage() {
                     </div>
                     <input
                       type="number"
-                      step={1000}
-                      min={10000}
+                      step="any"
+                      min={1000}
                       value={priceCOP === 0 ? "" : priceCOP}
                       onChange={handleCopInputChange}
                       placeholder="45000"
@@ -644,8 +644,8 @@ export default function NuevaPartituraPage() {
                     </div>
                     <input
                       type="number"
-                      step={0.5}
-                      min={1}
+                      step="any"
+                      min={0.5}
                       value={priceUSD === 0 ? "" : priceUSD}
                       onChange={handleUsdInputChange}
                       placeholder="11.50"
