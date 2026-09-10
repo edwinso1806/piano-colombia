@@ -1,5 +1,7 @@
 import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { Client } from "pg"
+import { getAdminAndModeratorEmailsFromDB } from "../../../../lib/admin-recipient-service"
+import { sendEmail, generateComposerProfileUpdatedAdminNotificationHTML } from "../../../../lib/resend-mailer"
 
 export const AUTHENTICATE = false
 
@@ -28,7 +30,7 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
       SELECT 
         c.id, c.first_name, c.last_name, c.artistic_name, c.slug, c.email, c.phone,
         c.region, c.era, c.bio_es, c.bio_en, c.photo_url, c.status, c.rejection_reason,
-        c.commission_percentage, c.created_at, c.updated_at,
+        c.approval_attempts, c.commission_percentage, c.created_at, c.updated_at,
         b.bank_name, b.account_type, b.account_number, b.holder_name,
         b.document_type, b.document_number, b.bank_code
       FROM composer c
@@ -61,6 +63,7 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
       photo_url: row.photo_url,
       status: row.status,
       rejection_reason: row.rejection_reason,
+      approval_attempts: row.approval_attempts ? Number(row.approval_attempts) : 1,
       commission_percentage: row.commission_percentage !== null ? Number(row.commission_percentage) : null,
       created_at: row.created_at,
       updated_at: row.updated_at,
@@ -119,15 +122,32 @@ export async function PUT(req: MedusaRequest, res: MedusaResponse) {
 
     await client.connect()
 
-    // 1. Obtener ID del compositor si solo se envió email
+    // 1. Obtener ID y estado actual del compositor
     let composerId = id
-    if (!composerId) {
-      const findRes = await client.query("SELECT id FROM composer WHERE LOWER(email) = LOWER($1) LIMIT 1;", [email])
-      if (findRes.rows.length === 0) {
-        return res.status(404).json({ success: false, message: "Compositor no encontrado" })
-      }
-      composerId = findRes.rows[0].id
+    let findRes
+    if (composerId) {
+      findRes = await client.query("SELECT id, status, first_name, last_name, artistic_name, email, phone, region, approval_attempts FROM composer WHERE id = $1 LIMIT 1;", [composerId])
+    } else {
+      findRes = await client.query("SELECT id, status, first_name, last_name, artistic_name, email, phone, region, approval_attempts FROM composer WHERE LOWER(email) = LOWER($1) LIMIT 1;", [email])
     }
+
+    if (findRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: "Compositor no encontrado" })
+    }
+
+    const currentComposer = findRes.rows[0]
+    composerId = currentComposer.id
+    const previousStatus = currentComposer.status || "PENDING_APPROVAL"
+
+    // Si el compositor está bloqueado definitivamente o suspendido, prohibir ediciones
+    if (previousStatus === "BLOCKED" || previousStatus === "SUSPENDED") {
+      return res.status(403).json({
+        success: false,
+        message: "Tu cuenta de compositor ha sido bloqueada definitivamente por la administración de Piano Colombia. No es posible editar ni reenviar tu postulación.",
+      })
+    }
+
+    const wasApproved = previousStatus === "APPROVED"
 
     // 2. Determinar nuevo estado si se envía a revisión
     let statusUpdateClause = ""
@@ -144,7 +164,7 @@ export async function PUT(req: MedusaRequest, res: MedusaResponse) {
     ]
 
     if (submit_for_review) {
-      statusUpdateClause = ", status = 'PENDING_APPROVAL', rejection_reason = NULL"
+      statusUpdateClause = ", status = 'PENDING_APPROVAL', rejection_reason = NULL, approval_attempts = COALESCE(approval_attempts, 1) + 1"
     }
 
     const updateQuery = `
@@ -165,7 +185,17 @@ export async function PUT(req: MedusaRequest, res: MedusaResponse) {
     `
     const updatedComposerRes = await client.query(updateQuery, params)
 
-    // 3. Actualizar o insertar cuenta bancaria si se suministró
+    // 3. Si el perfil estaba APROBADO (Activo) y se envió a revisión:
+    // Inactivar todas sus partituras en la tienda (cambiar status a 'IN_REVIEW')
+    if (submit_for_review && wasApproved) {
+      await client.query(
+        "UPDATE score SET status = 'IN_REVIEW' WHERE composer_id = $1 AND status = 'APPROVED';",
+        [composerId]
+      )
+      console.log(`⚠️ [COMPOSER INACTIVATED] Perfil activo del compositor ${composerId} fue editado. Partituras desactivadas temporalmente de la tienda.`)
+    }
+
+    // 4. Actualizar o insertar cuenta bancaria si se suministró
     if (bank_account) {
       const checkBankRes = await client.query(
         "SELECT id FROM composer_bank_account WHERE composer_id = $1 LIMIT 1;",
@@ -214,11 +244,57 @@ export async function PUT(req: MedusaRequest, res: MedusaResponse) {
 
     const updatedRow = updatedComposerRes.rows[0]
 
+    // 5. Notificar vía correo electrónico a TODOS los Administradores y Moderadores
+    if (submit_for_review) {
+      try {
+        const adminRecipients = await getAdminAndModeratorEmailsFromDB(req)
+        const composerFullName = `${updatedRow.first_name || ""} ${updatedRow.last_name || ""}`.trim()
+        const artisticName = updatedRow.artistic_name || composerFullName
+        const currentAttempts = updatedRow.approval_attempts ? Number(updatedRow.approval_attempts) : 1
+
+        console.log(`📧 Notificando reenvío de perfil a ${adminRecipients.length} administradores/moderadores (Intento #${currentAttempts}): ${adminRecipients.map(r => r.email).join(", ")}`)
+
+        const sendPromises = adminRecipients.map((recipient) =>
+          sendEmail({
+            to: recipient.email,
+            subject: `🚨 [Piano Colombia] Modificación de Perfil de Compositor - ${artisticName} (Intento #${currentAttempts})`,
+            html: generateComposerProfileUpdatedAdminNotificationHTML({
+              adminName: recipient.name,
+              composerName: composerFullName,
+              artisticName,
+              email: updatedRow.email,
+              phone: updatedRow.phone,
+              region: updatedRow.region,
+              previousStatus,
+              wasApproved,
+              approvalAttempts: currentAttempts,
+              adminDashboardUrl: "http://localhost:3000/admin/compositores",
+            }),
+          })
+        )
+
+        const results = await Promise.allSettled(sendPromises)
+        console.log(`✅ [NOTIFICACIONES ENVIADAS] Finalizado envío a ${results.length} destinatarios.`)
+      } catch (emailErr: any) {
+        console.warn("⚠️ Advertencia notificando a los administradores por correo:", emailErr.message)
+      }
+    }
+
+    // 6. Generar mensaje de respuesta según estado previo
+    let message = "Perfil actualizado correctamente."
+    if (submit_for_review) {
+      if (wasApproved) {
+        message = "Tu información fue enviada a revisión. Al haber modificado tu perfil activo, tu perfil y tus partituras registradas han sido desactivados temporalmente del catálogo público mientras un administrador de Piano Colombia valida los cambios."
+      } else {
+        message = "Tu información fue enviada exitosamente a revisión. Tu perfil se encuentra en espera de la aprobación por parte de un administrador de Piano Colombia para ser publicado en la tienda."
+      }
+    }
+
     return res.status(200).json({
       success: true,
-      message: submit_for_review
-        ? "¡Tu perfil y fotografía oficial han sido guardados y enviados a revisión técnica por Piano Colombia!"
-        : "Perfil actualizado correctamente.",
+      message,
+      was_approved: wasApproved,
+      previous_status: previousStatus,
       composer: {
         id: updatedRow.id,
         email: updatedRow.email,

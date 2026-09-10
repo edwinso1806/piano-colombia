@@ -7,6 +7,8 @@ import { useCart } from "@/context/CartContext";
 import MobileDrawer from "@/components/dashboard/MobileDrawer";
 
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/context/LanguageContext";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 
 interface HeaderProps {
   activePage?: "inicio" | "tienda" | "compositores" | "blog" | "carrito" | "checkout";
@@ -16,28 +18,29 @@ export default function Header({ activePage }: HeaderProps) {
   const router = useRouter();
   const { totalItems } = useCart();
   const { customer, logoutCustomer } = useAuth();
+  const { t } = useLanguage();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
-  // Menú de navegación para Escritorio (sin "Inicio", el logo cumple esa función)
+  // Menú de navegación para Escritorio
   const desktopNav = [
-    { href: "/tienda", label: "Tienda de Partituras", activeKey: "tienda" },
-    { href: "/compositores", label: "Compositores", activeKey: "compositores" },
-    { href: "/blog", label: "Blog & Artículos", activeKey: "blog" },
+    { href: "/tienda", label: t("nav.catalog", "Tienda de Partituras"), activeKey: "tienda" },
+    { href: "/compositores", label: t("nav.composers", "Compositores"), activeKey: "compositores" },
+    { href: "/blog", label: t("nav.blog", "Blog & Artículos"), activeKey: "blog" },
   ];
 
-  // Menú de navegación para Móvil (incluye "Inicio" para accesibilidad móvil)
+  // Menú de navegación para Móvil
   const mobileNav = [
     { href: "/", label: "Inicio", activeKey: "inicio", icon: "home" },
-    { href: "/tienda", label: "Tienda de Partituras", activeKey: "tienda", icon: "storefront" },
-    { href: "/compositores", label: "Compositores", activeKey: "compositores", icon: "groups" },
-    { href: "/blog", label: "Blog & Artículos", activeKey: "blog", icon: "article" },
+    { href: "/tienda", label: t("nav.catalog", "Tienda de Partituras"), activeKey: "tienda", icon: "storefront" },
+    { href: "/compositores", label: t("nav.composers", "Compositores"), activeKey: "compositores", icon: "groups" },
+    { href: "/blog", label: t("nav.blog", "Blog & Artículos"), activeKey: "blog", icon: "article" },
   ];
 
   return (
     <>
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-black/5 px-4 sm:px-8 py-3.5 flex justify-between items-center gap-6 w-full shadow-2xs">
-        {/* Left Cluster: Logo Brand + Desktop Navigation (Agrupados con espaciado controlado) */}
+        {/* Left Cluster: Logo Brand + Desktop Navigation */}
         <div className="flex items-center gap-6 lg:gap-10 shrink-0">
           {/* Hamburger Mobile Toggle */}
           <button
@@ -68,7 +71,7 @@ export default function Header({ activePage }: HeaderProps) {
             </div>
           </Link>
 
-          {/* Navegación Principal Escritorio (Junto al logo con separación exacta) */}
+          {/* Navegación Principal Escritorio */}
           <nav className="hidden md:flex items-center gap-5 lg:gap-8 text-sm font-semibold tracking-wide text-[#4C4546] shrink-0">
             {desktopNav.map((item) => (
               <Link
@@ -86,9 +89,7 @@ export default function Header({ activePage }: HeaderProps) {
 
         {/* Right Cluster: Action Buttons */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          <button className="hidden lg:flex text-xs font-semibold px-3 py-2 bg-[#F0F3FF] hover:bg-slate-200/60 transition rounded-xl text-[#111C2D] items-center gap-1 border border-black/5">
-            <span className="material-symbols-outlined text-sm">language</span> ES | COP
-          </button>
+          <LanguageSwitcher />
 
           {/* Botón Carrito de Compras */}
           <Link
@@ -101,7 +102,7 @@ export default function Header({ activePage }: HeaderProps) {
             aria-label="Ver Carrito de Compras"
           >
             <span className="material-symbols-outlined text-lg">shopping_cart</span>
-            <span className="hidden md:inline">Carrito</span>
+            <span className="hidden md:inline">{t("nav.cart", "Carrito")}</span>
             {totalItems > 0 && (
               <span className="w-5 h-5 rounded-full bg-[#C1272D] text-white text-[10px] font-black flex items-center justify-center font-montserrat shadow-2xs">
                 {totalItems}
@@ -165,7 +166,7 @@ export default function Header({ activePage }: HeaderProps) {
               className="hidden sm:flex px-3.5 py-2 text-xs font-bold bg-[#F0F3FF] hover:bg-[#111C2D] text-[#111C2D] hover:text-white transition rounded-xl font-montserrat items-center gap-1.5 border border-black/5"
             >
               <span className="material-symbols-outlined text-base text-[#0071BC]">person</span>
-              <span>Mi Cuenta</span>
+              <span>{t("nav.my_account", "Mi Cuenta")}</span>
             </Link>
           )}
 
@@ -176,7 +177,7 @@ export default function Header({ activePage }: HeaderProps) {
             title="Acceder al Portal del Compositor"
           >
             <span className="material-symbols-outlined text-sm">music_note</span>
-            <span>Portal Compositor</span>
+            <span>{t("nav.composer_portal", "Portal Compositor")}</span>
           </Link>
         </div>
       </header>

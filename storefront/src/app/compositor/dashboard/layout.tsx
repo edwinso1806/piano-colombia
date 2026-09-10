@@ -5,8 +5,10 @@ import { useState, useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import MobileDrawer from "@/components/dashboard/MobileDrawer";
+import { getComposerProfileApi } from "@/lib/api-client";
 
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/context/LanguageContext";
 
 export default function CompositorDashboardLayout({
   children,
@@ -15,8 +17,45 @@ export default function CompositorDashboardLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { composer, logoutComposer, isLoaded } = useAuth();
+  const { composer, loginComposer, logoutComposer, isLoaded } = useAuth();
+  const { t } = useLanguage();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Sincronización automática del estado del compositor con la base de datos
+  useEffect(() => {
+    if (!composer) return;
+    const currentComposer = composer;
+    const targetId = currentComposer.id || currentComposer.email;
+    if (!targetId) return;
+
+    let isMounted = true;
+    async function syncComposerStatus() {
+      try {
+        const freshData = await getComposerProfileApi(targetId);
+        if (freshData && isMounted) {
+          if (
+            freshData.status !== currentComposer.status ||
+            freshData.rejection_reason !== currentComposer.rejection_reason ||
+            freshData.artistic_name !== currentComposer.artistic_name
+          ) {
+            loginComposer({
+              ...currentComposer,
+              ...freshData,
+              status: freshData.status,
+              rejection_reason: freshData.rejection_reason,
+            });
+          }
+        }
+      } catch (err) {
+        console.warn("Error al sincronizar estado del compositor:", err);
+      }
+    }
+
+    syncComposerStatus();
+    return () => {
+      isMounted = false;
+    };
+  }, [composer?.id, composer?.email, composer?.status]);
 
   const activeName = composer?.artistic_name || (composer?.first_name ? `${composer.first_name} ${composer.last_name || ""}`.trim() : "Compositor");
   const activeEmail = composer?.email || "";
@@ -53,26 +92,26 @@ export default function CompositorDashboardLayout({
     return (
       <div className="min-h-screen bg-[#F9F9FF] flex flex-col items-center justify-center p-6 text-center">
         <div className="w-10 h-10 border-4 border-[#0071BC] border-t-transparent rounded-full animate-spin mb-4" />
-        <p className="text-sm font-bold text-[#111C2D] font-montserrat">Verificando sesión de compositor...</p>
+        <p className="text-sm font-bold text-[#111C2D] font-montserrat">{t("dashboard.verifying_session", "Verificando sesión de compositor...")}</p>
       </div>
     );
   }
 
   const navLinks = [
-    { href: "/compositor/dashboard", label: "Métricas & Obras", icon: "analytics", locked: !isApproved },
-    { href: "/compositor/dashboard/partituras/nueva", label: "Subir Partitura", icon: "upload_file", locked: !isApproved },
-    { href: "/compositor/dashboard/pagos", label: "Liquidaciones Wompi", icon: "payments", locked: !isApproved },
-    { href: "/compositor/dashboard/perfil", label: "Perfil & Biografía", icon: "badge", locked: false },
-    { href: "/", label: "Ver Tienda Pública", icon: "storefront", locked: false },
+    { href: "/compositor/dashboard", label: t("dashboard.nav_overview", "Métricas & Obras"), icon: "analytics", locked: !isApproved },
+    { href: "/compositor/dashboard/partituras/nueva", label: t("dashboard.nav_new_score", "Subir Partitura"), icon: "upload_file", locked: !isApproved },
+    { href: "/compositor/dashboard/pagos", label: t("dashboard.nav_royalties", "Liquidaciones Wompi"), icon: "payments", locked: !isApproved },
+    { href: "/compositor/dashboard/perfil", label: t("dashboard.nav_profile", "Perfil & Biografía"), icon: "badge", locked: false },
+    { href: "/", label: t("dashboard.nav_public_store", "Ver Tienda Pública"), icon: "storefront", locked: false },
   ];
 
   return (
     <div className="min-h-screen bg-[#F9F9FF] text-[#111C2D] flex flex-col font-inter selection:bg-[#FBB03B]/30 selection:text-[#111C2D] overflow-x-hidden">
       {/* Shared Dashboard Header */}
       <DashboardHeader
-        portalBadge="COMPOSITOR"
+        portalBadge={t("dashboard.portal_badge", "COMPOSITOR")}
         badgeColor="bg-[#FBB03B]/20 border-[#FBB03B]/40 text-[#111C2D]"
-        searchPlaceholder="Buscar obras, métricas, liquidaciones..."
+        searchPlaceholder={t("dashboard.search_placeholder", "Buscar obras, métricas, liquidaciones...")}
         userName={activeName}
         userRoleOrTag={activeEmail}
         userInitials={initials}
@@ -89,11 +128,11 @@ export default function CompositorDashboardLayout({
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-extrabold text-[#4C4546] uppercase tracking-widest block font-montserrat">
-                Menú del Compositor
+                {t("dashboard.menu_title", "Menú del Compositor")}
               </span>
               {!isApproved && (
                 <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-[9px] font-black uppercase font-montserrat">
-                  En Revisión
+                  {t("dashboard.in_review", "En Revisión")}
                 </span>
               )}
             </div>
@@ -106,7 +145,7 @@ export default function CompositorDashboardLayout({
                     <div
                       key={link.href}
                       className="flex items-center justify-between px-3.5 py-2.5 rounded-xl text-[#4C4546]/50 bg-slate-50 cursor-not-allowed select-none"
-                      title="Módulo bloqueado hasta que tu perfil sea aprobado por administración"
+                      title={t("dashboard.locked_tooltip", "Módulo bloqueado hasta que tu perfil sea aprobado por administración")}
                     >
                       <div className="flex items-center gap-3">
                         <span className="material-symbols-outlined text-base shrink-0 text-[#4C4546]/40">
@@ -145,7 +184,7 @@ export default function CompositorDashboardLayout({
                   className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-[#C1272D] hover:bg-red-50 hover:text-red-800 transition font-bold font-montserrat w-full text-left"
                 >
                   <span className="material-symbols-outlined text-base shrink-0 text-[#C1272D]">logout</span>
-                  <span className="truncate">Cerrar Sesión</span>
+                  <span className="truncate">{t("dashboard.nav_logout", "Cerrar Sesión")}</span>
                 </button>
               </div>
             </nav>
@@ -156,7 +195,7 @@ export default function CompositorDashboardLayout({
         <MobileDrawer
           isOpen={isMobileMenuOpen}
           onClose={() => setIsMobileMenuOpen(false)}
-          title="Portal Compositor"
+          title={t("dashboard.portal_badge", "Portal Compositor")}
         >
           <nav className="space-y-1.5 text-xs font-semibold py-2">
             {navLinks.map((link) => {
@@ -166,6 +205,7 @@ export default function CompositorDashboardLayout({
                   <div
                     key={link.href}
                     className="flex items-center justify-between px-3.5 py-3 rounded-xl text-[#4C4546]/50 bg-slate-50 cursor-not-allowed select-none"
+                    title={t("dashboard.locked_tooltip", "Módulo bloqueado hasta que tu perfil sea aprobado por administración")}
                   >
                     <div className="flex items-center gap-3">
                       <span className="material-symbols-outlined text-base shrink-0 text-[#4C4546]/40">
@@ -207,7 +247,7 @@ export default function CompositorDashboardLayout({
                 className="flex items-center gap-3 px-3.5 py-3 rounded-xl text-[#C1272D] hover:bg-red-50 hover:text-red-800 transition font-bold font-montserrat w-full text-left"
               >
                 <span className="material-symbols-outlined text-base shrink-0 text-[#C1272D]">logout</span>
-                <span className="truncate">Cerrar Sesión</span>
+                <span className="truncate">{t("dashboard.nav_logout", "Cerrar Sesión")}</span>
               </button>
             </div>
           </nav>
@@ -220,10 +260,10 @@ export default function CompositorDashboardLayout({
               <span className="material-symbols-outlined text-2xl text-[#FBB03B] shrink-0">hourglass_top</span>
               <div className="text-xs">
                 <span className="font-extrabold font-montserrat uppercase tracking-wider block text-[#111C2D]">
-                  Acceso Restringido • Perfil en Construcción
+                  {t("dashboard.restricted_access_title", "Acceso Restringido • Perfil en Construcción")}
                 </span>
                 <span className="text-[#4C4546] font-medium">
-                  Tu cuenta se encuentra pendiente de aprobación. Completa tu biografía, fotografía oficial de retrato y datos bancarios, y haz clic en <strong>"Guardar y enviar a revisión"</strong> para habilitar las demás funciones del portal.
+                  {t("dashboard.restricted_access_desc", "Tu cuenta se encuentra pendiente de aprobación. Completa tu biografía, fotografía oficial de retrato y datos bancarios, y haz clic en \"Guardar y enviar a revisión\" para habilitar las demás funciones del portal.")}
                 </span>
               </div>
             </div>

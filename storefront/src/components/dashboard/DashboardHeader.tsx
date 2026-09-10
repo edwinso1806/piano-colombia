@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import React from "react";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
+import { useLanguage } from "@/context/LanguageContext";
 
 interface DashboardHeaderProps {
   portalBadge: string;
@@ -28,6 +30,7 @@ export default function DashboardHeader({
   homeLink = "/",
   onLogout,
 }: DashboardHeaderProps) {
+  const { t } = useLanguage();
   return (
     <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-black/5 px-4 sm:px-6 py-3.5 flex items-center justify-between shadow-2xs font-inter">
       {/* Brand & Mobile Hamburger */}
@@ -80,8 +83,10 @@ export default function DashboardHeader({
         </div>
       </div>
 
-      {/* User Badge Info & Logout */}
+      {/* User Badge Info, Language Switcher & Logout */}
       <div className="flex items-center gap-3">
+        <LanguageSwitcher />
+
         <div className="text-right hidden sm:block">
           <span className="text-xs font-bold text-[#111C2D] block font-montserrat">{userName}</span>
           <span className="text-[10px] text-[#0071BC] font-semibold">{userRoleOrTag}</span>
@@ -96,10 +101,10 @@ export default function DashboardHeader({
             type="button"
             onClick={onLogout}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition text-xs font-bold font-montserrat shrink-0 shadow-2xs"
-            title="Cerrar sesión"
+            title={t("dashboard.nav_logout", "Cerrar Sesión")}
           >
             <span className="material-symbols-outlined text-sm">logout</span>
-            <span className="hidden sm:inline">Cerrar Sesión</span>
+            <span className="hidden sm:inline">{t("dashboard.nav_logout", "Cerrar Sesión")}</span>
           </button>
         )}
       </div>

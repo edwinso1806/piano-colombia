@@ -1,14 +1,37 @@
 import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { COMPOSER_MODULE } from "../../../modules/composer"
+import { SCORE_MODULE } from "../../../modules/score"
 import { hashPassword } from "../../../lib/auth-security"
 
 export async function GET(req: MedusaRequest, res: MedusaResponse) {
   try {
     const composerModuleService = req.scope.resolve(COMPOSER_MODULE)
-    const { status = "APPROVED", is_featured } = req.query
+    const scoreModuleService = req.scope.resolve(SCORE_MODULE)
+    const { is_featured } = req.query
 
-    const filters: Record<string, any> = {}
-    if (status) filters.status = status
+    // Requisito estricto de tienda: El compositor SOLO debe aparecer en la tienda cuando tenga mínimo una partitura aprobada
+    const approvedScores = await scoreModuleService.listScores({ status: "APPROVED" })
+
+    const approvedScoresCountMap = new Map<string, number>()
+    for (const score of approvedScores) {
+      if (score.composer_id) {
+        approvedScoresCountMap.set(score.composer_id, (approvedScoresCountMap.get(score.composer_id) || 0) + 1)
+      }
+    }
+
+    const eligibleComposerIds = Array.from(approvedScoresCountMap.keys())
+
+    if (eligibleComposerIds.length === 0) {
+      return res.status(200).json({
+        composers: [],
+        count: 0,
+      })
+    }
+
+    const filters: Record<string, any> = {
+      status: "APPROVED",
+      id: eligibleComposerIds,
+    }
     if (is_featured !== undefined) filters.is_featured = is_featured === "true"
 
     const [composers, count] = await composerModuleService.listAndCountComposers(filters, {
@@ -16,8 +39,14 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
       order: { first_name: "ASC" },
     })
 
+    const enrichedComposers = composers.map((c: any) => ({
+      ...c,
+      scoreCount: approvedScoresCountMap.get(c.id) || 0,
+      approved_scores_count: approvedScoresCountMap.get(c.id) || 0,
+    }))
+
     return res.status(200).json({
-      composers,
+      composers: enrichedComposers,
       count,
     })
   } catch (error: any) {

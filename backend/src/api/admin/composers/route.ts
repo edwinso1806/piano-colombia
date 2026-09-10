@@ -18,7 +18,7 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
     let queryText = `
       SELECT 
         c.id, c.first_name, c.last_name, c.artistic_name, c.slug, c.bio_es, c.bio_en, 
-        c.region, c.era, c.photo_url, c.status, c.rejection_reason, c.email, c.phone, 
+        c.region, c.era, c.photo_url, c.status, c.rejection_reason, c.approval_attempts, c.email, c.phone, 
         c.commission_percentage, c.created_at,
         b.bank_name, b.account_type, b.account_number, b.holder_name, 
         b.document_type, b.document_number, b.bank_code
@@ -54,6 +54,7 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
       photo_url: row.photo_url,
       status: row.status,
       rejection_reason: row.rejection_reason,
+      approval_attempts: row.approval_attempts ? Number(row.approval_attempts) : 1,
       email: row.email,
       phone: row.phone,
       commission_percentage: row.commission_percentage !== null ? Number(row.commission_percentage) : null,

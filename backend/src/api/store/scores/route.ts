@@ -1,25 +1,34 @@
 import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { SCORE_MODULE } from "../../../modules/score"
 import { COMPOSER_MODULE } from "../../../modules/composer"
+import { getAdminAndModeratorEmailsFromDB } from "../../../lib/admin-recipient-service"
+import { sendEmail, generateScoreSubmittedAdminNotificationHTML } from "../../../lib/resend-mailer"
 
 export async function GET(req: MedusaRequest, res: MedusaResponse) {
   try {
     const scoreModuleService = req.scope.resolve(SCORE_MODULE)
     const composerModuleService = req.scope.resolve(COMPOSER_MODULE)
 
-    const { difficulty, genre, is_featured, limit = 50, offset = 0 } = req.query
+    const { difficulty, genre, is_featured, limit = 50, offset = 0, composer_id, status } = req.query as Record<string, any>
 
-    const filters: Record<string, any> = {
-      status: "APPROVED",
+    const filters: Record<string, any> = {}
+    if (composer_id) {
+      filters.composer_id = composer_id
+      if (status && status !== "all") {
+        filters.status = status
+      }
+    } else {
+      filters.status = "APPROVED"
     }
-    if (difficulty) filters.difficulty = difficulty
-    if (genre) filters.genre = genre
+
+    if (difficulty && difficulty !== "all") filters.difficulty = difficulty
+    if (genre && genre !== "all") filters.genre = genre
     if (is_featured !== undefined) filters.is_featured = is_featured === "true"
 
     const [scores, count] = await scoreModuleService.listAndCountScores(filters, {
       take: Number(limit),
       skip: Number(offset),
-      order: { title: "ASC" },
+      order: { created_at: "DESC" },
     })
 
     // Enriquecer con datos del compositor
@@ -63,6 +72,10 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       description,
       tonality,
       tags,
+      pages_count,
+      preview_images,
+      preview_pdf_url,
+      original_pdf_url,
     } = (req.body as any) || {}
 
     if (!title) {
@@ -73,10 +86,20 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
 
     // Resolve or find composer
     let finalComposerId = composer_id
+    let composerInfo: any = null
+
+    if (finalComposerId) {
+      const composers = await composerModuleService.listComposers({ id: finalComposerId }, { take: 1 })
+      if (composers && composers.length > 0) {
+        composerInfo = composers[0]
+      }
+    }
+
     if (!finalComposerId) {
       const [composers] = await composerModuleService.listAndCountComposers({}, { take: 1 })
       if (composers && composers.length > 0) {
         finalComposerId = composers[0].id
+        composerInfo = composers[0]
       } else {
         finalComposerId = "comp_adolfo"
       }
@@ -102,13 +125,41 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       price_usd: Number(price_usd),
       audio_sample_url: audio_preview_url || null,
       description_es: description || null,
-      pages_count: 8,
+      pages_count: Number(pages_count) || 4,
       tonality: tonality || "Mi menor",
       status: "IN_REVIEW" as any,
       is_featured: false,
-      preview_pdf_url: `/preview-scores/${slug}.pdf`,
-      original_pdf_url: `/master-scores/${slug}-master.pdf`,
+      preview_images: Array.isArray(preview_images) ? preview_images : [],
+      preview_pdf_url: preview_pdf_url || `/preview-scores/${slug}.pdf`,
+      original_pdf_url: original_pdf_url || `/master-scores/${slug}-master.pdf`,
     })
+
+    // Enviar notificación por correo a Administradores y Moderadores
+    try {
+      const adminRecipients = await getAdminAndModeratorEmailsFromDB(req)
+      const composerDisplayName = composerInfo?.artistic_name || composerInfo?.full_name || composer_name || "Compositor PC"
+      
+      for (const admin of adminRecipients) {
+        const html = generateScoreSubmittedAdminNotificationHTML({
+          adminName: admin.name,
+          composerName: composerInfo?.full_name || composerDisplayName,
+          artisticName: composerDisplayName,
+          scoreTitle: title,
+          genre,
+          difficulty,
+          priceCop: Number(price_cop),
+          adminDashboardUrl: "http://localhost:3000/admin/partituras",
+        })
+
+        await sendEmail({
+          to: admin.email,
+          subject: `🎼 Nueva Partitura en Revisión: "${title}" - Piano Colombia`,
+          html,
+        }).catch((err) => console.warn(`Error enviando correo de partitura a ${admin.email}:`, err.message))
+      }
+    } catch (emailErr: any) {
+      console.warn("Error en despacho de notificaciones de partitura a administradores:", emailErr.message)
+    }
 
     return res.status(201).json({
       success: true,

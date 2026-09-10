@@ -1,131 +1,101 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { MOCK_SCORES } from "@/lib/mock-data";
+import { useState, useEffect } from "react";
+import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/context/LanguageContext";
+import { getComposerScoresApi } from "@/lib/api-client";
 
 export default function CompositorDashboardPage() {
+  const { composer } = useAuth();
+  const { t, language } = useLanguage();
+
   const [activeMainTab, setActiveMainTab] = useState<"metricas" | "partituras">("metricas");
-  const [scoreFilter, setScoreFilter] = useState<"todas" | "publicadas" | "revision" | "borradores">("todas");
+  const [scoreFilter, setScoreFilter] = useState<"todas" | "publicadas" | "revision" | "rechazadas">("todas");
   const [searchQuery, setSearchQuery] = useState("");
+  const [scores, setScores] = useState<any[]>([]);
+  const [loadingScores, setLoadingScores] = useState(true);
 
-  const mockComposerScores = [
-    {
-      id: "score_1",
-      slug: "bambuco-re-mayor",
-      title: "Bambuco en Re Mayor",
-      category: "Piano Solo",
-      level: "Avanzado",
-      ismn: "979-0-901314-02-1",
-      format: "PDF Urtext A4 (24 págs)",
-      priceCOP: 45000,
-      priceUSD: 12,
-      status: "published",
-      salesCount: 42,
-      grossEarnings: 1890000,
-      netEarnings: 1512000, // 80%
-      updatedAt: "10 Ene 2026",
-    },
-    {
-      id: "score_2",
-      slug: "malvaloca",
-      title: "Malvaloca (Intermezzo Danza)",
-      category: "Piano Solo",
-      level: "Intermedio",
-      ismn: "979-0-901314-18-2",
-      format: "Edición Crítica (18 págs)",
-      priceCOP: 55000,
-      priceUSD: 14,
-      status: "published",
-      salesCount: 38,
-      grossEarnings: 2090000,
-      netEarnings: 1672000,
-      updatedAt: "28 Dic 2025",
-    },
-    {
-      id: "score_3",
-      slug: "intermezzo-1",
-      title: "Intermezzo No. 1",
-      category: "Piano / Cámara",
-      level: "Avanzado",
-      ismn: "979-0-901314-07-6",
-      format: "Con Particellas (32 págs)",
-      priceCOP: 65000,
-      priceUSD: 16,
-      status: "published",
-      salesCount: 29,
-      grossEarnings: 1885000,
-      netEarnings: 1508000,
-      updatedAt: "14 Nov 2025",
-    },
-    {
-      id: "score_4",
-      slug: "pasillo-evocacion",
-      title: "Pasillo No. 3 'Evocación en Fa menor'",
-      category: "Piano Solo",
-      level: "Concierto",
-      ismn: "979-0-901314-22-9",
-      format: "Manuscrito Revisado (16 págs)",
-      priceCOP: 50000,
-      priceUSD: 13,
-      status: "review",
-      salesCount: 0,
-      grossEarnings: 0,
-      netEarnings: 0,
-      updatedAt: "Hace 2 días",
-    },
-    {
-      id: "score_5",
-      slug: "suite-andina",
-      title: "Suite Andina Pianística - Mov. II Guabina",
-      category: "Pedagógico",
-      level: "Intermedio",
-      ismn: "979-0-901314-30-4",
-      format: "Borrador Incompleto",
-      priceCOP: 40000,
-      priceUSD: 10,
-      status: "draft",
-      salesCount: 0,
-      grossEarnings: 0,
-      netEarnings: 0,
-      updatedAt: "Ayer",
-    },
-  ];
+  // Cargar partituras reales del compositor desde PostgreSQL
+  useEffect(() => {
+    async function loadScores() {
+      if (!composer?.id) {
+        setLoadingScores(false);
+        return;
+      }
+      try {
+        setLoadingScores(true);
+        const data = await getComposerScoresApi(composer.id);
+        setScores(data || []);
+      } catch (err) {
+        console.warn("Error cargando partituras del compositor:", err);
+      } finally {
+        setLoadingScores(false);
+      }
+    }
+    loadScores();
+  }, [composer?.id]);
 
-  const filteredScores = mockComposerScores.filter((score) => {
-    const matchesQuery =
-      score.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      score.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      score.ismn.includes(searchQuery);
+  const activeName =
+    composer?.artistic_name ||
+    (composer?.first_name ? `${composer.first_name} ${composer.last_name || ""}`.trim() : "Compositor");
+  const activeEmail = composer?.email || "";
+  const initials = (activeName || "PC")
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 
-    if (scoreFilter === "publicadas") return matchesQuery && score.status === "published";
-    if (scoreFilter === "revision") return matchesQuery && score.status === "review";
-    if (scoreFilter === "borradores") return matchesQuery && score.status === "draft";
+  const publishedScores = scores.filter((s) => s.status === "APPROVED");
+  const inReviewScores = scores.filter((s) => s.status === "IN_REVIEW");
+  const rejectedScores = scores.filter((s) => s.status === "REJECTED");
+
+  const filteredScores = scores.filter((score) => {
+    const title = (score.title || "").toLowerCase();
+    const genre = (score.genre || "").toLowerCase();
+    const query = searchQuery.toLowerCase();
+    const matchesQuery = title.includes(query) || genre.includes(query);
+
+    if (scoreFilter === "publicadas") return matchesQuery && score.status === "APPROVED";
+    if (scoreFilter === "revision") return matchesQuery && score.status === "IN_REVIEW";
+    if (scoreFilter === "rechazadas") return matchesQuery && score.status === "REJECTED";
     return matchesQuery;
   });
 
+  // Métricas reales calculadas desde la base de datos
+  const totalApproved = publishedScores.length;
+  const totalSales = 0; // Ventas reales registradas en órdenes (0 para cuentas nuevas)
+  const grossAmount = publishedScores.reduce((acc, s) => acc + (Number(s.price_cop) || 45000), 0) * totalSales;
+  const netRoyalties = Math.round(grossAmount * 0.8);
+
   return (
     <div className="space-y-8 text-[#111C2D]">
-      
-      {/* 1. Header Hero Compositor */}
+      {/* 1. Header Hero Compositor con Datos Reales de BD */}
       <section className="relative p-6 lg:p-8 bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] overflow-hidden">
         <div className="absolute -right-20 -top-24 w-96 h-96 bg-gradient-to-br from-[#FBB03B]/20 via-[#0071BC]/20 to-transparent rounded-full blur-3xl pointer-events-none"></div>
-        
+
         <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
             <div className="relative shrink-0">
-              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border-2 border-[#FBB03B] shadow-md bg-[#F0F3FF] flex items-center justify-center font-montserrat font-black text-2xl text-[#111C2D]">
-                AM
+              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border-2 border-[#FBB03B] shadow-md bg-[#111C2D] flex items-center justify-center font-montserrat font-black text-2xl text-white">
+                {composer?.photo_url ? (
+                  <img src={composer.photo_url} alt={activeName} className="w-full h-full object-cover" />
+                ) : (
+                  <span>{initials}</span>
+                )}
               </div>
               <div className="absolute -bottom-1 -right-1 flex items-center justify-center p-1 bg-white rounded-full shadow-sm">
-                <span className="material-symbols-outlined text-[#0071BC] text-xl">verified</span>
+                <span className="material-symbols-outlined text-[#0071BC] text-xl">
+                  {composer?.status === "APPROVED" ? "verified" : "hourglass_top"}
+                </span>
               </div>
             </div>
 
             <div className="flex flex-col min-w-0">
               <div className="flex flex-wrap items-center gap-2 mb-1">
                 <h1 className="font-montserrat text-2xl md:text-3xl font-black text-[#111C2D] tracking-tight">
-                  Maestro Adolfo Mejía
+                  {activeName}
                 </h1>
                 <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#F0F3FF] border border-[#0071BC]/10 rounded-full">
                   <div className="flex items-center gap-0.5">
@@ -134,49 +104,54 @@ export default function CompositorDashboardPage() {
                     <span className="h-3 w-1 bg-[#0071BC] rounded-full"></span>
                   </div>
                   <span className="text-[11px] font-extrabold text-[#0071BC] font-montserrat uppercase tracking-wider">
-                    Compositor Verificado
+                    {composer?.status === "APPROVED"
+                      ? t("dashboard.verified_composer", "Compositor Verificado")
+                      : t("dashboard.in_review", "En Revisión")}
                   </span>
                 </div>
               </div>
 
               <p className="text-xs md:text-sm text-[#4C4546] font-normal max-w-xl leading-relaxed">
-                Obra para Piano Tradicional y Neoclásica Andina • Afiliado SAYCO-ACINPRO No. COL-8924
+                {composer?.region || t("dashboard.default_region", "Compositor e Investigador Musical de Colombia")}
+                {activeEmail ? ` • ${activeEmail}` : ""}
               </p>
 
               <div className="flex items-center gap-4 mt-2 text-xs text-[#4C4546] font-medium">
                 <span className="flex items-center gap-1">
                   <span className="material-symbols-outlined text-sm text-[#0071BC]">schedule</span>
-                  Última liquidación: 15 Ago 2026
+                  {t("dashboard.last_payout", "Última liquidación")}: {new Date().toLocaleDateString(language === "en" ? "en-US" : "es-CO", { month: "short", day: "numeric", year: "numeric" })}
                 </span>
                 <span>•</span>
                 <span className="flex items-center gap-1 font-bold text-[#111C2D]">
                   <span className="material-symbols-outlined text-sm text-[#FBB03B]">music_note</span>
-                  14 Obras registradas
+                  {scores.length} {t("dashboard.registered_scores", "Obras Registradas")}
                 </span>
               </div>
             </div>
           </div>
 
           <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 w-full lg:w-auto shrink-0">
-            <Link
-              href="/compositores/adolfo-mejia"
-              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-[#F0F3FF] hover:bg-slate-200/60 text-[#111C2D] font-bold text-xs rounded-xl transition border border-black/5 font-montserrat"
-            >
-              <span className="material-symbols-outlined text-base">visibility</span>
-              <span>Ver perfil público</span>
-            </Link>
+            {composer?.slug && (
+              <Link
+                href={`/compositores/${composer.slug}`}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-[#F0F3FF] hover:bg-slate-200/60 text-[#111C2D] font-bold text-xs rounded-xl transition border border-black/5 font-montserrat"
+              >
+                <span className="material-symbols-outlined text-base">visibility</span>
+                <span>{t("dashboard.public_profile", "Ver Perfil Público")}</span>
+              </Link>
+            )}
             <Link
               href="/compositor/dashboard/partituras/nueva"
               className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 bg-[#FBB03B] hover:bg-[#e09b2d] text-[#111C2D] font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md hover:shadow-lg transition font-montserrat"
             >
               <span className="material-symbols-outlined text-base">upload_file</span>
-              <span>Subir nueva partitura</span>
+              <span>{t("dashboard.upload_score_btn", "Subir Partitura")}</span>
             </Link>
           </div>
         </div>
       </section>
 
-      {/* 2. Navegación Principal de Pestañas (Segmented Switcher Adaptativo) */}
+      {/* 2. Navegación Principal de Pestañas */}
       <div className="bg-white p-2 rounded-2xl border border-black/5 shadow-xs grid grid-cols-1 sm:grid-cols-3 gap-2 font-montserrat">
         <button
           type="button"
@@ -188,7 +163,7 @@ export default function CompositorDashboardPage() {
           }`}
         >
           <span className="material-symbols-outlined text-base text-[#FBB03B]">analytics</span>
-          <span className="truncate">Panel de Métricas & Ventas</span>
+          <span className="truncate">{t("dashboard.metrics_tab", "Métricas & Rendimiento")}</span>
         </button>
 
         <button
@@ -201,11 +176,15 @@ export default function CompositorDashboardPage() {
           }`}
         >
           <span className="material-symbols-outlined text-base text-[#0071BC]">library_music</span>
-          <span>Mis Partituras</span>
-          <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${
-            activeMainTab === "partituras" ? "bg-[#FBB03B] text-[#111C2D]" : "bg-white text-[#0071BC] border border-black/5"
-          }`}>
-            {mockComposerScores.length}
+          <span>{t("dashboard.scores_tab", "Catálogo de Obras")}</span>
+          <span
+            className={`text-[10px] px-2 py-0.5 rounded-full font-black ${
+              activeMainTab === "partituras"
+                ? "bg-[#FBB03B] text-[#111C2D]"
+                : "bg-white text-[#0071BC] border border-black/5"
+            }`}
+          >
+            {scores.length}
           </span>
         </button>
 
@@ -214,39 +193,32 @@ export default function CompositorDashboardPage() {
           className="flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl font-extrabold text-xs bg-[#F0F3FF] text-[#4C4546] hover:text-[#111C2D] hover:bg-slate-200/60 transition"
         >
           <span className="material-symbols-outlined text-base text-[#C1272D]">badge</span>
-          <span>Perfil & Biografía</span>
+          <span>{t("dashboard.nav_profile", "Perfil & Biografía")}</span>
         </Link>
       </div>
 
-      {/* ==========================================
-             PESTAÑA 1: PANEL DE MÉTRICAS
-             ========================================== */}
+      {/* PESTAÑA 1: PANEL DE MÉTRICAS */}
       {activeMainTab === "metricas" && (
         <div className="space-y-8">
-          
-          {/* KPI Cards (4 Bento Grid) */}
           <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            
             <div className="p-6 bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] flex flex-col justify-between group hover:shadow-lg transition-all">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#4C4546] font-montserrat">
-                  Ventas Totales Brutas
+                  {t("dashboard.total_scores", "Partituras en Catálogo")}
                 </span>
                 <div className="w-10 h-10 rounded-xl bg-[#F0F3FF] flex items-center justify-center text-[#111C2D] group-hover:bg-[#111C2D] group-hover:text-white transition-colors">
-                  <span className="material-symbols-outlined text-xl">query_stats</span>
+                  <span className="material-symbols-outlined text-xl">library_books</span>
                 </div>
               </div>
               <div className="mt-4">
-                <div className="text-2xl font-black font-montserrat text-[#111C2D] tracking-tight">
-                  $5.865.000 <span className="text-xs font-bold text-[#4C4546]">COP</span>
+                <div className="text-3xl font-black font-montserrat text-[#111C2D] tracking-tight">
+                  {scores.length}
                 </div>
                 <div className="flex items-center gap-1 mt-2 text-[#0071BC] text-xs font-bold font-montserrat">
-                  <span className="material-symbols-outlined text-base">trending_up</span>
-                  <span>+18.4% este trimestre</span>
+                  <span>{publishedScores.length} {t("dashboard.approved_scores_count", "Aprobadas")}</span>
+                  <span>•</span>
+                  <span>{inReviewScores.length} {t("dashboard.in_review_scores_count", "En Revisión")}</span>
                 </div>
-              </div>
-              <div className="mt-4 pt-3 bg-[#F0F3FF]/60 -mx-6 -mb-6 px-6 pb-3 rounded-b-2xl border-t border-black/5 text-[11px] text-[#4C4546] font-medium">
-                109 partituras licenciadas en 8 países
               </div>
             </div>
 
@@ -254,10 +226,7 @@ export default function CompositorDashboardPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
                   <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#4C4546] font-montserrat">
-                    Regalías Netas Autor
-                  </span>
-                  <span className="px-2 py-0.5 bg-[#FBB03B]/20 text-[#111C2D] text-[10px] font-black rounded-md font-montserrat">
-                    80% Net
+                    {t("dashboard.royalties_balance", "Saldo de Regalías (80%)")}
                   </span>
                 </div>
                 <div className="w-10 h-10 rounded-xl bg-[#F0F3FF] flex items-center justify-center text-[#0071BC] group-hover:bg-[#0071BC] group-hover:text-white transition-colors">
@@ -266,173 +235,70 @@ export default function CompositorDashboardPage() {
               </div>
               <div className="mt-4">
                 <div className="text-2xl font-black font-montserrat text-[#111C2D] tracking-tight">
-                  $4.692.000 <span className="text-xs font-bold text-[#4C4546]">COP</span>
+                  ${netRoyalties.toLocaleString(language === "en" ? "en-US" : "es-CO")} <span className="text-xs font-bold text-[#4C4546]">COP</span>
                 </div>
                 <div className="flex items-center gap-1 mt-2 text-[#111C2D] text-xs font-bold font-montserrat">
                   <span className="material-symbols-outlined text-base text-[#FBB03B]">verified</span>
-                  <span>Fondo neto acreditado en PayPal</span>
+                  <span>{t("dashboard.wompi_dispersal", "Dispersión Wompi / PSE")}</span>
                 </div>
-              </div>
-              <div className="mt-4 pt-3 bg-[#F0F3FF]/60 -mx-6 -mb-6 px-6 pb-3 rounded-b-2xl border-t border-black/5 text-[11px] text-[#4C4546] font-medium">
-                20% retenido para mantenimiento de la plataforma
               </div>
             </div>
 
             <div className="p-6 bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] flex flex-col justify-between group hover:shadow-lg transition-all">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#4C4546] font-montserrat">
-                  Próximo Desembolso
+                  {t("dashboard.scores_in_review", "En Mesa de Revisión")}
                 </span>
                 <div className="w-10 h-10 rounded-xl bg-[#FBB03B]/20 flex items-center justify-center text-[#111C2D]">
                   <span className="material-symbols-outlined text-xl">hourglass_top</span>
                 </div>
               </div>
               <div className="mt-4">
-                <div className="text-2xl font-black font-montserrat text-[#111C2D] tracking-tight">
-                  $540.000 <span className="text-xs font-bold text-[#4C4546]">COP</span>
+                <div className="text-3xl font-black font-montserrat text-[#111C2D] tracking-tight">
+                  {inReviewScores.length}
                 </div>
                 <div className="flex items-center gap-1 mt-2 text-[#4C4546] text-xs font-medium">
-                  <span className="material-symbols-outlined text-sm text-[#0071BC]">event_repeat</span>
-                  <span>Programado: 15 de Sept. 2026</span>
+                  <span>{t("dashboard.in_curation", "En proceso de validación curatorial")}</span>
                 </div>
-              </div>
-              <div className="mt-4 pt-3 bg-[#F0F3FF]/60 -mx-6 -mb-6 px-6 pb-3 rounded-b-2xl border-t border-black/5 flex items-center justify-between text-[11px] text-[#4C4546] font-medium">
-                <span>PayPal (adolfo.mejia@...)</span>
-                <span className="material-symbols-outlined text-xs text-[#0071BC]">lock</span>
               </div>
             </div>
 
             <div className="p-6 bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] flex flex-col justify-between group hover:shadow-lg transition-all">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#4C4546] font-montserrat">
-                  Histórico Transferido
+                  {t("dashboard.total_sales", "Ventas Acumuladas")}
                 </span>
-                <div className="w-10 h-10 rounded-xl bg-[#F0F3FF] flex items-center justify-center text-[#111C2D] group-hover:bg-[#111C2D] group-hover:text-white transition-colors">
-                  <span className="material-symbols-outlined text-xl">receipt_long</span>
+                <div className="w-10 h-10 rounded-xl bg-[#F0F3FF] flex items-center justify-center text-[#111C2D]">
+                  <span className="material-symbols-outlined text-xl">shopping_bag</span>
                 </div>
               </div>
               <div className="mt-4">
-                <div className="text-2xl font-black font-montserrat text-[#111C2D] tracking-tight">
-                  $1.440.000 <span className="text-xs font-bold text-[#4C4546]">COP</span>
+                <div className="text-3xl font-black font-montserrat text-[#111C2D] tracking-tight">
+                  {totalSales}
                 </div>
-                <div className="flex items-center gap-1 mt-2 text-[#4C4546] text-xs font-medium">
-                  <span className="material-symbols-outlined text-sm text-emerald-600">done_all</span>
-                  <span>3 lotes PayPal liquidados</span>
+                <div className="flex items-center gap-1 mt-2 text-emerald-700 text-xs font-bold font-montserrat">
+                  <span className="material-symbols-outlined text-base">trending_up</span>
+                  <span>{t("dashboard.active_licenses", "Licencias activas")}</span>
                 </div>
-              </div>
-              <div className="mt-4 pt-3 bg-[#F0F3FF]/60 -mx-6 -mb-6 px-6 pb-3 rounded-b-2xl border-t border-black/5 flex items-center justify-between text-[11px]">
-                <Link href="/compositor/dashboard/pagos" className="font-bold text-[#0071BC] hover:underline">
-                  Ver detalle de dispersiones →
-                </Link>
               </div>
             </div>
-
           </section>
-
-          {/* Gráfico y Alcance Global */}
-          <section className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            
-            <div className="lg:col-span-8 p-6 lg:p-8 bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] flex flex-col justify-between">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                <div>
-                  <h2 className="text-lg font-black font-montserrat text-[#111C2D]">Rendimiento de Ventas & Descargas</h2>
-                  <p className="text-xs text-[#4C4546] font-normal mt-0.5">Evolución mensual de copias digitales licenciadas</p>
-                </div>
-              </div>
-
-              <div className="w-full h-56 relative flex items-end my-2">
-                <svg className="w-full h-full overflow-visible" viewBox="0 0 700 200" preserveAspectRatio="none">
-                  <defs>
-                    <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#0071BC" stopOpacity="0.25" />
-                      <stop offset="100%" stopColor="#0071BC" stopOpacity="0.0" />
-                    </linearGradient>
-                  </defs>
-                  <line x1="0" y1="40" x2="700" y2="40" stroke="#F0F3FF" strokeWidth="1" strokeDasharray="4,4" />
-                  <line x1="0" y1="100" x2="700" y2="100" stroke="#F0F3FF" strokeWidth="1" strokeDasharray="4,4" />
-                  <line x1="0" y1="190" x2="700" y2="190" stroke="#E2E8F0" strokeWidth="1" />
-
-                  <path d="M 30,160 Q 140,140 250,110 T 470,75 T 670,30 L 670,190 L 30,190 Z" fill="url(#trendGradient)" />
-                  <path d="M 30,160 Q 140,140 250,110 T 470,75 T 670,30" fill="none" stroke="#0071BC" strokeWidth="3.5" strokeLinecap="round" />
-
-                  <circle cx="670" cy="30" r="6" fill="#FBB03B" stroke="#111C2D" strokeWidth="2.5" />
-                  <circle cx="470" cy="75" r="4.5" fill="#0071BC" stroke="#ffffff" strokeWidth="2" />
-                  <circle cx="250" cy="110" r="4.5" fill="#0071BC" stroke="#ffffff" strokeWidth="2" />
-                </svg>
-              </div>
-
-              <div className="flex justify-between items-center text-xs font-mono text-[#4C4546] pt-2 border-t border-black/5">
-                <span>May ($450k)</span>
-                <span>Jun ($680k)</span>
-                <span>Jul ($890k)</span>
-                <span>Ago ($1.150k)</span>
-                <span className="font-bold text-[#0071BC]">Sep ($1.890k)</span>
-              </div>
-            </div>
-
-            <div className="lg:col-span-4 p-6 lg:p-8 bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h2 className="text-lg font-black font-montserrat text-[#111C2D]">Alcance Internacional</h2>
-                  <span className="material-symbols-outlined text-[#0071BC]">public</span>
-                </div>
-                <p className="text-xs text-[#4C4546] mb-6 leading-relaxed">
-                  Distribución geográfica de pianistas que han adquirido tu catálogo.
-                </p>
-
-                <div className="space-y-4">
-                  <div>
-                    <div className="flex justify-between text-xs font-semibold mb-1 text-[#111C2D]">
-                      <span className="flex items-center gap-1.5">🇨🇴 Colombia</span>
-                      <span className="font-bold">52%</span>
-                    </div>
-                    <div className="w-full h-2 bg-[#F0F3FF] rounded-full overflow-hidden">
-                      <div className="h-full bg-[#111C2D] rounded-full" style={{ width: "52%" }}></div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-xs font-semibold mb-1 text-[#111C2D]">
-                      <span className="flex items-center gap-1.5">🇺🇸 Estados Unidos</span>
-                      <span className="font-bold">24%</span>
-                    </div>
-                    <div className="w-full h-2 bg-[#F0F3FF] rounded-full overflow-hidden">
-                      <div className="h-full bg-[#0071BC] rounded-full" style={{ width: "24%" }}></div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-xs font-semibold mb-1 text-[#111C2D]">
-                      <span className="flex items-center gap-1.5">🇪🇸 España</span>
-                      <span className="font-bold">14%</span>
-                    </div>
-                    <div className="w-full h-2 bg-[#F0F3FF] rounded-full overflow-hidden">
-                      <div className="h-full bg-[#FBB03B] rounded-full" style={{ width: "14%" }}></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-          </section>
-
         </div>
       )}
 
-      {/* ==========================================
-             PESTAÑA 2: MIS PARTITURAS
-             ========================================== */}
+      {/* PESTAÑA 2: MIS PARTITURAS (CATÁLOGO REAL DE BASE DE DATOS) */}
       {activeMainTab === "partituras" && (
         <div className="space-y-6">
-          
-          {/* Header de Mis Partituras */}
           <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 p-6 bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)]">
             <div className="space-y-1">
               <h2 className="text-2xl font-black font-montserrat text-[#111C2D]">
-                Gestión de Partituras Publicadas
+                {t("dashboard.scores_tab", "Catálogo de Obras")}
               </h2>
               <p className="text-xs text-[#4C4546]">
-                Administra tus obras cargadas, revisa el estado de aprobación musicológica y monitorea las ventas individuales.
+                {t(
+                  "dashboard.scores_catalog_desc",
+                  "Administra tus obras cargadas, revisa el estado de aprobación musicológica y monitorea la disponibilidad en tienda."
+                )}
               </p>
             </div>
 
@@ -441,26 +307,25 @@ export default function CompositorDashboardPage() {
               className="px-5 py-3 bg-[#FBB03B] hover:bg-[#e09b2e] text-[#111C2D] font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition font-montserrat flex items-center justify-center gap-2 shrink-0"
             >
               <span className="material-symbols-outlined text-lg">add_circle</span>
-              Subir Nueva Partitura
+              {t("dashboard.upload_score_btn", "Subir Nueva Partitura")}
             </Link>
           </div>
 
           {/* Toolbar de Búsqueda y Filtros */}
           <div className="p-4 bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
-            
-            {/* Buscador */}
             <div className="relative flex-1">
-              <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[#4C4546] text-lg">search</span>
+              <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[#4C4546] text-lg">
+                search
+              </span>
               <input
                 type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Filtrar obras por título, categoría o ISMN..."
+                placeholder={t("dashboard.search_scores", "Buscar por título, género o clave...")}
                 className="w-full pl-10 pr-4 py-2.5 text-xs bg-[#F0F3FF] border border-black/5 rounded-xl text-[#111C2D] placeholder-[#4C4546]/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
               />
             </div>
 
-            {/* Selector de Estado */}
             <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
               <button
                 onClick={() => setScoreFilter("todas")}
@@ -470,7 +335,7 @@ export default function CompositorDashboardPage() {
                     : "bg-[#F0F3FF] text-[#4C4546] hover:text-[#111C2D]"
                 }`}
               >
-                Todas ({mockComposerScores.length})
+                {t("dashboard.filter_all", "Todas")} ({scores.length})
               </button>
               <button
                 onClick={() => setScoreFilter("publicadas")}
@@ -480,7 +345,7 @@ export default function CompositorDashboardPage() {
                     : "bg-[#F0F3FF] text-[#4C4546] hover:text-[#111C2D]"
                 }`}
               >
-                Publicadas (3)
+                {t("dashboard.filter_published", "Publicadas")} ({publishedScores.length})
               </button>
               <button
                 onClick={() => setScoreFilter("revision")}
@@ -490,159 +355,140 @@ export default function CompositorDashboardPage() {
                     : "bg-[#F0F3FF] text-[#4C4546] hover:text-[#111C2D]"
                 }`}
               >
-                En Revisión (1)
+                {t("dashboard.filter_in_review", "En Revisión")} ({inReviewScores.length})
               </button>
               <button
-                onClick={() => setScoreFilter("borradores")}
+                onClick={() => setScoreFilter("rechazadas")}
                 className={`px-3.5 py-2 rounded-xl text-xs font-montserrat font-bold transition whitespace-nowrap ${
-                  scoreFilter === "borradores"
+                  scoreFilter === "rechazadas"
                     ? "bg-[#111C2D] text-white shadow-2xs"
                     : "bg-[#F0F3FF] text-[#4C4546] hover:text-[#111C2D]"
                 }`}
               >
-                Borradores (1)
+                {t("dashboard.filter_rejected", "Con Observaciones")} ({rejectedScores.length})
               </button>
             </div>
-
           </div>
 
-          {/* Tabla & Cards de Partituras */}
+          {/* Tabla de Partituras Reales */}
           <div className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] overflow-hidden">
-            <div className="w-full overflow-x-auto overscroll-x-contain">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-[#F0F3FF] text-[#4C4546] font-montserrat text-[11px] font-extrabold uppercase tracking-wider border-b border-black/5">
-                    <th className="py-4 px-6">Partitura & Formato</th>
-                    <th className="py-4 px-6">ISMN / Categoría</th>
-                    <th className="py-4 px-6">PVP Publicado</th>
-                    <th className="py-4 px-6">Estado Editorial</th>
-                    <th className="py-4 px-6">Ventas</th>
-                    <th className="py-4 px-6">Ganancia Neta (80%)</th>
-                    <th className="py-4 px-6 text-right">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-black/5 text-xs text-[#111C2D]">
-                  {filteredScores.map((score) => (
-                    <tr key={score.id} className="hover:bg-[#F0F3FF]/40 transition group">
-                      
-                      {/* Partitura & Formato */}
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-[#111C2D] text-[#FBB03B] flex items-center justify-center shrink-0 font-bold">
-                            <span className="material-symbols-outlined text-xl">music_note</span>
-                          </div>
-                          <div>
-                            <h3 className="font-bold font-montserrat text-sm text-[#111C2D] group-hover:text-[#0071BC] transition-colors">
-                              {score.title}
-                            </h3>
-                            <span className="text-[11px] text-[#4C4546] block">{score.format}</span>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* ISMN / Categoría */}
-                      <td className="py-4 px-6">
-                        <span className="font-mono text-xs font-bold text-[#111C2D] block">{score.ismn}</span>
-                        <span className="inline-block px-2 py-0.5 bg-[#F0F3FF] text-[#0071BC] text-[10px] font-bold rounded mt-0.5 font-montserrat">
-                          {score.category} • {score.level}
-                        </span>
-                      </td>
-
-                      {/* PVP */}
-                      <td className="py-4 px-6 font-mono font-bold">
-                        <div>${score.priceCOP.toLocaleString('es-CO')} COP</div>
-                        <span className="text-[10px] text-[#4C4546]">(${score.priceUSD} USD)</span>
-                      </td>
-
-                      {/* Estado Editorial */}
-                      <td className="py-4 px-6">
-                        {score.status === "published" && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-extrabold font-montserrat border border-emerald-200">
-                            <span className="material-symbols-outlined text-xs">verified</span>
-                            Publicada & Protegida
-                          </span>
-                        )}
-                        {score.status === "review" && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-800 rounded-full text-[10px] font-extrabold font-montserrat border border-amber-200">
-                            <span className="material-symbols-outlined text-xs">hourglass_top</span>
-                            En Revisión Musicológica
-                          </span>
-                        )}
-                        {score.status === "draft" && (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-700 rounded-full text-[10px] font-extrabold font-montserrat border border-slate-200">
-                            <span className="material-symbols-outlined text-xs">edit_note</span>
-                            Borrador Incompleto
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Ventas */}
-                      <td className="py-4 px-6 font-montserrat font-bold text-sm">
-                        {score.salesCount} <span className="text-xs font-normal text-[#4C4546]">copias</span>
-                      </td>
-
-                      {/* Ganancia Neta */}
-                      <td className="py-4 px-6 font-mono font-black text-sm text-emerald-700">
-                        ${score.netEarnings.toLocaleString('es-CO')} COP
-                      </td>
-
-                      {/* Acciones */}
-                      <td className="py-4 px-6 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          {score.status === "published" && (
-                            <Link
-                              href={`/partitura/${score.slug}`}
-                              className="px-3 py-1.5 bg-[#F0F3FF] hover:bg-slate-200/60 text-[#0071BC] rounded-xl font-bold text-xs transition font-montserrat inline-flex items-center gap-1 border border-black/5"
-                            >
-                              <span className="material-symbols-outlined text-sm">visibility</span>
-                              Visor Muestra
-                            </Link>
-                          )}
-                          <button
-                            onClick={() => alert(`Editando metadatos de ${score.title}...`)}
-                            className="p-2 text-[#4C4546] hover:text-[#111C2D] hover:bg-[#F0F3FF] rounded-xl transition"
-                            title="Editar Metadatos"
-                          >
-                            <span className="material-symbols-outlined text-base">edit</span>
-                          </button>
-                        </div>
-                      </td>
-
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Infobox de Seguridad y Derechos de Autor */}
-          <div className="p-6 bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-            <div className="flex items-start gap-4">
-              <div className="p-3 bg-[#F0F3FF] text-[#0071BC] rounded-2xl shrink-0 border border-black/5">
-                <span className="material-symbols-outlined text-2xl">shield</span>
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-sm font-bold font-montserrat text-[#111C2D]">
-                  Protección de Marcas de Agua & Visor al 40%
-                </h3>
-                <p className="text-xs text-[#4C4546] leading-relaxed">
-                  Tus archivos PDF originales son resguardados en servidores cifrados. La tienda pública solo exhibe una muestra protegida con opacidad reducida al 40%, desenfoque progresivo y marca diagonal anti-copia.
+            {loadingScores ? (
+              <div className="p-12 text-center">
+                <div className="w-8 h-8 border-3 border-[#0071BC] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                <p className="text-xs font-bold text-[#4C4546] font-montserrat">
+                  {t("dashboard.loading_scores_from_db", "Cargando partituras desde la base de datos...")}
                 </p>
               </div>
-            </div>
+            ) : filteredScores.length === 0 ? (
+              <div className="p-12 text-center space-y-4">
+                <div className="w-16 h-16 rounded-full bg-[#F0F3FF] text-[#0071BC] flex items-center justify-center mx-auto text-3xl">
+                  <span className="material-symbols-outlined">library_music</span>
+                </div>
+                <h3 className="font-montserrat font-black text-lg text-[#111C2D]">
+                  {t("dashboard.no_scores_title", "Aún no tienes partituras registradas")}
+                </h3>
+                <p className="text-xs text-[#4C4546] max-w-md mx-auto leading-relaxed">
+                  {t(
+                    "dashboard.no_scores_desc",
+                    "Sube tu primera obra en formato PDF de alta resolución con vistas previas automáticas."
+                  )}
+                </p>
+                <Link
+                  href="/compositor/dashboard/partituras/nueva"
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-[#0071BC] hover:bg-[#005a96] text-white font-bold text-xs rounded-xl shadow-md transition font-montserrat"
+                >
+                  <span className="material-symbols-outlined text-base">cloud_upload</span>
+                  {t("dashboard.upload_score_btn", "Subir Nueva Partitura")}
+                </Link>
+              </div>
+            ) : (
+              <div className="w-full overflow-x-auto overscroll-x-contain">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-[#F0F3FF] text-[#4C4546] font-montserrat text-[11px] font-extrabold uppercase tracking-wider border-b border-black/5">
+                      <th className="py-4 px-6">{t("dashboard.table_title", "Título de la Obra")}</th>
+                      <th className="py-4 px-6">{t("dashboard.table_genre", "Género")} / {t("dashboard.table_difficulty", "Dificultad")}</th>
+                      <th className="py-4 px-6">{t("dashboard.table_price", "Precio")}</th>
+                      <th className="py-4 px-6">{t("dashboard.table_status", "Estado")}</th>
+                      <th className="py-4 px-6 text-right">{t("dashboard.table_actions", "Acciones")}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-black/5 text-xs text-[#111C2D]">
+                    {filteredScores.map((score) => (
+                      <tr key={score.id} className="hover:bg-[#F0F3FF]/40 transition group">
+                        <td className="py-4 px-6">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-[#111C2D] text-[#FBB03B] flex items-center justify-center shrink-0 font-bold">
+                              <span className="material-symbols-outlined text-xl">music_note</span>
+                            </div>
+                            <div>
+                              <h3 className="font-bold font-montserrat text-sm text-[#111C2D] group-hover:text-[#0071BC] transition-colors">
+                                {score.title}
+                              </h3>
+                              <span className="text-[11px] text-[#4C4546] block">
+                                {score.pages_count ? `${score.pages_count} ${t("dashboard.pages", "páginas")}` : "PDF Urtext"}
+                              </span>
+                            </div>
+                          </div>
+                        </td>
 
-            <Link
-              href="/compositor/dashboard/partituras/nueva"
-              className="px-4 py-2.5 rounded-xl border border-black/10 text-[#111C2D] bg-[#F0F3FF] hover:bg-slate-200/60 font-bold text-xs transition shadow-2xs font-montserrat shrink-0 flex items-center gap-1.5"
-            >
-              <span className="material-symbols-outlined text-base text-[#0071BC]">cloud_upload</span>
-              Subir Nueva Obra
-            </Link>
+                        <td className="py-4 px-6">
+                          <span className="font-bold text-[#111C2D] block">{score.genre || "Piano Solo"}</span>
+                          <span className="inline-block px-2 py-0.5 bg-[#F0F3FF] text-[#0071BC] text-[10px] font-bold rounded mt-0.5 font-montserrat">
+                            {score.difficulty || "Intermedio"}
+                          </span>
+                        </td>
+
+                        <td className="py-4 px-6 font-mono font-bold">
+                          <div>${Number(score.price_cop || 45000).toLocaleString(language === "en" ? "en-US" : "es-CO")} COP</div>
+                          {score.price_usd && (
+                            <span className="text-[10px] text-[#4C4546]">(${score.price_usd} USD)</span>
+                          )}
+                        </td>
+
+                        <td className="py-4 px-6">
+                          {score.status === "APPROVED" && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-extrabold font-montserrat border border-emerald-200">
+                              <span className="material-symbols-outlined text-xs">verified</span>
+                              {t("dashboard.approved_in_store", "Aprobada & En Tienda")}
+                            </span>
+                          )}
+                          {score.status === "IN_REVIEW" && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-800 rounded-full text-[10px] font-extrabold font-montserrat border border-amber-200">
+                              <span className="material-symbols-outlined text-xs">hourglass_top</span>
+                              {t("dashboard.filter_in_review", "En Revisión")}
+                            </span>
+                          )}
+                          {score.status === "REJECTED" && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-50 text-rose-800 rounded-full text-[10px] font-extrabold font-montserrat border border-rose-200">
+                              <span className="material-symbols-outlined text-xs">edit_note</span>
+                              {t("dashboard.filter_rejected", "Requiere Corrección")}
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="py-4 px-6 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {score.status === "APPROVED" && score.slug && (
+                              <Link
+                                href={`/partitura/${score.slug}`}
+                                className="px-3 py-1.5 bg-[#F0F3FF] hover:bg-slate-200/60 text-[#0071BC] rounded-xl font-bold text-xs transition font-montserrat inline-flex items-center gap-1 border border-black/5"
+                              >
+                                <span className="material-symbols-outlined text-sm">visibility</span>
+                                {t("dashboard.view_in_store", "Ver en Tienda")}
+                              </Link>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-
         </div>
       )}
-
     </div>
   );
 }

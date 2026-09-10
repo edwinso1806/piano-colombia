@@ -6,6 +6,7 @@ export const ComposerStatus = {
   APPROVED: "APPROVED",
   REJECTED: "REJECTED",
   SUSPENDED: "SUSPENDED",
+  BLOCKED: "BLOCKED",
 } as const
 
 export const Composer = model.define("composer", {
@@ -21,6 +22,7 @@ export const Composer = model.define("composer", {
   photo_url: model.text().nullable(),
   status: model.enum(Object.values(ComposerStatus)).default(ComposerStatus.PENDING_APPROVAL),
   rejection_reason: model.text().nullable(),
+  approval_attempts: model.number().default(1),
   user_id: model.text().nullable(), // Reference to Auth / Customer ID
   email: model.text(),
   phone: model.text().nullable(),

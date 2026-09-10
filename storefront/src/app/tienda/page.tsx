@@ -1,10 +1,28 @@
 import Link from "next/link";
 import { MOCK_SCORES } from "@/lib/mock-data";
+import { getCatalogScores } from "@/lib/api-client";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SaveScoreButton from "@/components/SaveScoreButton";
 
-export default function TiendaPage() {
+export default async function TiendaPage() {
+  const liveScores = await getCatalogScores();
+  const scores = Array.isArray(liveScores) && liveScores.length > 0
+    ? liveScores.map((s: any) => ({
+        id: s.id,
+        title: s.title,
+        slug: s.slug || s.id,
+        composer: s.composer?.artistic_name || `${s.composer?.first_name || ""} ${s.composer?.last_name || ""}`.trim() || "Compositor Colombiano",
+        composerId: s.composer_id,
+        level: s.difficulty || "Intermedio",
+        category: s.genre || "Piano Solo",
+        tags: s.tags || [],
+        priceCOP: Number(s.price_cop) || 45000,
+        priceUSD: Number(s.price_usd) || 12,
+        previewPages: s.preview_images || [],
+        description: s.description || "Edición filológica y digital de alta calidad con licencias oficiales.",
+      }))
+    : MOCK_SCORES;
   return (
     <div className="min-h-screen bg-[#F9F9FF] text-[#111C2D] flex flex-col font-inter antialiased selection:bg-[#FBB03B]/30 selection:text-[#111C2D]">
       
@@ -73,13 +91,13 @@ export default function TiendaPage() {
               <p className="text-xs text-[#4C4546] mt-1 font-medium">Repertorio revisado con marcaciones de digitación y licencias legalmente firmadas.</p>
             </div>
             <span className="text-xs text-[#4C4546] font-bold font-montserrat bg-[#F0F3FF] px-3.5 py-1.5 rounded-full shrink-0 border border-black/5">
-              {MOCK_SCORES.length} partituras disponibles
+              {scores.length} partituras disponibles
             </span>
           </div>
 
           {/* Product Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {MOCK_SCORES.map((score) => (
+            {scores.map((score: any) => (
               <div key={score.id} className="group flex flex-col rounded-2xl bg-white border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 overflow-hidden">
                 
                 {/* Miniature Preview Container */}

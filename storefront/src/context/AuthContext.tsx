@@ -11,6 +11,7 @@ export interface ComposerUser {
   id?: string;
   artistic_name: string;
   email: string;
+  slug?: string;
   first_name?: string;
   last_name?: string;
   phone?: string;

@@ -37,6 +37,25 @@ export async function getCatalogScores(filters?: {
   }
 }
 
+export async function getComposerScoresApi(composerId: string, status?: string) {
+  try {
+    const params = new URLSearchParams()
+    params.append("composer_id", composerId)
+    if (status && status !== "todas") params.append("status", status)
+
+    const res = await fetch(`${MEDUSA_URL}/store/scores?${params.toString()}`, {
+      headers: defaultHeaders,
+      cache: "no-store",
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    return data.scores || []
+  } catch (err) {
+    console.warn("Error consultando partituras del compositor:", err)
+    return []
+  }
+}
+
 // ----------------------------------------------------------------------
 // 2. Directorio de Compositores
 // ----------------------------------------------------------------------
@@ -179,13 +198,16 @@ export async function approveComposerAdmin(id: string) {
   return await res.json()
 }
 
-export async function rejectComposerAdmin(id: string, reason: string) {
+export async function rejectComposerAdmin(id: string, reason: string, isPermanentBlock: boolean = false) {
   const res = await fetch(`${MEDUSA_URL}/admin/composers/${id}/reject`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ reason }),
+    body: JSON.stringify({ reason, is_permanent_block: isPermanentBlock }),
   })
-  if (!res.ok) throw new Error("Error al rechazar compositor")
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}))
+    throw new Error(errorData.message || "Error al procesar la solicitud de moderación")
+  }
   return await res.json()
 }
 
@@ -487,14 +509,16 @@ export async function loginAdminApi(email: string, password: string, role?: stri
 export async function requestPasswordResetApi(payload: {
   email: string
   role?: "customer" | "composer" | "admin"
+  token?: string
 }) {
   try {
-    const res = await fetch(`${MEDUSA_URL}/store/auth/password-reset/request`, {
+    const res = await fetch(`${MEDUSA_URL}/auth/password-reset/request`, {
       method: "POST",
       headers: defaultHeaders,
       body: JSON.stringify({
         email: payload.email,
         role: payload.role || "customer",
+        token: payload.token,
       }),
     })
     const data = await res.json().catch(() => ({}))
@@ -513,9 +537,10 @@ export async function confirmPasswordResetApi(payload: {
   code: string
   newPassword: string
   role?: "customer" | "composer" | "admin"
+  token?: string
 }) {
   try {
-    const res = await fetch(`${MEDUSA_URL}/store/auth/password-reset/confirm`, {
+    const res = await fetch(`${MEDUSA_URL}/auth/password-reset/confirm`, {
       method: "POST",
       headers: defaultHeaders,
       body: JSON.stringify({
@@ -523,6 +548,7 @@ export async function confirmPasswordResetApi(payload: {
         code: payload.code,
         new_password: payload.newPassword,
         role: payload.role || "customer",
+        token: payload.token,
       }),
     })
     const data = await res.json().catch(() => ({}))
@@ -578,4 +604,160 @@ export async function updateComposerProfileApi(payload: any) {
   return data
 }
 
+// 7. Gestión de Usuarios Administrativos RBAC
+export async function getAdminUsersApi(requestingUser?: { role?: string; email?: string }) {
+  const params = new URLSearchParams()
+  if (requestingUser?.role) params.append("requesting_user_role", requestingUser.role)
+  if (requestingUser?.email) params.append("requesting_user_email", requestingUser.email)
+  const qs = params.toString() ? `?${params.toString()}` : ""
+  const res = await fetch(`${MEDUSA_URL}/admin/users${qs}`, {
+    method: "GET",
+    headers: defaultHeaders,
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.message || "Error al consultar usuarios administrativos")
+  return data.users || []
+}
 
+export async function createAdminUserApi(payload: {
+  name: string
+  email: string
+  role: string
+  permissions?: string[]
+  requesting_user_role?: string
+  requesting_user_email?: string
+}) {
+  const res = await fetch(`${MEDUSA_URL}/admin/users`, {
+    method: "POST",
+    headers: defaultHeaders,
+    body: JSON.stringify(payload),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.message || "Error al crear usuario administrativo")
+  return data
+}
+
+export async function updateAdminUserApi(payload: {
+  id: string
+  name?: string
+  email?: string
+  role?: string
+  permissions?: string[]
+  status?: string
+  requesting_user_role?: string
+  requesting_user_email?: string
+}) {
+  const res = await fetch(`${MEDUSA_URL}/admin/users`, {
+    method: "PUT",
+    headers: defaultHeaders,
+    body: JSON.stringify(payload),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.message || "Error al actualizar usuario administrativo")
+  return data
+}
+
+export async function toggleAdminUserStatusApi(payload: {
+  id: string
+  requesting_user_role?: string
+  requesting_user_email?: string
+}) {
+  const res = await fetch(`${MEDUSA_URL}/admin/users`, {
+    method: "PATCH",
+    headers: defaultHeaders,
+    body: JSON.stringify(payload),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.message || "Error al cambiar estado de usuario")
+  return data
+}
+
+export async function resendAdminUserInvitationApi(payload: {
+  userId: string
+  requesting_user_role?: string
+  requesting_user_email?: string
+}) {
+  const res = await fetch(`${MEDUSA_URL}/admin/users/resend-invitation`, {
+    method: "POST",
+    headers: defaultHeaders,
+    body: JSON.stringify(payload),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.message || "Error al reenviar invitación de usuario")
+  return data
+}
+
+// ----------------------------------------------------------------------
+// 9. Metadatos Dinámicos del Catálogo (Categorías & Dificultades CMS)
+// ----------------------------------------------------------------------
+
+export async function getStoreCatalogMetadata() {
+  try {
+    const res = await fetch(`${MEDUSA_URL}/store/settings/metadata`, {
+      headers: defaultHeaders,
+      cache: "no-store",
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return await res.json()
+  } catch (err) {
+    console.warn("Fallback a metadatos locales:", err)
+    return {
+      categories: ["Pasillo", "Bambuco", "Danza", "Guabina", "Vals", "Cumbia", "Porro", "Joropo", "Contradanza", "Estudio"],
+      difficulties: ["Iniciación / Fácil", "Intermedio", "Avanzado", "Virtuoso / Concierto"],
+    }
+  }
+}
+
+export async function getAdminCatalogMetadata() {
+  try {
+    const res = await fetch(`${MEDUSA_URL}/admin/settings/metadata`, {
+      headers: defaultHeaders,
+      cache: "no-store",
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return await res.json()
+  } catch (err) {
+    console.warn("Fallback a metadatos admin locales:", err)
+    return {
+      categories: ["Pasillo", "Bambuco", "Danza", "Guabina", "Vals", "Cumbia", "Porro", "Joropo", "Contradanza", "Estudio"],
+      difficulties: ["Iniciación / Fácil", "Intermedio", "Avanzado", "Virtuoso / Concierto"],
+    }
+  }
+}
+
+export async function updateAdminCatalogMetadata(payload: { categories?: string[]; difficulties?: string[] }) {
+  const res = await fetch(`${MEDUSA_URL}/admin/settings/metadata`, {
+    method: "POST",
+    headers: defaultHeaders,
+    body: JSON.stringify(payload),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.message || "Error al actualizar metadatos del catálogo")
+  return data
+}
+
+// ----------------------------------------------------------------------
+// 10. Gestión de Partituras por el Compositor (Creación & Edición)
+// ----------------------------------------------------------------------
+
+export async function createScoreApi(scoreData: Record<string, unknown>) {
+  const res = await fetch(`${MEDUSA_URL}/store/scores`, {
+    method: "POST",
+    headers: defaultHeaders,
+    body: JSON.stringify(scoreData),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.message || "Error al enviar la partitura")
+  return data
+}
+
+export async function updateScoreApi(slugOrId: string, scoreData: Record<string, unknown>) {
+  const res = await fetch(`${MEDUSA_URL}/store/scores/${slugOrId}`, {
+    method: "PUT",
+    headers: defaultHeaders,
+    body: JSON.stringify(scoreData),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.message || "Error al actualizar la partitura")
+  return data
+}

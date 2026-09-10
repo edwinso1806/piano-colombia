@@ -40,6 +40,22 @@ function AdminLoginForm() {
     message: string;
   } | null>(null);
 
+  // Auto-fill email & activar cuenta desde link de invitación por correo
+  useEffect(() => {
+    const urlEmail = searchParams.get("email");
+    const urlMode = searchParams.get("mode");
+
+    if (urlMode === "activate" && urlEmail) {
+      router.push(`/admin/activar-cuenta?email=${encodeURIComponent(urlEmail)}`);
+      return;
+    }
+
+    if (urlEmail) {
+      setEmail(urlEmail);
+      setForgotEmail(urlEmail);
+    }
+  }, [searchParams, router]);
+
   // Countdown timers para OTP
   useEffect(() => {
     let interval: any = null;
@@ -82,7 +98,20 @@ function AdminLoginForm() {
         name: res.admin.name,
       });
 
-      router.push(redirectPath);
+      let destination = redirectPath;
+      if (!searchParams.get("redirect") || destination === "/admin/dashboard" || destination === "/admin") {
+        if (res.admin.role === "moderator" || res.admin.role === "moderador") {
+          destination = "/admin/partituras";
+        } else if (res.admin.role === "editor" || res.admin.role === "editor_cms") {
+          destination = "/admin/cms";
+        } else if (res.admin.role === "payouts" || res.admin.role === "tesorero") {
+          destination = "/admin/pagos";
+        } else {
+          destination = "/admin/dashboard";
+        }
+      }
+
+      router.push(destination);
     } catch (err: any) {
       console.error("Fallo autenticación admin:", err);
 

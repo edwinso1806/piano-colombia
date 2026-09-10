@@ -1,10 +1,35 @@
 import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
+import { Client } from "pg"
 import { generateSessionToken } from "../../../../../lib/auth-security"
 
-// Registro persistente en memoria del último cambio de contraseña por correo admin
 const adminPasswordChangeTimestamps = new Map<string, number>()
 
+function getPgClient() {
+  return new Client({
+    connectionString: process.env.DATABASE_URL || "postgres://postgres:Alex%242020@localhost:5432/piano_colombia_db"
+  })
+}
+
+function mapRoleToAuthRole(roleId: string): "admin" | "editor" | "moderator" | "payouts" {
+  switch (roleId) {
+    case "super_admin":
+    case "admin":
+      return "admin"
+    case "moderador":
+    case "moderator":
+      return "moderator"
+    case "tesorero":
+    case "payouts":
+      return "payouts"
+    case "editor_cms":
+    case "editor":
+    default:
+      return "editor"
+  }
+}
+
 export async function POST(req: MedusaRequest, res: MedusaResponse) {
+  const client = getPgClient()
   try {
     const { email, password, role = "admin" } = (req.body as any) || {}
 
@@ -16,27 +41,52 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
 
     const normalizedEmail = email.trim().toLowerCase()
 
-    // Cuentas de correo administrativas institucionales autorizadas
-    const validRoles: Record<string, { role: "admin" | "editor" | "moderator" | "payouts"; name: string }> = {
-      "admin@pianocolombia.com": { role: "admin", name: "Super Admin PC" },
-      "editor.cms@pianocolombia.com": { role: "editor", name: "Editor de Contenido CMS" },
-      "moderador@pianocolombia.com": { role: "moderator", name: "Moderador de Obras & Perfiles" },
-      "tesorero@pianocolombia.com": { role: "payouts", name: "Tesorero de Pagos" },
-      "carlos.restrepo@pianocolombia.com": { role: "admin", name: "Carlos Restrepo (Admin)" },
-    }
+    await client.connect()
 
-    const isAuthorizedEmail = validRoles[normalizedEmail] || normalizedEmail.endsWith("@pianocolombia.com")
+    // 1. Buscar el usuario en la base de datos PostgreSQL admin_user
+    const dbUserRes = await client.query(
+      "SELECT * FROM admin_user WHERE LOWER(email) = LOWER($1) LIMIT 1;",
+      [normalizedEmail]
+    )
 
-    if (!isAuthorizedEmail || (password !== "piano2026" && password !== "Piano2026!" && password.length < 6)) {
-      return res.status(401).json({
-        message: "El correo electrónico institucional o la contraseña ingresada son incorrectos. Por favor verifica tus credenciales o utiliza la opción de recuperar contraseña.",
-      })
+    let matchedRole: "admin" | "editor" | "moderator" | "payouts" = "admin"
+    let matchedName = "Usuario Admin"
+
+    if (dbUserRes.rows.length > 0) {
+      const dbUser = dbUserRes.rows[0]
+      if (dbUser.status === "inactive") {
+        return res.status(403).json({
+          message: "Esta cuenta de usuario se encuentra inactiva. Contacta al Super Admin para solicitar su activación.",
+        })
+      }
+      matchedRole = mapRoleToAuthRole(dbUser.role_id)
+      matchedName = dbUser.name
+    } else {
+      // Usuarios por defecto autorizados
+      const validRoles: Record<string, { role: "admin" | "editor" | "moderator" | "payouts"; name: string }> = {
+        "admin@pianocolombia.com": { role: "admin", name: "Super Admin PC" },
+        "editor.cms@pianocolombia.com": { role: "editor", name: "Editor de Contenido CMS" },
+        "moderador@pianocolombia.com": { role: "moderator", name: "Moderador de Obras & Perfiles" },
+        "tesorero@pianocolombia.com": { role: "payouts", name: "Tesorero de Pagos" },
+        "carlos.restrepo@pianocolombia.com": { role: "admin", name: "Carlos Restrepo (Admin)" },
+      }
+
+      const defaultMatch = validRoles[normalizedEmail]
+      if (!defaultMatch && !normalizedEmail.endsWith("@pianocolombia.com")) {
+        return res.status(401).json({
+          message: "El correo electrónico ingresado no corresponde a un usuario registrado en la consola de administración.",
+        })
+      }
+
+      if (defaultMatch) {
+        matchedRole = defaultMatch.role
+        matchedName = defaultMatch.name
+      }
     }
 
     // 2. Evaluar Política de Seguridad de Rotación Obligatoria de Contraseña Cada 30 Días
     const now = Date.now()
     const lastChanged = adminPasswordChangeTimestamps.get(normalizedEmail) || now
-
     const daysDiff = Math.floor((now - lastChanged) / (1000 * 60 * 60 * 24))
 
     if (daysDiff >= 30 && req.query.skip_expiry !== "true") {
@@ -44,18 +94,13 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       return res.status(403).json({
         password_expired: true,
         email: normalizedEmail,
-        message: "Por políticas de seguridad de la consola de administración, debes renovar tu contraseña cada 30 días. Por favor actualiza tu clave a continuación para continuar.",
+        message: "Por políticas de seguridad de la consola de administración, debes renovar tu contraseña cada 30 días.",
       })
-    }
-
-    const matched = validRoles[normalizedEmail] || {
-      role: role as any,
-      name: role === "admin" ? "Super Admin PC" : "Usuario Admin",
     }
 
     const token = generateSessionToken({
       email: normalizedEmail,
-      role: matched.role,
+      role: matchedRole,
     })
 
     return res.status(200).json({
@@ -63,8 +108,8 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       token,
       admin: {
         email: normalizedEmail,
-        role: matched.role,
-        name: matched.name,
+        role: matchedRole,
+        name: matchedName,
       },
     })
   } catch (error: any) {
@@ -73,6 +118,8 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       message: "Error de conexión al autenticar usuario administrativo.",
       error: error.message,
     })
+  } finally {
+    await client.end().catch(() => {})
   }
 }
 
@@ -84,4 +131,3 @@ export function recordAdminPasswordChange(email: string) {
   const normalized = email.trim().toLowerCase()
   adminPasswordChangeTimestamps.set(normalized, Date.now())
 }
-

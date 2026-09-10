@@ -8,6 +8,104 @@ import MobileDrawer from "@/components/dashboard/MobileDrawer";
 import { useAuth } from "@/context/AuthContext";
 import { getAdminDashboardStats } from "@/lib/api-client";
 
+export type AdminRole = "admin" | "super_admin" | "editor" | "moderator" | "payouts";
+
+export interface AdminRouteConfig {
+  href: string;
+  label: string;
+  icon: string;
+  allowedRoles: AdminRole[];
+  badge?: string;
+  badgeColor?: string;
+}
+
+export const ADMIN_ROUTES: AdminRouteConfig[] = [
+  {
+    href: "/admin/dashboard",
+    label: "Dashboard Global",
+    icon: "analytics",
+    allowedRoles: ["admin", "super_admin"],
+  },
+  {
+    href: "/admin/compositores",
+    label: "Compositores",
+    icon: "person_check",
+    allowedRoles: ["admin", "super_admin", "moderator"],
+  },
+  {
+    href: "/admin/partituras",
+    label: "Partituras",
+    icon: "library_music",
+    allowedRoles: ["admin", "super_admin", "moderator"],
+  },
+  {
+    href: "/admin/cms",
+    label: "Gestor CMS",
+    icon: "web",
+    allowedRoles: ["admin", "super_admin", "editor"],
+  },
+  {
+    href: "/admin/pagos",
+    label: "Dispersión & Pagos",
+    icon: "payments",
+    badge: "Wompi API",
+    badgeColor: "bg-emerald-100 text-emerald-800",
+    allowedRoles: ["admin", "super_admin", "payouts"],
+  },
+  {
+    href: "/admin/usuarios",
+    label: "Usuarios & Roles",
+    icon: "manage_accounts",
+    allowedRoles: ["admin", "super_admin"],
+  },
+  {
+    href: "/admin/emails",
+    label: "Plantillas Email",
+    icon: "mail",
+    allowedRoles: ["admin", "super_admin", "editor"],
+  },
+];
+
+function normalizeRole(role?: string): AdminRole {
+  if (!role) return "editor";
+  const r = role.toLowerCase().trim();
+  if (r === "super_admin") return "super_admin";
+  if (r === "admin") return "admin";
+  if (r === "moderador" || r === "moderator") return "moderator";
+  if (r === "editor_cms" || r === "editor") return "editor";
+  if (r === "tesorero" || r === "payouts") return "payouts";
+  return "editor";
+}
+
+function getRoleLabel(role: AdminRole): string {
+  switch (role) {
+    case "super_admin":
+      return "Super Admin";
+    case "admin":
+      return "Administrador";
+    case "moderator":
+      return "Moderador de Obras & Compositores";
+    case "editor":
+      return "Editor de Contenido CMS";
+    case "payouts":
+      return "Tesorero / Pagos";
+    default:
+      return "Usuario Administrativo";
+  }
+}
+
+function isUserAllowedForRoute(role: AdminRole, email: string, route: AdminRouteConfig): boolean {
+  if (
+    role === "admin" ||
+    role === "super_admin" ||
+    email.toLowerCase() === "admin@pianocolombia.com" ||
+    email.toLowerCase() === "carlos.admin@pianocolombia.com"
+  ) {
+    return true;
+  }
+  return route.allowedRoles.includes(role);
+}
+
 export default function AdminLayout({
   children,
 }: {
@@ -20,6 +118,21 @@ export default function AdminLayout({
   const [pendingComposers, setPendingComposers] = useState<number>(0);
   const [pendingScores, setPendingScores] = useState<number>(0);
 
+  const activeName = admin?.name || "";
+  const activeEmail = admin?.email || "";
+  const activeRole = admin?.role || "";
+  const userRole = normalizeRole(activeRole);
+
+  const defaultHomeLink =
+    userRole === "moderator"
+      ? "/admin/partituras"
+      : userRole === "editor"
+      ? "/admin/cms"
+      : userRole === "payouts"
+      ? "/admin/pagos"
+      : "/admin/dashboard";
+
+  // Cargar estadísticas del dashboard
   useEffect(() => {
     if (admin) {
       getAdminDashboardStats().then((data) => {
@@ -38,6 +151,21 @@ export default function AdminLayout({
       router.push(redirectUrl);
     }
   }, [isLoaded, admin, pathname, router]);
+
+  // Redirección inteligente: si el rol NO tiene acceso al Dashboard Global y navega a /admin o /admin/dashboard
+  useEffect(() => {
+    if (isLoaded && admin) {
+      const isSuper =
+        userRole === "admin" ||
+        userRole === "super_admin" ||
+        activeEmail.toLowerCase() === "admin@pianocolombia.com" ||
+        activeEmail.toLowerCase() === "carlos.admin@pianocolombia.com";
+
+      if (!isSuper && (pathname === "/admin" || pathname === "/admin/dashboard")) {
+        router.replace(defaultHomeLink);
+      }
+    }
+  }, [isLoaded, admin, userRole, activeEmail, pathname, router, defaultHomeLink]);
 
   // 1. Estado de Carga
   if (!isLoaded) {
@@ -96,10 +224,7 @@ export default function AdminLayout({
     );
   }
 
-  // 3. Estado AUTENTICADO: Renderizar layout completo con datos reales
-  const activeName = admin.name;
-  const activeEmail = admin.email;
-  const activeRole = admin.role;
+  // 3. Estado AUTENTICADO: Filtrar rutas y evaluar guardia de acceso por URL
   const initials = activeName
     .split(" ")
     .map((n) => n[0])
@@ -107,25 +232,24 @@ export default function AdminLayout({
     .slice(0, 2)
     .toUpperCase();
 
-  const navLinks = [
-    { href: "/admin/dashboard", label: "Dashboard Global", icon: "analytics" },
-    {
-      href: "/admin/compositores",
-      label: "Compositores",
-      icon: "person_check",
-      badge: pendingComposers > 0 ? `${pendingComposers} nuevo${pendingComposers > 1 ? "s" : ""}` : undefined,
-    },
-    {
-      href: "/admin/partituras",
-      label: "Partituras",
-      icon: "library_music",
-      badge: pendingScores > 0 ? `${pendingScores} pendiente${pendingScores > 1 ? "s" : ""}` : undefined,
-    },
-    { href: "/admin/cms", label: "Gestor CMS", icon: "web" },
-    { href: "/admin/pagos", label: "Dispersión & Pagos", icon: "payments", badge: "Wompi API", badgeColor: "bg-emerald-100 text-emerald-800" },
-    { href: "/admin/usuarios", label: "Usuarios & Roles", icon: "manage_accounts" },
-    { href: "/admin/emails", label: "Plantillas Email", icon: "mail" },
-  ];
+  // Filtrar exclusivamente los menús a los que el rol tiene acceso
+  const navLinks = ADMIN_ROUTES.filter((route) =>
+    isUserAllowedForRoute(userRole, activeEmail, route)
+  ).map((route) => ({
+    ...route,
+    badge:
+      route.href === "/admin/compositores" && pendingComposers > 0
+        ? `${pendingComposers} nuevo${pendingComposers > 1 ? "s" : ""}`
+        : route.href === "/admin/partituras" && pendingScores > 0
+        ? `${pendingScores} pendiente${pendingScores > 1 ? "s" : ""}`
+        : route.badge,
+  }));
+
+  // Evaluar guardia de acceso para la URL directa actual
+  const matchedRoute = ADMIN_ROUTES.find(
+    (r) => pathname === r.href || pathname.startsWith(`${r.href}/`)
+  );
+  const hasRouteAccess = !matchedRoute || isUserAllowedForRoute(userRole, activeEmail, matchedRoute);
 
   const handleLogout = () => {
     logoutAdmin();
@@ -144,13 +268,13 @@ export default function AdminLayout({
         userInitials={initials}
         avatarBg="bg-[#C1272D]"
         onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
-        homeLink="/admin/dashboard"
+        homeLink={defaultHomeLink}
       />
 
       {/* Main Body with Sidebar & Content */}
       <div className="flex-1 flex max-w-[1600px] mx-auto w-full min-w-0">
         {/* Desktop Sidebar Nav (lg:flex) */}
-        <aside className="w-64 border-r border-black/5 bg-white p-6 hidden lg:flex flex-col justify-between shrink-0 shadow-2xs">
+        <aside className="w-64 border-r border-black/5 bg-white p-6 hidden lg:flex flex-col gap-6 shrink-0 shadow-2xs">
           <div className="space-y-6">
             <span className="text-[10px] font-extrabold text-[#4C4546] uppercase tracking-widest block font-montserrat">
               Panel Administrativo
@@ -272,9 +396,74 @@ export default function AdminLayout({
           </div>
         </MobileDrawer>
 
-        {/* Dynamic Page Content */}
+        {/* Dynamic Page Content with RBAC Protection */}
         <main className="flex-1 p-4 sm:p-6 md:p-8 min-w-0 overflow-y-auto">
-          {children}
+          {!hasRouteAccess ? (
+            <div className="max-w-xl mx-auto my-8 bg-white rounded-3xl border border-red-200 p-8 sm:p-10 shadow-[0_20px_50px_rgba(239,68,68,0.08)] text-center space-y-6 relative overflow-hidden">
+              <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-red-600 via-[#FBB03B] to-red-600"></div>
+
+              <div className="w-16 h-16 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mx-auto border border-red-200 shadow-xs">
+                <span className="material-symbols-outlined text-3xl">shield_lock</span>
+              </div>
+
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-50 text-red-700 text-[11px] font-extrabold uppercase tracking-wider font-montserrat border border-red-200">
+                  Acceso Restringido • Control RBAC
+                </div>
+                <h1 className="text-2xl font-black font-montserrat text-[#111C2D] tracking-tight">
+                  Módulo No Autorizado
+                </h1>
+                <p className="text-xs sm:text-sm text-[#4C4546] leading-relaxed font-normal max-w-md mx-auto">
+                  Tu perfil actual tiene el rol de{" "}
+                  <strong className="text-[#111C2D] uppercase font-bold">
+                    {getRoleLabel(userRole)}
+                  </strong>{" "}
+                  y no cuenta con privilegios para acceder al módulo{" "}
+                  <strong className="text-[#111C2D]">
+                    {matchedRoute?.label || pathname}
+                  </strong>
+                  . Esta sección está reservada exclusivamente para roles con permisos específicos.
+                </p>
+              </div>
+
+              <div className="p-4 bg-[#F9F9FF] border border-black/5 rounded-2xl text-left space-y-2.5">
+                <div className="text-[11px] font-bold text-[#111C2D] font-montserrat uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-base text-[#0071BC]">verified_user</span>
+                  Módulos Habilitados para tu Rol:
+                </div>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {navLinks.map((vl) => (
+                    <Link
+                      key={vl.href}
+                      href={vl.href}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-black/5 hover:border-[#0071BC] text-[#111C2D] text-xs font-bold rounded-xl transition shadow-2xs hover:text-[#0071BC]"
+                    >
+                      <span className="material-symbols-outlined text-sm text-[#0071BC]">{vl.icon}</span>
+                      <span>{vl.label}</span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-3 pt-2">
+                <Link
+                  href={defaultHomeLink}
+                  className="w-full py-3.5 bg-[#111C2D] hover:bg-[#1a2b45] text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition font-montserrat flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-lg text-[#FBB03B]">arrow_back</span>
+                  {userRole === "moderator"
+                    ? "Ir a Moderación de Partituras"
+                    : userRole === "editor"
+                    ? "Ir al Gestor CMS"
+                    : userRole === "payouts"
+                    ? "Ir a Dispersión & Pagos"
+                    : "Volver al Dashboard Global"}
+                </Link>
+              </div>
+            </div>
+          ) : (
+            children
+          )}
         </main>
       </div>
     </div>

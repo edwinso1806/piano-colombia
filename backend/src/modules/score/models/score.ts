@@ -29,8 +29,8 @@ export const Score = model.define("score", {
   title: model.text(),
   slug: model.text().unique(),
   composer_id: model.text(),
-  genre: model.enum(Object.values(GenreType)).default(GenreType.PASILLO),
-  difficulty: model.enum(Object.values(DifficultyLevel)).default(DifficultyLevel.INTERMEDIO),
+  genre: model.text().default("PASILLO"),
+  difficulty: model.text().default("INTERMEDIO"),
   description_es: model.text().nullable(),
   description_en: model.text().nullable(),
   pages_count: model.number().default(1),
@@ -43,6 +43,7 @@ export const Score = model.define("score", {
   rejection_notes: model.text().nullable(),
   original_pdf_url: model.text().nullable(), // Archivo maestro privado
   preview_pdf_url: model.text().nullable(), // Archivo con opacidad y marca de agua
+  preview_images: model.json().nullable(), // Array de URLs de muestras difuminadas con marca de agua
   audio_sample_url: model.text().nullable(), // Audio MP3 demo
   is_featured: model.boolean().default(false),
   product_id: model.text().nullable(), // Enlace con Product de Medusa

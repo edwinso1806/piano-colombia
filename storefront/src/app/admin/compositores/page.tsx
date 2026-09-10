@@ -14,12 +14,29 @@ export default function AdminCompositoresPage() {
   const [composersList, setComposersList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [rejectedId, setRejectedId] = useState<string | null>(null);
+  const [isPermanentBlock, setIsPermanentBlock] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [defaultCommission, setDefaultCommission] = useState<number>(15);
   const [editingCommissionId, setEditingCommissionId] = useState<string | null>(null);
   const [commissionValueInput, setCommissionValueInput] = useState<string>("");
   const [expandedPhotoUrl, setExpandedPhotoUrl] = useState<string | null>(null);
+
+  // Estados para Toast Notification y Validación en Modal
+  const [toast, setToast] = useState<{
+    type: "success" | "error" | "warning" | "info";
+    title: string;
+    message: string;
+  } | null>(null);
+  const [modalValidationError, setModalValidationError] = useState<string | null>(null);
+  const [confirmingBlock, setConfirmingBlock] = useState(false);
+
+  const showToast = (type: "success" | "error" | "warning" | "info", title: string, message: string) => {
+    setToast({ type, title, message });
+    setTimeout(() => {
+      setToast(prev => prev && prev.title === title ? null : prev);
+    }, 5000);
+  };
 
   const fetchComposersAndSettings = async () => {
     setLoading(true);
@@ -63,7 +80,9 @@ export default function AdminCompositoresPage() {
             email: c.email,
             phone: c.phone || "No registrado",
             date: new Date(c.created_at || c.createdAt || Date.now()).toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" }),
-            status: c.status === "PENDING_APPROVAL" ? "PENDIENTE" : c.status === "APPROVED" ? "APROBADO" : "RECHAZADO",
+            status: c.status === "PENDING_APPROVAL" ? "PENDIENTE" : c.status === "APPROVED" ? "APROBADO" : c.status === "BLOCKED" ? "BLOQUEADO" : "RECHAZADO",
+            approvalAttempts: c.approval_attempts ? Number(c.approval_attempts) : 1,
+            rejectionReason: c.rejection_reason || null,
             bankName: c.bank_account?.bank_name || "No especificado",
             accountType: c.bank_account?.account_type || "Ahorros",
             accountNumber: c.bank_account?.account_number || "No especificado",
@@ -90,26 +109,66 @@ export default function AdminCompositoresPage() {
     try {
       await approveComposerAdmin(id);
       setComposersList(prev => prev.map(c => c.id === id ? { ...c, status: "APROBADO" } : c));
-      alert("✅ Compositor aprobado en base de datos. Se ha activado su perfil en el catálogo.");
+      showToast(
+        "success",
+        "Compositor Aprobado",
+        "Se ha activado su perfil en el catálogo y se le notificó por correo de bienvenida."
+      );
     } catch (err: any) {
       console.error(err);
-      alert("Error al aprobar compositor: " + err.message);
+      showToast("error", "Error al Aprobar", err.message || "No se pudo procesar la aprobación.");
     } finally {
       setActionLoading(null);
     }
   };
 
-  const handleRejectSubmit = async (id: string) => {
+  const handleRejectSubmit = async (id: string, blockMode: boolean) => {
+    if (!rejectionReason.trim()) {
+      setModalValidationError(
+        blockMode 
+          ? "Por favor escribe el motivo del bloqueo definitivo." 
+          : "Por favor escribe las observaciones para que el compositor sepa qué corregir."
+      );
+      return;
+    }
+    setModalValidationError(null);
+
+    // Si es modo bloqueo y aún no ha confirmado en el paso 2 del modal
+    if (blockMode && !confirmingBlock) {
+      setConfirmingBlock(true);
+      return;
+    }
+
     setActionLoading(id);
     try {
-      await rejectComposerAdmin(id, rejectionReason);
-      setComposersList(prev => prev.map(c => c.id === id ? { ...c, status: "RECHAZADO" } : c));
+      await rejectComposerAdmin(id, rejectionReason, blockMode);
+      setComposersList(prev => prev.map(c => c.id === id ? { 
+        ...c, 
+        status: blockMode ? "BLOQUEADO" : "RECHAZADO",
+        rejectionReason: rejectionReason 
+      } : c));
       setRejectedId(null);
       setRejectionReason("");
-      alert("❌ Solicitud rechazada en base de datos.");
+      setIsPermanentBlock(false);
+      setConfirmingBlock(false);
+      setModalValidationError(null);
+
+      if (blockMode) {
+        showToast(
+          "error",
+          "Compositor Bloqueado Definitivamente",
+          "Se cerró la solicitud permanentemente y se envió correo de resolución definitiva."
+        );
+      } else {
+        showToast(
+          "warning",
+          "Solicitud Rechazada con Observaciones",
+          "Se notificó al compositor por correo para que realice las correcciones y vuelva a enviar su perfil."
+        );
+      }
     } catch (err: any) {
       console.error(err);
-      alert("Error al rechazar: " + err.message);
+      showToast("error", "Error en Moderación", err.message || "No se pudo procesar la moderación.");
     } finally {
       setActionLoading(null);
     }
@@ -120,11 +179,15 @@ export default function AdminCompositoresPage() {
     try {
       const val = commissionValueInput.trim() === "" ? null : Number(commissionValueInput);
       await updateComposerCommission(composerId, val);
-      alert(val !== null ? `✅ Comisión fijada al ${val}% para este compositor.` : "✅ Se restableció a la comisión general de la plataforma.");
+      showToast(
+        "success",
+        "Comisión Actualizada",
+        val !== null ? `Comisión fijada al ${val}% para este compositor.` : "Se restableció a la comisión general de la plataforma."
+      );
       setEditingCommissionId(null);
       fetchComposersAndSettings();
     } catch (err: any) {
-      alert("Error al actualizar comisión: " + err.message);
+      showToast("error", "Error al Guardar Comisión", err.message || "No se pudo actualizar el porcentaje.");
     } finally {
       setActionLoading(null);
     }
@@ -213,17 +276,31 @@ export default function AdminCompositoresPage() {
                   )}
                 </div>
 
-                <div>
+                  <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`inline-flex items-center gap-1 text-[10px] px-2.5 py-0.5 rounded-full font-extrabold font-montserrat whitespace-nowrap shrink-0 ${
                       c.status === "PENDIENTE" ? "bg-amber-50 text-amber-800 border border-amber-200" :
                       c.status === "APROBADO" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" :
+                      c.status === "BLOQUEADO" ? "bg-zinc-900 text-white border border-zinc-700" :
                       "bg-rose-50 text-rose-700 border border-rose-200"
                     }`}>
                       {c.status === "PENDIENTE" && <span className="material-symbols-outlined text-xs">hourglass_top</span>}
                       {c.status === "APROBADO" && <span className="material-symbols-outlined text-xs">check_circle</span>}
+                      {c.status === "BLOQUEADO" && <span className="material-symbols-outlined text-xs">block</span>}
                       {c.status === "RECHAZADO" && <span className="material-symbols-outlined text-xs">cancel</span>}
                       {c.status}
+                    </span>
+
+                    {/* Badge de Intentos de Aprobación */}
+                    <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-black font-mono border ${
+                      c.approvalAttempts > 2 
+                        ? "bg-rose-50 text-rose-700 border-rose-300" 
+                        : c.approvalAttempts > 1 
+                        ? "bg-amber-50 text-amber-800 border-amber-300" 
+                        : "bg-blue-50 text-[#0071BC] border-blue-200"
+                    }`}>
+                      <span className="material-symbols-outlined text-xs">history</span>
+                      Intento #{c.approvalAttempts}
                     </span>
 
                     {c.photoUrl ? (
@@ -249,29 +326,71 @@ export default function AdminCompositoresPage() {
                     <span className="text-[#4C4546]">•</span>
                     <span className="text-[#4C4546] font-mono">{c.phone}</span>
                   </div>
+
+                  {c.rejectionReason && (
+                    <div className="mt-2 p-2.5 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-800 flex items-start gap-2">
+                      <span className="material-symbols-outlined text-sm text-rose-600 shrink-0 mt-0.5">info</span>
+                      <div>
+                        <strong>Observaciones previas:</strong> "{c.rejectionReason}"
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {c.status === "PENDIENTE" && (
-                <div className="flex items-center gap-3 w-full md:w-auto shrink-0">
+              <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto shrink-0">
+                {c.status === "PENDIENTE" && (
+                  <>
+                    <button
+                      onClick={() => handleApprove(c.id)}
+                      disabled={actionLoading === c.id}
+                      className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold uppercase tracking-wider font-montserrat flex items-center justify-center gap-1.5 transition shadow-sm disabled:opacity-50"
+                    >
+                      <span className="material-symbols-outlined text-base">check</span>
+                      Aprobar
+                    </button>
+                    <button
+                      onClick={() => {
+                        setRejectedId(c.id);
+                        setIsPermanentBlock(false);
+                        setRejectionReason("");
+                      }}
+                      disabled={actionLoading === c.id}
+                      className="px-4 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-xl text-xs font-extrabold uppercase tracking-wider font-montserrat flex items-center justify-center gap-1.5 transition disabled:opacity-50"
+                    >
+                      <span className="material-symbols-outlined text-base">edit_note</span>
+                      Rechazar (Observaciones)
+                    </button>
+                    <button
+                      onClick={() => {
+                        setRejectedId(c.id);
+                        setIsPermanentBlock(true);
+                        setRejectionReason("Se ha superado el número de intentos permitidos o incumplimiento reiterado de las directrices.");
+                      }}
+                      disabled={actionLoading === c.id}
+                      className="px-3.5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-extrabold uppercase tracking-wider font-montserrat flex items-center justify-center gap-1.5 transition shadow-sm disabled:opacity-50"
+                    >
+                      <span className="material-symbols-outlined text-base">block</span>
+                      Bloquear Definitivo
+                    </button>
+                  </>
+                )}
+
+                {c.status === "RECHAZADO" && (
                   <button
-                    onClick={() => handleApprove(c.id)}
+                    onClick={() => {
+                      setRejectedId(c.id);
+                      setIsPermanentBlock(true);
+                      setRejectionReason("Solicitud cerrada de forma definitiva tras evaluar intentos previos.");
+                    }}
                     disabled={actionLoading === c.id}
-                    className="flex-1 md:flex-none px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold uppercase tracking-wider font-montserrat flex items-center justify-center gap-1.5 transition shadow-sm disabled:opacity-50"
+                    className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-900 text-white rounded-xl text-xs font-extrabold uppercase tracking-wider font-montserrat flex items-center justify-center gap-1.5 transition disabled:opacity-50"
                   >
-                    <span className="material-symbols-outlined text-base">check</span>
-                    Aprobar Solicitud
+                    <span className="material-symbols-outlined text-base">block</span>
+                    Bloquear Definitivo
                   </button>
-                  <button
-                    onClick={() => setRejectedId(c.id)}
-                    disabled={actionLoading === c.id}
-                    className="flex-1 md:flex-none px-5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-extrabold uppercase tracking-wider font-montserrat flex items-center justify-center gap-1.5 transition disabled:opacity-50"
-                  >
-                    <span className="material-symbols-outlined text-base">close</span>
-                    Rechazar
-                  </button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
             {/* SECCIÓN BIOGRÁFICA (ESPAÑOL E INGLÉS) */}
@@ -383,39 +502,227 @@ export default function AdminCompositoresPage() {
               </div>
             </div>
 
-            {/* Formulario de Motivo de Rechazo */}
-            {rejectedId === c.id && (
-              <div className="p-5 bg-rose-50 border border-rose-200 rounded-xl space-y-3">
-                <label className="block text-xs font-bold text-[#C1272D] font-montserrat">
-                  Indica el motivo de rechazo (se incluirá en la notificación al compositor):
-                </label>
-                <textarea
-                  rows={2}
-                  value={rejectionReason}
-                  onChange={(e) => setRejectionReason(e.target.value)}
-                  placeholder="Ej: La fotografía de retrato no es nítida o el documento bancario no coincide con el titular..."
-                  className="w-full bg-white border border-rose-200 rounded-xl p-3 text-xs text-[#111C2D] focus:outline-none focus:ring-2 focus:ring-[#C1272D]"
-                />
-                <div className="flex justify-end gap-2">
+          </div>
+        ))}
+      </div>
+
+      {/* Modal Flotante de Rechazo con Observaciones o Bloqueo Definitivo */}
+      {rejectedId && (
+        <div 
+          onClick={() => {
+            setRejectedId(null);
+            setRejectionReason("");
+            setIsPermanentBlock(false);
+          }}
+          className="fixed inset-0 z-[9999] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in"
+        >
+          {(() => {
+            const selectedComposer = composersList.find(c => c.id === rejectedId);
+            if (!selectedComposer) return null;
+
+            return (
+              <div 
+                onClick={(e) => e.stopPropagation()}
+                className={`relative max-w-lg w-full rounded-3xl p-6 sm:p-7 shadow-2xl border space-y-4 animate-in zoom-in-95 duration-150 ${
+                  isPermanentBlock 
+                    ? "bg-[#18181B] border-zinc-700 text-white" 
+                    : "bg-white border-black/10 text-[#111C2D]"
+                }`}
+              >
+                {/* Header del Modal */}
+                <div className="flex items-start justify-between gap-3 border-b pb-4 border-black/5">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${
+                      isPermanentBlock ? "bg-rose-950/80 text-rose-400 border border-rose-800" : "bg-amber-100 text-amber-800 border border-amber-200"
+                    }`}>
+                      <span className="material-symbols-outlined text-2xl">
+                        {isPermanentBlock ? "block" : "edit_note"}
+                      </span>
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black font-montserrat">
+                        {isPermanentBlock 
+                          ? "Bloqueo Definitivo de Acceso" 
+                          : "Rechazo con Observaciones"}
+                      </h3>
+                      <p className={`text-xs ${isPermanentBlock ? "text-zinc-400" : "text-[#4C4546]"}`}>
+                        Compositor: <strong>{selectedComposer.name}</strong> • Intento #{selectedComposer.approvalAttempts}
+                      </p>
+                    </div>
+                  </div>
+
                   <button
-                    onClick={() => setRejectedId(null)}
-                    className="px-3 py-1.5 text-xs text-[#4C4546] font-semibold hover:underline font-montserrat"
+                    onClick={() => {
+                      setRejectedId(null);
+                      setRejectionReason("");
+                      setIsPermanentBlock(false);
+                    }}
+                    className={`p-1.5 rounded-xl hover:bg-black/5 transition cursor-pointer ${isPermanentBlock ? "text-zinc-400 hover:text-white" : "text-gray-400 hover:text-gray-600"}`}
+                  >
+                    <span className="material-symbols-outlined text-xl">close</span>
+                  </button>
+                </div>
+
+                {/* Switch / Toggle Modo */}
+                <div className={`p-2.5 rounded-xl flex items-center justify-between text-xs ${
+                  isPermanentBlock ? "bg-zinc-800/80 border border-zinc-700" : "bg-amber-50 border border-amber-200"
+                }`}>
+                  <span className="font-semibold text-[11px]">
+                    {isPermanentBlock ? "Modo: Bloqueo Definitivo Permanente" : "Modo: Observaciones para Corrección"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsPermanentBlock(!isPermanentBlock);
+                      if (!isPermanentBlock && !rejectionReason) {
+                        setRejectionReason("Se ha superado el número de intentos permitidos para subsanar los requisitos curatoriales de la plataforma.");
+                      } else if (isPermanentBlock) {
+                        setRejectionReason("");
+                      }
+                    }}
+                    className={`px-3 py-1 rounded-lg font-bold text-[11px] transition cursor-pointer ${
+                      isPermanentBlock 
+                        ? "bg-amber-400 text-black hover:bg-amber-300" 
+                        : "bg-rose-600 text-white hover:bg-rose-700"
+                    }`}
+                  >
+                    {isPermanentBlock ? "Cambiar a Observaciones" : "Cambiar a Bloqueo"}
+                  </button>
+                </div>
+
+                {/* Error de Validación en Modal */}
+                {modalValidationError && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-center gap-2 animate-in fade-in">
+                    <span className="material-symbols-outlined text-base text-rose-600">error</span>
+                    <span>{modalValidationError}</span>
+                  </div>
+                )}
+
+                {/* Explicación */}
+                <p className={`text-xs leading-relaxed ${isPermanentBlock ? "text-zinc-300" : "text-[#4C4546]"}`}>
+                  {isPermanentBlock
+                    ? "Esta acción deniega la postulación de forma PERMANENTE. Se notificará formalmente al autor por correo que su solicitud definitiva no ha sido aceptada y no podrá reenviar su perfil."
+                    : "Escribe las observaciones exactas que el compositor debe corregir (fotografía de retrato, biografía o datos bancarios). Le llegará un correo con estas observaciones y podrá corregir y reenviar."}
+                </p>
+
+                {/* Confirmación explícita de Bloqueo Permanente */}
+                {confirmingBlock && (
+                  <div className="p-4 bg-rose-950/90 border border-rose-700 rounded-2xl space-y-2 text-xs text-rose-200 animate-in fade-in">
+                    <div className="flex items-center gap-2 text-white font-bold">
+                      <span className="material-symbols-outlined text-rose-400">warning</span>
+                      <span>¿Confirmas el bloqueo permanente e irreversible?</span>
+                    </div>
+                    <p className="text-[11px] text-rose-300 leading-relaxed">
+                      El compositor no podrá volver a postularse a la plataforma y se inactivarán sus partituras registradas.
+                    </p>
+                  </div>
+                )}
+
+                {/* Textarea */}
+                <div>
+                  <label className={`block text-xs font-bold font-montserrat mb-1.5 ${isPermanentBlock ? "text-zinc-300" : "text-[#111C2D]"}`}>
+                    {isPermanentBlock ? "Motivo del bloqueo definitivo:" : "Observaciones a corregir (se notificarán al correo):"}
+                  </label>
+                  <textarea
+                    rows={4}
+                    autoFocus
+                    value={rejectionReason}
+                    onChange={(e) => {
+                      setRejectionReason(e.target.value);
+                      if (modalValidationError) setModalValidationError(null);
+                    }}
+                    placeholder={
+                      isPermanentBlock
+                        ? "Ej: Se ha superado el límite de intentos permitidos sin subsanar las observaciones curatoriales..."
+                        : "Ej: Por favor adjunta una fotografía con fondo neutro y mayor nitidez, y completa la biografía en español..."
+                    }
+                    className={`w-full rounded-2xl p-3.5 text-xs focus:outline-none transition ${
+                      isPermanentBlock
+                        ? "bg-zinc-800 border border-zinc-600 text-white placeholder-zinc-500 focus:ring-2 focus:ring-rose-500"
+                        : "bg-[#F0F3FF]/70 border border-black/10 text-[#111C2D] placeholder-gray-400 focus:bg-white focus:ring-2 focus:ring-[#0071BC]"
+                    }`}
+                  />
+                </div>
+
+                {/* Footer Botones */}
+                <div className="flex justify-end items-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRejectedId(null);
+                      setRejectionReason("");
+                      setIsPermanentBlock(false);
+                      setConfirmingBlock(false);
+                      setModalValidationError(null);
+                    }}
+                    className={`px-4 py-2 text-xs font-bold hover:underline font-montserrat ${
+                      isPermanentBlock ? "text-zinc-400 hover:text-white" : "text-[#4C4546]"
+                    }`}
                   >
                     Cancelar
                   </button>
                   <button
-                    onClick={() => handleRejectSubmit(c.id)}
-                    className="px-4 py-2 bg-[#C1272D] hover:bg-rose-800 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl transition font-montserrat shadow-xs"
+                    type="button"
+                    onClick={() => handleRejectSubmit(selectedComposer.id, isPermanentBlock)}
+                    disabled={actionLoading === selectedComposer.id}
+                    className={`px-5 py-2.5 font-extrabold text-xs uppercase tracking-wider rounded-xl transition font-montserrat shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50 ${
+                      isPermanentBlock
+                        ? "bg-rose-600 hover:bg-rose-700 text-white"
+                        : "bg-[#C1272D] hover:bg-rose-800 text-white"
+                    }`}
                   >
-                    Confirmar Rechazo & Guardar
+                    <span className="material-symbols-outlined text-base">
+                      {isPermanentBlock ? (confirmingBlock ? "gavel" : "block") : "send"}
+                    </span>
+                    {actionLoading === selectedComposer.id
+                      ? "Procesando..."
+                      : isPermanentBlock
+                      ? (confirmingBlock ? "Sí, Proceder con el Bloqueo" : "Confirmar Bloqueo Definitivo")
+                      : "Enviar Observaciones al Autor"}
                   </button>
                 </div>
               </div>
-            )}
+            );
+          })()}
+        </div>
+      )}
 
+      {/* Toast Notification Flotante con Diseño Premium */}
+      {toast && (
+        <div className="fixed top-6 right-6 z-[10000] max-w-md w-full animate-in slide-in-from-top-4 fade-in duration-300">
+          <div className={`p-4 rounded-2xl shadow-2xl border flex items-start gap-3.5 backdrop-blur-md ${
+            toast.type === "success" 
+              ? "bg-emerald-950/90 border-emerald-500/50 text-emerald-100" 
+              : toast.type === "error"
+              ? "bg-rose-950/90 border-rose-500/50 text-rose-100"
+              : toast.type === "warning"
+              ? "bg-amber-950/90 border-amber-500/50 text-amber-100"
+              : "bg-blue-950/90 border-blue-500/50 text-blue-100"
+          }`}>
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+              toast.type === "success" ? "bg-emerald-500 text-white" :
+              toast.type === "error" ? "bg-rose-600 text-white" :
+              toast.type === "warning" ? "bg-amber-500 text-black" : "bg-blue-500 text-white"
+            }`}>
+              <span className="material-symbols-outlined text-xl">
+                {toast.type === "success" ? "check_circle" : toast.type === "error" ? "cancel" : toast.type === "warning" ? "warning" : "info"}
+              </span>
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <h4 className="text-xs font-black uppercase tracking-wider font-montserrat">{toast.title}</h4>
+              <p className="text-xs mt-0.5 leading-relaxed opacity-90">{toast.message}</p>
+            </div>
+
+            <button
+              onClick={() => setToast(null)}
+              className="p-1 rounded-lg opacity-70 hover:opacity-100 transition cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-base">close</span>
+            </button>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
 
       {/* Modal de Zoom para Foto de Perfil */}
       {expandedPhotoUrl && (

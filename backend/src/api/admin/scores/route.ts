@@ -16,7 +16,7 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
     const [scores, count] = await scoreModuleService.listAndCountScores(filters, {
       take: Number(limit),
       skip: Number(offset),
-      order: { createdAt: "DESC" },
+      order: { created_at: "DESC" },
     })
 
     // Enriquecer con nombres de autores

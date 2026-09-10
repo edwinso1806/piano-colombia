@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/context/LanguageContext";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 import {
   loginComposerApi,
   requestPasswordResetApi,
@@ -13,6 +15,7 @@ import {
 export default function CompositorLoginPage() {
   const router = useRouter();
   const { composer, loginComposer, logoutComposer } = useAuth();
+  const { t } = useLanguage();
   const [viewMode, setViewMode] = useState<"login" | "forgot_email" | "forgot_otp">("login");
   
   const [email, setEmail] = useState("");
@@ -212,7 +215,7 @@ export default function CompositorLoginPage() {
         <div className="absolute bottom-0 inset-x-0 h-96 bg-[radial-gradient(circle_at_50%_110%,rgba(251,176,59,0.12)_0%,rgba(0,113,188,0.04)_40%,transparent_75%)]"></div>
       </div>
 
-      {/* Header Fijo con Logo Stitch */}
+      {/* Header Fijo con Logo Stitch y Selector de Idioma */}
       <header className="relative z-10 w-full border-b border-slate-200/80 bg-white/90 backdrop-blur-md sticky top-0 transition-colors">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           
@@ -230,19 +233,23 @@ export default function CompositorLoginPage() {
                 PIANO COLOMBIA
               </span>
               <span className="text-[9px] font-extrabold text-[#4C4546] uppercase tracking-wider font-montserrat mt-0.5">
-                Archivo & Partituras
+                {t("auth.brand_sub", "Archivo & Partituras")}
               </span>
             </div>
           </Link>
 
-          {/* Acciones Derechas Header */}
-          <div className="flex items-center gap-4 sm:gap-6">
+          {/* Acciones Derechas Header: Selector Idioma + Registro */}
+          <div className="flex items-center gap-3 sm:gap-5">
+            <LanguageSwitcher />
+
             <Link
               href="/compositor/registro"
               className="text-xs sm:text-sm font-semibold text-slate-700 hover:text-amber-600 transition-all duration-200 flex items-center gap-1.5 group"
             >
-              <span className="text-slate-500 hidden sm:inline font-normal">¿No tienes cuenta?</span>
-              <span className="font-bold text-slate-900 group-hover:text-amber-600 underline underline-offset-4 decoration-amber-400 group-hover:decoration-amber-600">Regístrate aquí</span>
+              <span className="text-slate-500 hidden sm:inline font-normal">{t("auth.dont_have_account", "¿No tienes cuenta?")}</span>
+              <span className="font-bold text-slate-900 group-hover:text-amber-600 underline underline-offset-4 decoration-amber-400 group-hover:decoration-amber-600">
+                {t("auth.register_here", "Regístrate aquí")}
+              </span>
               <span className="material-symbols-outlined text-xs text-amber-500 transition-transform group-hover:translate-x-1">arrow_forward</span>
             </Link>
           </div>
@@ -263,14 +270,14 @@ export default function CompositorLoginPage() {
             <div className="text-center mb-8">
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-50 border border-amber-200/80 text-amber-800 text-[11px] font-bold tracking-wider uppercase mb-4 shadow-2xs font-montserrat">
                 <span className="material-symbols-outlined text-xs text-amber-600">shield</span>
-                <span>Portal Exclusivo · Acceso Restringido</span>
+                <span>{t("auth.restricted_badge", "Portal Exclusivo · Acceso Restringido")}</span>
               </div>
 
               <h1 className="text-2xl sm:text-3xl font-black text-[#0f172a] tracking-tight font-montserrat">
-                Portal de Compositores
+                {t("auth.composer_title", "Portal de Compositores")}
               </h1>
               <p className="mt-2.5 text-xs sm:text-sm text-slate-500 leading-relaxed max-w-sm mx-auto font-normal">
-                Ingresa con tus credenciales registradas para gestionar tu catálogo, regalías y perfil artístico.
+                {t("auth.composer_subtitle", "Ingresa con tus credenciales registradas para gestionar tu catálogo, regalías y perfil artístico.")}
               </p>
             </div>
 
@@ -296,7 +303,7 @@ export default function CompositorLoginPage() {
               <form onSubmit={handleRequestForgotOtp} className="space-y-5">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1.5 tracking-wide font-montserrat" htmlFor="forgotEmail">
-                    Correo Electrónico de Compositor
+                    {t("auth.forgot_email_label", "Correo Electrónico de Compositor")}
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -309,7 +316,7 @@ export default function CompositorLoginPage() {
                       autoFocus
                       value={forgotEmail}
                       onChange={(e) => setForgotEmail(e.target.value)}
-                      placeholder="compositor@ejemplo.com"
+                      placeholder={t("auth.email_placeholder", "tu.correo@ejemplo.com")}
                       className="block w-full pl-10 pr-4 py-3 bg-[#f8fafc] border border-slate-200 rounded-xl text-slate-900 text-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-500 transition duration-200"
                     />
                   </div>
@@ -323,11 +330,11 @@ export default function CompositorLoginPage() {
                   {isSubmitting ? (
                     <>
                       <span className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></span>
-                      <span>Enviando Código...</span>
+                      <span>{t("auth.sending_code", "Enviando Código...")}</span>
                     </>
                   ) : (
                     <>
-                      <span>Enviar Código de Recuperación</span>
+                      <span>{t("auth.send_code_btn", "Enviar Código de Recuperación")}</span>
                       <span className="material-symbols-outlined text-base">send</span>
                     </>
                   )}
@@ -344,7 +351,7 @@ export default function CompositorLoginPage() {
                     className="text-xs font-bold text-slate-600 hover:text-amber-600 inline-flex items-center gap-1 font-montserrat transition"
                   >
                     <span className="material-symbols-outlined text-sm">arrow_back</span>
-                    Volver a Iniciar Sesión
+                    {t("auth.back_to_login", "Volver a Iniciar Sesión")}
                   </button>
                 </div>
               </form>
@@ -355,7 +362,7 @@ export default function CompositorLoginPage() {
               <form onSubmit={handleConfirmForgotOtp} className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1 text-center font-montserrat">
-                    Código de Seguridad (6 Dígitos) *
+                    {t("auth.security_code_label", "Código de Seguridad (6 Dígitos) *")}
                   </label>
                   <div className="relative max-w-xs mx-auto">
                     <input
@@ -371,14 +378,14 @@ export default function CompositorLoginPage() {
                   </div>
                   <div className="text-center mt-1">
                     <span className="text-[11px] font-mono text-slate-500">
-                      ⏱️ Expira en: <strong className="text-slate-800">{formatTimer(forgotTimer)}</strong>
+                      {t("auth.expires_in", "⏱️ Expira en:")} <strong className="text-slate-800">{formatTimer(forgotTimer)}</strong>
                     </span>
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1 font-montserrat">
-                    Nueva Contraseña *
+                    {t("auth.new_password_label", "Nueva Contraseña *")}
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -390,7 +397,7 @@ export default function CompositorLoginPage() {
                       minLength={6}
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Mínimo 6 caracteres"
+                      placeholder={t("auth.min_chars", "Mínimo 6 caracteres")}
                       className="block w-full pl-10 pr-11 py-3 bg-[#f8fafc] border border-slate-200 rounded-xl text-slate-900 text-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-500 transition"
                     />
                     <button
@@ -407,7 +414,7 @@ export default function CompositorLoginPage() {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1 font-montserrat">
-                    Confirmar Nueva Contraseña *
+                    {t("auth.confirm_new_password_label", "Confirmar Nueva Contraseña *")}
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -419,7 +426,7 @@ export default function CompositorLoginPage() {
                       minLength={6}
                       value={confirmNewPassword}
                       onChange={(e) => setConfirmNewPassword(e.target.value)}
-                      placeholder="Repite tu contraseña"
+                      placeholder={t("auth.repeat_password", "Repite tu contraseña")}
                       className={`block w-full pl-10 pr-11 py-3 bg-[#f8fafc] border rounded-xl text-slate-900 text-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition ${
                         confirmNewPassword && confirmNewPassword !== newPassword
                           ? "border-red-400 focus:ring-red-400/50"
@@ -440,7 +447,7 @@ export default function CompositorLoginPage() {
                   </div>
                   {confirmNewPassword && confirmNewPassword !== newPassword && (
                     <p className="text-[11px] text-red-600 font-medium mt-1">
-                      Las contraseñas no coinciden
+                      {t("auth.passwords_dont_match", "Las contraseñas no coinciden")}
                     </p>
                   )}
                 </div>
@@ -453,11 +460,11 @@ export default function CompositorLoginPage() {
                   {isSubmitting ? (
                     <>
                       <span className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></span>
-                      <span>Guardando Contraseña...</span>
+                      <span>{t("auth.saving_password", "Guardando Contraseña...")}</span>
                     </>
                   ) : (
                     <>
-                      <span>Restablecer y Guardar</span>
+                      <span>{t("auth.save_and_reset_btn", "Restablecer y Guardar")}</span>
                       <span className="material-symbols-outlined text-base">check_circle</span>
                     </>
                   )}
@@ -473,7 +480,7 @@ export default function CompositorLoginPage() {
                     className="font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1 font-montserrat"
                   >
                     <span className="material-symbols-outlined text-sm">arrow_back</span>
-                    Cambiar Correo
+                    {t("auth.change_email", "Cambiar Correo")}
                   </button>
 
                   <button
@@ -486,7 +493,7 @@ export default function CompositorLoginPage() {
                         : "text-slate-400 cursor-not-allowed"
                     }`}
                   >
-                    {forgotCanResend ? "Reenviar Código" : `Reenviar en (${forgotResendCooldown}s)`}
+                    {forgotCanResend ? t("auth.resend_code", "Reenviar Código") : `${t("auth.resend_in", "Reenviar en")} (${forgotResendCooldown}s)`}
                   </button>
                 </div>
               </form>
@@ -499,7 +506,7 @@ export default function CompositorLoginPage() {
                 {/* Campo Correo */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1.5 tracking-wide font-montserrat" htmlFor="email">
-                    Correo Electrónico
+                    {t("auth.email", "Correo Electrónico")}
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -511,7 +518,7 @@ export default function CompositorLoginPage() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
-                      placeholder="tu.correo@ejemplo.com"
+                      placeholder={t("auth.email_placeholder", "tu.correo@ejemplo.com")}
                       className="block w-full pl-10 pr-4 py-3 bg-[#f8fafc] border border-slate-200 rounded-xl text-slate-900 text-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-500 transition duration-200"
                     />
                   </div>
@@ -521,7 +528,7 @@ export default function CompositorLoginPage() {
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="block text-xs font-bold text-slate-700 tracking-wide font-montserrat" htmlFor="password">
-                      Contraseña
+                      {t("auth.password", "Contraseña")}
                     </label>
                     <button
                       type="button"
@@ -533,7 +540,7 @@ export default function CompositorLoginPage() {
                       }}
                       className="text-xs font-bold text-[#0071bc] hover:underline transition-colors font-montserrat"
                     >
-                      ¿Olvidaste tu clave?
+                      {t("auth.forgot_password", "¿Olvidaste tu contraseña?")}
                     </button>
                   </div>
                   <div className="relative">
@@ -546,7 +553,7 @@ export default function CompositorLoginPage() {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
-                      placeholder="Ingresa tu contraseña"
+                      placeholder={t("auth.password_placeholder", "Ingresa tu contraseña")}
                       className="block w-full pl-10 pr-11 py-3 bg-[#f8fafc] border border-slate-200 rounded-xl text-slate-900 text-sm placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/50 focus:border-amber-500 transition duration-200"
                     />
                     <button
@@ -571,7 +578,7 @@ export default function CompositorLoginPage() {
                     className="h-4 w-4 rounded border-slate-300 text-amber-500 focus:ring-amber-400 cursor-pointer"
                   />
                   <label htmlFor="remember-me" className="ml-2 block text-xs text-slate-600 font-medium cursor-pointer select-none">
-                    Mantener sesión iniciada de forma segura
+                    {t("auth.keep_logged_in", "Mantener sesión iniciada de forma segura")}
                   </label>
                 </div>
 
@@ -579,16 +586,16 @@ export default function CompositorLoginPage() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full mt-2 py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-extrabold text-sm uppercase tracking-wider shadow-lg shadow-amber-500/20 hover:shadow-amber-500/30 active:scale-[0.99] transition-all duration-200 flex items-center justify-center gap-2 font-montserrat disabled:opacity-50"
+                  className="w-full mt-2 py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-extrabold text-sm uppercase tracking-wider shadow-lg shadow-amber-500/20 hover:shadow-amber-500/30 active:scale-[0.99] transition-all duration-200 flex items-center justify-center gap-2 font-montserrat disabled:opacity-50 cursor-pointer"
                 >
                   {isSubmitting ? (
                     <>
                       <span className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></span>
-                      <span>Validando Credenciales...</span>
+                      <span>{t("auth.signing_in", "Validando Credenciales...")}</span>
                     </>
                   ) : (
                     <>
-                      <span>Ingresar al Portal</span>
+                      <span>{t("auth.sign_in", "Ingresar al Panel")}</span>
                       <span className="material-symbols-outlined text-base">login</span>
                     </>
                   )}
@@ -601,7 +608,7 @@ export default function CompositorLoginPage() {
             <div className="mt-8 pt-6 border-t border-slate-100 text-center">
               <div className="flex items-center justify-center gap-2 text-xs text-slate-500 font-medium">
                 <span className="material-symbols-outlined text-sm text-slate-400">verified_user</span>
-                <span>Tus datos financieros y fiscales están protegidos</span>
+                <span>{t("auth.security_notice", "Tus datos financieros y fiscales están protegidos")}</span>
               </div>
             </div>
 
@@ -614,7 +621,7 @@ export default function CompositorLoginPage() {
               className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors"
             >
               <span className="material-symbols-outlined text-sm">arrow_back</span>
-              Volver a la tienda principal
+              {t("auth.back_to_store", "Volver a la tienda principal")}
             </Link>
           </div>
 
@@ -624,7 +631,7 @@ export default function CompositorLoginPage() {
       {/* Footer Minimalista */}
       <footer className="relative z-10 w-full border-t border-slate-200/80 bg-white/80 py-6">
         <div className="max-w-7xl mx-auto px-4 text-center text-xs text-slate-400">
-          © {new Date().getFullYear()} Piano Colombia. Todos los derechos reservados. Ediciones Críticas y Urtext.
+          © {new Date().getFullYear()} Piano Colombia. {t("auth.rights_reserved", "Todos los derechos reservados. Ediciones Críticas y Urtext.")}
         </div>
       </footer>
 

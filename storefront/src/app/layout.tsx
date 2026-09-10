@@ -4,6 +4,7 @@ import "./globals.css";
 import { CartProvider } from "@/context/CartContext";
 import { AuthProvider } from "@/context/AuthContext";
 import { SavedScoresProvider } from "@/context/SavedScoresContext";
+import { LanguageProvider } from "@/context/LanguageContext";
 
 const montserrat = Montserrat({
   variable: "--font-montserrat",
@@ -39,11 +40,13 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col bg-[#F9F9FF] text-[#111C2D] font-sans overflow-x-hidden w-full max-w-full">
-        <AuthProvider>
-          <SavedScoresProvider>
-            <CartProvider>{children}</CartProvider>
-          </SavedScoresProvider>
-        </AuthProvider>
+        <LanguageProvider>
+          <AuthProvider>
+            <SavedScoresProvider>
+              <CartProvider>{children}</CartProvider>
+            </SavedScoresProvider>
+          </AuthProvider>
+        </LanguageProvider>
       </body>
     </html>
   );

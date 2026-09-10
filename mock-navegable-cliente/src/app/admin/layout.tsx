@@ -42,7 +42,7 @@ export default function AdminLayout({
       {/* Main Body with Sidebar & Content */}
       <div className="flex-1 flex max-w-[1600px] mx-auto w-full min-w-0">
         {/* Desktop Sidebar Nav (lg:flex) */}
-        <aside className="w-64 border-r border-black/5 bg-white p-6 hidden lg:flex flex-col justify-between shrink-0 shadow-2xs">
+        <aside className="w-64 border-r border-black/5 bg-white p-6 hidden lg:flex flex-col gap-6 shrink-0 shadow-2xs">
           <div className="space-y-6">
             <span className="text-[10px] font-extrabold text-[#4C4546] uppercase tracking-widest block font-montserrat">
               Panel Administrativo
