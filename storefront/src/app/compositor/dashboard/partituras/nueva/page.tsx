@@ -183,8 +183,32 @@ export default function NuevaPartituraPage() {
     setIsSubmitting(true);
 
     try {
-      // 1. Opcional: Subir PDF a almacenamiento si hay base64 o endpoint disponible
+      // 1. Subir archivo maestro PDF a Cloudflare R2 en la nube
       let masterPdfUrl = `/master-scores/${Date.now()}-${pdfFile?.name || "score.pdf"}`;
+
+      if (pdfFile) {
+        try {
+          const fileBase64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = (e) => reject(e);
+            reader.readAsDataURL(pdfFile);
+          });
+
+          const uploadRes = await uploadFileApi({
+            base64: fileBase64,
+            fileName: pdfFile.name,
+            fileType: pdfFile.type || "application/pdf",
+            folder: "master-scores",
+          });
+
+          if (uploadRes && (uploadRes.url || uploadRes.key)) {
+            masterPdfUrl = uploadRes.url || `/store/media?key=${encodeURIComponent(uploadRes.key)}`;
+          }
+        } catch (uploadErr: any) {
+          console.warn("Aviso al subir PDF a Cloudflare R2, utilizando referencia predeterminada:", uploadErr.message);
+        }
+      }
 
       // 2. Crear partitura en el catálogo a través de createScoreApi
       await createScoreApi({
@@ -199,7 +223,7 @@ export default function NuevaPartituraPage() {
         description: description || null,
         tonality: tonality || "Do mayor",
         pages_count: pagesCount,
-        preview_images: previewImages, // De 2 a 3 imágenes con marca de agua y difuminado
+        preview_images: previewImages,
         original_pdf_url: masterPdfUrl,
         preview_pdf_url: masterPdfUrl,
       });
