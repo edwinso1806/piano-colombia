@@ -11,15 +11,47 @@ export default function NuevaPartituraPage() {
   const { composer } = useAuth();
   const { t, language } = useLanguage();
 
+  const USD_RATE = 3900;
+
   // Form Fields
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("");
   const [difficulty, setDifficulty] = useState("");
   const [priceCOP, setPriceCOP] = useState(45000);
+  const [priceUSD, setPriceUSD] = useState(11.54);
   const [audioLink, setAudioLink] = useState("");
   const [tonality, setTonality] = useState("");
   const [description, setDescription] = useState("");
   const [pagesCount, setPagesCount] = useState(4);
+
+  // Currency handlers with auto-conversion
+  const handleCopInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const valStr = e.target.value;
+    if (valStr === "") {
+      setPriceCOP(0);
+      setPriceUSD(0);
+      return;
+    }
+    const valCOP = parseFloat(valStr);
+    if (!isNaN(valCOP)) {
+      setPriceCOP(valCOP);
+      setPriceUSD(Number((valCOP / USD_RATE).toFixed(2)));
+    }
+  };
+
+  const handleUsdInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const valStr = e.target.value;
+    if (valStr === "") {
+      setPriceUSD(0);
+      setPriceCOP(0);
+      return;
+    }
+    const valUSD = parseFloat(valStr);
+    if (!isNaN(valUSD)) {
+      setPriceUSD(valUSD);
+      setPriceCOP(Math.round(valUSD * USD_RATE));
+    }
+  };
 
   // Dynamic Metadata Options from Database
   const [categoriesList, setCategoriesList] = useState<string[]>([
@@ -148,7 +180,7 @@ export default function NuevaPartituraPage() {
         genre: category || "Pasillo",
         difficulty: difficulty || "Intermedio",
         price_cop: priceCOP,
-        price_usd: Math.round(priceCOP / 3900) || 12,
+        price_usd: priceUSD || Math.round(priceCOP / USD_RATE) || 12,
         audio_preview_url: audioLink || null,
         description: description || null,
         tonality: tonality || "Do mayor",
@@ -516,67 +548,137 @@ export default function NuevaPartituraPage() {
               </h2>
               <p className="text-xs text-[#4C4546] mt-1">
                 {language === "en"
-                  ? "Set the retail price of your score. Royalties (80%) are credited to your bank account."
-                  : "Fija el valor comercial de tu partitura. Las regalías (80%) son liquidadas quincenalmente a tu cuenta bancaria."}
+                  ? "Set the retail price of your score. You can type in USD ($) or COP ($) with automatic real-time conversion (1 USD = $3,900 COP). All royalties (80%) are recorded and paid in COP."
+                  : "Fija el valor comercial de tu partitura. Puedes ingresar el precio en COP ($) o en USD ($) con conversión automática instantánea ($3.900 COP por USD). Las regalías (80%) se liquidan a tu cuenta bancaria."}
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 items-center">
-              {/* Input Precio */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold font-montserrat text-[#111C2D]">
-                  {t("new_score.price_cop", "Precio de Venta (COP)")} <span className="text-[#C1272D]">*</span>
-                </label>
-                <div className="relative rounded-xl shadow-2xs">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#111C2D] text-sm font-bold">
-                    $
+            <div className="space-y-6">
+              {/* Inputs de Precio Bilingües con Conversión en Vivo */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Input USD */}
+                <div className={`p-4 rounded-xl border transition-all ${
+                  language === "en"
+                    ? "border-[#0071BC] bg-blue-50/20 shadow-xs"
+                    : "border-black/5 bg-[#F0F3FF]/40"
+                }`}>
+                  <label className="block text-xs font-bold font-montserrat text-[#111C2D] mb-1 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <span>{language === "en" ? "Price in USD ($ USD)" : "Precio en Dólares ($ USD)"}</span>
+                      <span className="text-[#C1272D]">*</span>
+                    </span>
+                    {language === "en" && (
+                      <span className="text-[10px] font-extrabold bg-[#0071BC] text-white px-2 py-0.5 rounded-full">
+                        Primary (US / International)
+                      </span>
+                    )}
+                  </label>
+                  <div className="relative rounded-xl shadow-2xs">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#111C2D] text-sm font-bold">
+                      $
+                    </div>
+                    <input
+                      type="number"
+                      step={0.5}
+                      min={1}
+                      value={priceUSD === 0 ? "" : priceUSD}
+                      onChange={handleUsdInputChange}
+                      placeholder="11.50"
+                      className="w-full text-base font-bold text-[#111C2D] rounded-xl border border-black/10 bg-white pl-8 pr-14 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#0071BC] transition-colors font-mono"
+                    />
+                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-xs font-bold text-[#0071BC]">
+                      USD
+                    </div>
                   </div>
-                  <input
-                    type="number"
-                    step={1000}
-                    min={10000}
-                    value={priceCOP}
-                    onChange={(e) => setPriceCOP(Number(e.target.value))}
-                    placeholder="45000"
-                    className="w-full text-base font-bold text-[#111C2D] rounded-xl border border-black/5 bg-[#F0F3FF]/50 pl-8 pr-14 py-3 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC] transition-colors font-mono"
-                  />
-                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-xs font-semibold text-[#4C4546]">
-                    COP
+                  <span className="text-[10px] text-[#4C4546] font-medium block mt-1.5">
+                    {language === "en"
+                      ? `≈ $${priceCOP.toLocaleString("es-CO")} COP (Converted at 1 USD = $3,900 COP)`
+                      : `≈ $${priceCOP.toLocaleString("es-CO")} COP (Tasa 1 USD = $3.900 COP)`}
+                  </span>
+                </div>
+
+                {/* Input COP */}
+                <div className={`p-4 rounded-xl border transition-all ${
+                  language === "es"
+                    ? "border-[#0071BC] bg-blue-50/20 shadow-xs"
+                    : "border-black/5 bg-[#F0F3FF]/40"
+                }`}>
+                  <label className="block text-xs font-bold font-montserrat text-[#111C2D] mb-1 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <span>{language === "en" ? "Price in COP ($ COP)" : "Precio de Venta (COP)"}</span>
+                      <span className="text-[#C1272D]">*</span>
+                    </span>
+                    {language === "es" && (
+                      <span className="text-[10px] font-extrabold bg-[#0071BC] text-white px-2 py-0.5 rounded-full">
+                        Moneda Base Colombia
+                      </span>
+                    )}
+                  </label>
+                  <div className="relative rounded-xl shadow-2xs">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#111C2D] text-sm font-bold">
+                      $
+                    </div>
+                    <input
+                      type="number"
+                      step={1000}
+                      min={10000}
+                      value={priceCOP === 0 ? "" : priceCOP}
+                      onChange={handleCopInputChange}
+                      placeholder="45000"
+                      className="w-full text-base font-bold text-[#111C2D] rounded-xl border border-black/10 bg-white pl-8 pr-14 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#0071BC] transition-colors font-mono"
+                    />
+                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-xs font-bold text-[#4C4546]">
+                      COP
+                    </div>
                   </div>
+                  <span className="text-[10px] text-[#4C4546] font-medium block mt-1.5">
+                    {language === "en"
+                      ? `≈ $${priceUSD.toFixed(2)} USD (Auto-calculated)`
+                      : `≈ $${priceUSD.toFixed(2)} USD (Calculado automáticamente)`}
+                  </span>
                 </div>
               </div>
 
-              {/* Comisión Plataforma */}
-              <div className="p-4 rounded-xl border border-black/5 bg-[#F0F3FF]/60 text-left space-y-1">
-                <span className="text-[11px] font-bold text-[#4C4546] block uppercase tracking-wider font-montserrat">
-                  {language === "en" ? "Platform Fee (20%)" : "Comisión Plataforma (20%)"}
-                </span>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-lg font-bold font-mono text-[#111C2D]">${commission.toLocaleString("es-CO")}</span>
-                  <span className="text-xs font-medium text-[#4C4546]">COP</span>
+              {/* Tarjetas de Desglose de Regalías (20% Plataforma / 80% Regalía) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Comisión Plataforma */}
+                <div className="p-4 rounded-xl border border-black/5 bg-[#F0F3FF]/60 text-left space-y-1">
+                  <span className="text-[11px] font-bold text-[#4C4546] block uppercase tracking-wider font-montserrat">
+                    {language === "en" ? "Platform Fee (20%)" : "Comisión Plataforma (20%)"}
+                  </span>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-xl font-bold font-mono text-[#111C2D]">
+                      ${commission.toLocaleString("es-CO")} <span className="text-xs font-medium text-[#4C4546]">COP</span>
+                    </span>
+                    <span className="text-xs font-medium font-mono text-[#4C4546]">
+                      (≈ ${ (commission / USD_RATE).toFixed(2) } USD)
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-[#4C4546] leading-tight block">
+                    {language === "en" ? "Payment processing via Wompi, R2 CDN & DRM Protection" : "Pasarela Wompi, hosting R2 y protección de derechos"}
+                  </span>
                 </div>
-                <span className="text-[10px] text-[#4C4546] leading-tight block">
-                  {language === "en" ? "Payment processing, CDN & DRM" : "Pasarela Wompi, hosting seguro y DRM"}
-                </span>
-              </div>
 
-              {/* Ganancia Neta Destacada */}
-              <div className="p-4 rounded-xl border-2 border-[#FBB03B] bg-[#FBB03B]/10 text-left relative overflow-hidden space-y-1">
-                <span className="text-[11px] font-bold text-[#111C2D] block uppercase tracking-wider font-montserrat flex items-center justify-between">
-                  <span>{language === "en" ? "Your Net Royalty (80%)" : "Tu Regalía Neta (80%)"}</span>
-                  <span className="text-[10px] bg-[#FBB03B] text-[#111C2D] px-1.5 py-0.5 rounded font-extrabold">
-                    {language === "en" ? "For you" : "Para ti"}
+                {/* Ganancia Neta Destacada */}
+                <div className="p-4 rounded-xl border-2 border-[#FBB03B] bg-[#FBB03B]/10 text-left relative overflow-hidden space-y-1">
+                  <span className="text-[11px] font-bold text-[#111C2D] block uppercase tracking-wider font-montserrat flex items-center justify-between">
+                    <span>{language === "en" ? "Your Net Royalty (80%)" : "Tu Regalía Neta (80%)"}</span>
+                    <span className="text-[10px] bg-[#FBB03B] text-[#111C2D] px-2 py-0.5 rounded font-extrabold">
+                      {language === "en" ? "Paid to your account" : "Para tu cuenta bancaria"}
+                    </span>
                   </span>
-                </span>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-2xl font-black font-mono text-[#111C2D] tracking-tight">
-                    ${netEarnings.toLocaleString("es-CO")}
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-black font-mono text-[#111C2D] tracking-tight">
+                      ${netEarnings.toLocaleString("es-CO")} <span className="text-xs font-bold text-[#111C2D]">COP</span>
+                    </span>
+                    <span className="text-xs font-bold font-mono text-[#0071BC]">
+                      (≈ ${ (netEarnings / USD_RATE).toFixed(2) } USD)
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-[#4C4546] leading-tight block">
+                    {language === "en" ? "Dispersed bi-monthly per copy sold" : "Transferencia automática por cada descarga vendida"}
                   </span>
-                  <span className="text-xs font-bold text-[#111C2D]">COP</span>
                 </div>
-                <span className="text-[10px] text-[#4C4546] leading-tight block">
-                  {language === "en" ? "Per copy sold in store" : "Por cada descarga vendida"}
-                </span>
               </div>
             </div>
           </section>
