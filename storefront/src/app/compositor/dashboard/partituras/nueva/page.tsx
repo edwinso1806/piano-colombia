@@ -274,7 +274,7 @@ export default function NuevaPartituraPage() {
 
           <div className="pt-4">
             <Link
-              href="/compositor/dashboard/partituras"
+              href="/compositor/dashboard?tab=partituras&filter=revision"
               className="px-6 py-3 bg-[#FBB03B] hover:bg-[#e09b2d] text-[#111C2D] font-extrabold text-xs uppercase tracking-wider rounded-xl transition inline-block font-montserrat shadow-md"
             >
               {language === "en" ? "View My Scores Queue" : "Ver Mis Partituras en Cola"}

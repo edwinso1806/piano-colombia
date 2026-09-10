@@ -1,20 +1,38 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { getComposerScoresApi } from "@/lib/api-client";
 
-export default function CompositorDashboardPage() {
+function CompositorDashboardContent() {
   const { composer } = useAuth();
   const { t, language } = useLanguage();
+  const searchParams = useSearchParams();
 
   const [activeMainTab, setActiveMainTab] = useState<"metricas" | "partituras">("metricas");
   const [scoreFilter, setScoreFilter] = useState<"todas" | "publicadas" | "revision" | "rechazadas">("todas");
   const [searchQuery, setSearchQuery] = useState("");
   const [scores, setScores] = useState<any[]>([]);
   const [loadingScores, setLoadingScores] = useState(true);
+
+  // Leer parámetros de URL (?tab=partituras&filter=revision)
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    const filter = searchParams.get("filter");
+    if (tab === "partituras" || tab === "scores") {
+      setActiveMainTab("partituras");
+    }
+    if (filter === "revision") {
+      setScoreFilter("revision");
+    } else if (filter === "publicadas") {
+      setScoreFilter("publicadas");
+    } else if (filter === "rechazadas") {
+      setScoreFilter("rechazadas");
+    }
+  }, [searchParams]);
 
   // Cargar partituras reales del compositor desde PostgreSQL
   useEffect(() => {
@@ -490,5 +508,17 @@ export default function CompositorDashboardPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function CompositorDashboardPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center p-12 text-center text-xs font-bold text-slate-500 font-montserrat">
+        Cargando tablero...
+      </div>
+    }>
+      <CompositorDashboardContent />
+    </Suspense>
   );
 }
