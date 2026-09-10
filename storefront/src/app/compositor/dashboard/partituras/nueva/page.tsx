@@ -6,12 +6,15 @@ import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { getStoreCatalogMetadata, createScoreApi, uploadFileApi } from "@/lib/api-client";
 import { generateScoreBlurredPreviews } from "@/lib/pdf-preview-generator";
+import { getUsdCopExchangeRate, convertCopToUsd, convertUsdToCop } from "@/lib/exchange-rate-service";
 
 export default function NuevaPartituraPage() {
   const { composer } = useAuth();
   const { t, language } = useLanguage();
 
-  const USD_RATE = 3900;
+  // Exchange rate (TRM) state
+  const [usdRate, setUsdRate] = useState<number>(3900);
+  const [isRateLive, setIsRateLive] = useState<boolean>(false);
 
   // Form Fields
   const [title, setTitle] = useState("");
@@ -24,7 +27,18 @@ export default function NuevaPartituraPage() {
   const [description, setDescription] = useState("");
   const [pagesCount, setPagesCount] = useState(4);
 
-  // Currency handlers with auto-conversion
+  // Load live TRM exchange rate on mount
+  useEffect(() => {
+    async function fetchTrm() {
+      const { rate, isLive } = await getUsdCopExchangeRate();
+      setUsdRate(rate);
+      setIsRateLive(isLive);
+      setPriceUSD(convertCopToUsd(45000, rate));
+    }
+    fetchTrm();
+  }, []);
+
+  // Currency handlers with auto-conversion using live exchange rate service
   const handleCopInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const valStr = e.target.value;
     if (valStr === "") {
@@ -35,7 +49,7 @@ export default function NuevaPartituraPage() {
     const valCOP = parseFloat(valStr);
     if (!isNaN(valCOP)) {
       setPriceCOP(valCOP);
-      setPriceUSD(Number((valCOP / USD_RATE).toFixed(2)));
+      setPriceUSD(convertCopToUsd(valCOP, usdRate));
     }
   };
 
@@ -49,7 +63,7 @@ export default function NuevaPartituraPage() {
     const valUSD = parseFloat(valStr);
     if (!isNaN(valUSD)) {
       setPriceUSD(valUSD);
-      setPriceCOP(Math.round(valUSD * USD_RATE));
+      setPriceCOP(convertUsdToCop(valUSD, usdRate));
     }
   };
 
@@ -180,7 +194,7 @@ export default function NuevaPartituraPage() {
         genre: category || "Pasillo",
         difficulty: difficulty || "Intermedio",
         price_cop: priceCOP,
-        price_usd: priceUSD || Math.round(priceCOP / USD_RATE) || 12,
+        price_usd: priceUSD || Math.round(priceCOP / usdRate) || 12,
         audio_preview_url: audioLink || null,
         description: description || null,
         tonality: tonality || "Do mayor",
@@ -541,22 +555,73 @@ export default function NuevaPartituraPage() {
 
           {/* PASO 3: Precio & Regalías (80% para el compositor) */}
           <section className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] p-6 sm:p-7">
-            <div className="mb-5">
-              <h2 className="text-base sm:text-lg font-bold font-montserrat text-[#111C2D] flex items-center gap-2">
-                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-[#0071BC] text-white text-xs font-bold">3</span>
-                <span>{language === "en" ? "Pricing & Royalty Calculator" : "Precio & Calculadora de Regalías"}</span>
-              </h2>
-              <p className="text-xs text-[#4C4546] mt-1">
-                {language === "en"
-                  ? "Set the retail price of your score. You can type in USD ($) or COP ($) with automatic real-time conversion (1 USD = $3,900 COP). All royalties (80%) are recorded and paid in COP."
-                  : "Fija el valor comercial de tu partitura. Puedes ingresar el precio en COP ($) o en USD ($) con conversión automática instantánea ($3.900 COP por USD). Las regalías (80%) se liquidan a tu cuenta bancaria."}
-              </p>
+            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base sm:text-lg font-bold font-montserrat text-[#111C2D] flex items-center gap-2">
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-[#0071BC] text-white text-xs font-bold">3</span>
+                  <span>{language === "en" ? "Pricing & Royalty Calculator" : "Precio & Calculadora de Regalías"}</span>
+                </h2>
+                <p className="text-xs text-[#4C4546] mt-1">
+                  {language === "en"
+                    ? `Set the retail price of your score. Enter in COP ($) or USD ($) with live real-time conversion (1 USD = $${usdRate.toLocaleString("es-CO")} COP).`
+                    : `Fija el valor comercial de tu partitura en COP ($). La conversión a USD ($) se calcula automáticamente en vivo ($${usdRate.toLocaleString("es-CO")} COP por USD).`}
+                </p>
+              </div>
+
+              {/* Insignia de Servicio TRM en Vivo */}
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-[#F0F3FF] border border-[#0071BC]/20 text-[#0071BC]">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                <span>
+                  {isRateLive ? "TRM en Vivo (API):" : "TRM Estimada:"} 1 USD = ${usdRate.toLocaleString("es-CO")} COP
+                </span>
+              </div>
             </div>
 
             <div className="space-y-6">
               {/* Inputs de Precio Bilingües con Conversión en Vivo */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Input USD */}
+                {/* Input COP (Moneda Base Colombia) */}
+                <div className={`p-4 rounded-xl border transition-all ${
+                  language === "es"
+                    ? "border-[#0071BC] bg-blue-50/20 shadow-xs"
+                    : "border-black/5 bg-[#F0F3FF]/40"
+                }`}>
+                  <label className="block text-xs font-bold font-montserrat text-[#111C2D] mb-1 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <span>{language === "en" ? "Price in COP ($ COP)" : "Precio de Venta (COP)"}</span>
+                      <span className="text-[#C1272D]">*</span>
+                    </span>
+                    {language === "es" && (
+                      <span className="text-[10px] font-extrabold bg-[#0071BC] text-white px-2 py-0.5 rounded-full">
+                        Ingreso Principal (COP)
+                      </span>
+                    )}
+                  </label>
+                  <div className="relative rounded-xl shadow-2xs">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#111C2D] text-sm font-bold">
+                      $
+                    </div>
+                    <input
+                      type="number"
+                      step={1000}
+                      min={10000}
+                      value={priceCOP === 0 ? "" : priceCOP}
+                      onChange={handleCopInputChange}
+                      placeholder="45000"
+                      className="w-full text-base font-bold text-[#111C2D] rounded-xl border border-black/10 bg-white pl-8 pr-14 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#0071BC] transition-colors font-mono"
+                    />
+                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-xs font-bold text-[#4C4546]">
+                      COP
+                    </div>
+                  </div>
+                  <span className="text-[10px] text-[#4C4546] font-medium block mt-1.5">
+                    {language === "en"
+                      ? `≈ $${priceUSD.toFixed(2)} USD (Auto-converted via live TRM)`
+                      : `≈ $${priceUSD.toFixed(2)} USD (Calculado en vivo vía servicio TRM)`}
+                  </span>
+                </div>
+
+                {/* Input USD (Internacional) */}
                 <div className={`p-4 rounded-xl border transition-all ${
                   language === "en"
                     ? "border-[#0071BC] bg-blue-50/20 shadow-xs"
@@ -592,49 +657,8 @@ export default function NuevaPartituraPage() {
                   </div>
                   <span className="text-[10px] text-[#4C4546] font-medium block mt-1.5">
                     {language === "en"
-                      ? `≈ $${priceCOP.toLocaleString("es-CO")} COP (Converted at 1 USD = $3,900 COP)`
-                      : `≈ $${priceCOP.toLocaleString("es-CO")} COP (Tasa 1 USD = $3.900 COP)`}
-                  </span>
-                </div>
-
-                {/* Input COP */}
-                <div className={`p-4 rounded-xl border transition-all ${
-                  language === "es"
-                    ? "border-[#0071BC] bg-blue-50/20 shadow-xs"
-                    : "border-black/5 bg-[#F0F3FF]/40"
-                }`}>
-                  <label className="block text-xs font-bold font-montserrat text-[#111C2D] mb-1 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <span>{language === "en" ? "Price in COP ($ COP)" : "Precio de Venta (COP)"}</span>
-                      <span className="text-[#C1272D]">*</span>
-                    </span>
-                    {language === "es" && (
-                      <span className="text-[10px] font-extrabold bg-[#0071BC] text-white px-2 py-0.5 rounded-full">
-                        Moneda Base Colombia
-                      </span>
-                    )}
-                  </label>
-                  <div className="relative rounded-xl shadow-2xs">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#111C2D] text-sm font-bold">
-                      $
-                    </div>
-                    <input
-                      type="number"
-                      step={1000}
-                      min={10000}
-                      value={priceCOP === 0 ? "" : priceCOP}
-                      onChange={handleCopInputChange}
-                      placeholder="45000"
-                      className="w-full text-base font-bold text-[#111C2D] rounded-xl border border-black/10 bg-white pl-8 pr-14 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#0071BC] transition-colors font-mono"
-                    />
-                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-xs font-bold text-[#4C4546]">
-                      COP
-                    </div>
-                  </div>
-                  <span className="text-[10px] text-[#4C4546] font-medium block mt-1.5">
-                    {language === "en"
-                      ? `≈ $${priceUSD.toFixed(2)} USD (Auto-calculated)`
-                      : `≈ $${priceUSD.toFixed(2)} USD (Calculado automáticamente)`}
+                      ? `≈ $${priceCOP.toLocaleString("es-CO")} COP (Rate: 1 USD = $${usdRate.toLocaleString("es-CO")} COP)`
+                      : `≈ $${priceCOP.toLocaleString("es-CO")} COP (Tasa en vivo: 1 USD = $${usdRate.toLocaleString("es-CO")} COP)`}
                   </span>
                 </div>
               </div>
@@ -651,7 +675,7 @@ export default function NuevaPartituraPage() {
                       ${commission.toLocaleString("es-CO")} <span className="text-xs font-medium text-[#4C4546]">COP</span>
                     </span>
                     <span className="text-xs font-medium font-mono text-[#4C4546]">
-                      (≈ ${ (commission / USD_RATE).toFixed(2) } USD)
+                      (≈ ${ (commission / usdRate).toFixed(2) } USD)
                     </span>
                   </div>
                   <span className="text-[10px] text-[#4C4546] leading-tight block">
@@ -672,7 +696,7 @@ export default function NuevaPartituraPage() {
                       ${netEarnings.toLocaleString("es-CO")} <span className="text-xs font-bold text-[#111C2D]">COP</span>
                     </span>
                     <span className="text-xs font-bold font-mono text-[#0071BC]">
-                      (≈ ${ (netEarnings / USD_RATE).toFixed(2) } USD)
+                      (≈ ${ (netEarnings / usdRate).toFixed(2) } USD)
                     </span>
                   </div>
                   <span className="text-[10px] text-[#4C4546] leading-tight block">
