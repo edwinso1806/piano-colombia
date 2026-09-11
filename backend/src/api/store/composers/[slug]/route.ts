@@ -23,22 +23,17 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
       return res.status(404).json({ message: "Compositor no disponible en la tienda pública" })
     }
 
-    // Obtener partituras publicadas del compositor
+    // Obtener partituras publicadas del compositor (opcional o vacías si están en revisión)
     const scores = await scoreModuleService.listScores({
       composer_id: composer.id,
       status: "APPROVED",
     })
 
-    // Requisito estricto: Debe tener mínimo una partitura aprobada para aparecer en la tienda
-    if (!scores || scores.length === 0) {
-      return res.status(404).json({ message: "El compositor aún no cuenta con partituras publicadas y aprobadas en el catálogo público" })
-    }
-
     return res.status(200).json({
       composer: {
         ...composer,
-        scores,
-        scoreCount: scores.length,
+        scores: scores || [],
+        scoreCount: scores ? scores.length : 0,
       },
     })
   } catch (error: any) {

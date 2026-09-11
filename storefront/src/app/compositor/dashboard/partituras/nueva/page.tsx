@@ -218,6 +218,31 @@ export default function NuevaPartituraPage() {
 
       const masterPdfUrl = uploadRes.url || `/store/media?key=${encodeURIComponent(uploadRes.key)}`;
 
+      // 1.5 Subir imágenes de muestras difuminadas a Cloudflare R2
+      let uploadedPreviews: string[] = [];
+      if (previewImages && previewImages.length > 0) {
+        for (let i = 0; i < previewImages.length; i++) {
+          const imgData = previewImages[i];
+          if (imgData.startsWith("data:image/")) {
+            const previewUploadRes = await uploadFileApi({
+              base64: imgData,
+              fileName: `preview_page_${i + 1}_${Date.now()}.png`,
+              fileType: "image/png",
+              folder: "previews",
+            });
+            if (previewUploadRes && (previewUploadRes.url || previewUploadRes.key)) {
+              uploadedPreviews.push(
+                previewUploadRes.url || `/store/media?key=${encodeURIComponent(previewUploadRes.key)}`
+              );
+            } else {
+              uploadedPreviews.push(imgData);
+            }
+          } else {
+            uploadedPreviews.push(imgData);
+          }
+        }
+      }
+
       // 2. Crear partitura en el catálogo a través de createScoreApi
       await createScoreApi({
         title,
@@ -231,7 +256,7 @@ export default function NuevaPartituraPage() {
         description: description || null,
         tonality: tonality || "Do mayor",
         pages_count: pagesCount,
-        preview_images: previewImages,
+        preview_images: uploadedPreviews,
         original_pdf_url: masterPdfUrl,
         preview_pdf_url: masterPdfUrl,
       });

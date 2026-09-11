@@ -2,15 +2,66 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MOCK_COMPOSERS, MOCK_SCORES } from "@/lib/mock-data";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { getHeroCms } from "@/lib/api-client";
 
 export default function Home() {
   const [isPlayingHero, setIsPlayingHero] = useState(false);
   const [currency, setCurrency] = useState<"COP" | "USD">("COP");
   const [activeComposerFilter, setActiveComposerFilter] = useState("todos");
+
+  // Estado dinámico del CMS Hero de la BD
+  const [heroData, setHeroData] = useState<any>({
+    hero_title: "La tradición del piano colombiano y latinoamericano en tus manos.",
+    hero_subtitle: "Un proyecto cultural con enfoque musical riguroso en pro del rescate, edición filológica y difusión de obras patrimoniales y contemporáneas para teclado.",
+    btn1_text: "Explorar Partituras",
+    btn1_url: "/tienda",
+    btn2_text: "Conocer Compositores",
+    btn2_url: "/compositores",
+    footer_notice: "Edición revisada con digitaciones de concierto y notas históricas bilingües (ES/EN).",
+    featured_genre: "PASILLO LÍRICO",
+    featured_title: "Malvaloca",
+    featured_author: "Luis A. Calvo (1882–1945) · Op. 12",
+    featured_tempo: "Andante cantabile",
+    featured_ismn: "ISMN 979-0-901314-18-2",
+    featured_audio_sample: "Pasillo No. 1 — L. A. Calvo",
+    featured_badge_text: "GRABADO URTEXT 100% Alta Resolución",
+    featured_link_url: "/partitura/malvaloca",
+  });
+
+  useEffect(() => {
+    async function fetchHero() {
+      try {
+        const res = await getHeroCms();
+        if (res && res.hero) {
+          const h = res.hero;
+          setHeroData({
+            hero_title: h.hero_title || `${h.title_part1 || ""} ${h.title_part2_highlight || ""}`.trim() || "La tradición del piano colombiano y latinoamericano en tus manos.",
+            hero_subtitle: h.hero_subtitle || h.description || "Un proyecto cultural con enfoque musical riguroso en pro del rescate, edición filológica y difusión de obras patrimoniales y contemporáneas para teclado.",
+            btn1_text: h.btn1_text || h.button1_text || "Explorar Partituras",
+            btn1_url: h.btn1_url || h.button1_url || "/tienda",
+            btn2_text: h.btn2_text || h.button2_text || "Conocer Compositores",
+            btn2_url: h.btn2_url || h.button2_url || "/compositores",
+            footer_notice: h.footer_notice || h.urtext_badge_text || "Edición revisada con digitaciones de concierto y notas históricas bilingües (ES/EN).",
+            featured_genre: h.featured_genre || "PASILLO LÍRICO",
+            featured_title: h.featured_title || "Malvaloca",
+            featured_author: h.featured_author || "Luis A. Calvo (1882–1945) · Op. 12",
+            featured_tempo: h.featured_tempo || "Andante cantabile",
+            featured_ismn: h.featured_ismn || "ISMN 979-0-901314-18-2",
+            featured_audio_sample: h.featured_audio_sample || "Pasillo No. 1 — L. A. Calvo",
+            featured_badge_text: h.featured_badge_text || "GRABADO URTEXT 100% Alta Resolución",
+            featured_link_url: h.featured_link_url || "/partitura/malvaloca",
+          });
+        }
+      } catch (err) {
+        console.warn("Error cargando CMS Hero en home:", err);
+      }
+    }
+    fetchHero();
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#F9F9FF] text-[#111C2D] flex flex-col font-inter antialiased selection:bg-[#FBB03B]/30 selection:text-[#111C2D]">
@@ -48,37 +99,37 @@ export default function Home() {
 
                 {/* Gran Título Hero */}
                 <h1 className="font-montserrat text-4xl sm:text-5xl lg:text-[56px] font-black text-[#111C2D] leading-[1.08] tracking-tight">
-                  La tradición del piano <span className="relative inline-block text-[#111C2D] underline decoration-[#FBB03B] decoration-4 underline-offset-8">colombiano</span> y latinoamericano en tus manos.
+                  {heroData.hero_title}
                 </h1>
 
                 {/* Subtítulo Descriptor */}
                 <p className="font-inter text-base sm:text-lg text-[#4C4546] max-w-xl leading-relaxed">
-                  Un proyecto cultural con enfoque musical riguroso en pro del rescate, edición filológica y difusión de obras patrimoniales y contemporáneas para teclado.
+                  {heroData.hero_subtitle}
                 </p>
 
                 {/* Botones CTA Principales */}
                 <div className="flex flex-wrap items-center gap-4 pt-2">
                   <Link
-                    href="/tienda"
+                    href={heroData.btn1_url}
                     className="group flex items-center gap-2 px-7 py-3.5 rounded-xl bg-[#FBB03B] text-[#111C2D] font-montserrat font-extrabold text-sm uppercase tracking-wider shadow-md hover:shadow-xl hover:bg-[#e09b2d] hover:scale-[1.02] active:scale-95 transition-all"
                   >
-                    <span>Explorar Partituras</span>
+                    <span>{heroData.btn1_text}</span>
                     <span className="material-symbols-outlined text-lg text-[#111C2D] group-hover:translate-x-1 transition-transform">arrow_forward</span>
                   </Link>
 
                   <Link
-                    href="/compositores"
+                    href={heroData.btn2_url}
                     className="flex items-center gap-2 px-6 py-3.5 rounded-xl bg-white/90 backdrop-blur-md text-[#111C2D] border border-black/10 font-montserrat font-bold text-sm shadow-xs hover:bg-[#F0F3FF] hover:shadow-md transition-all"
                   >
                     <span className="material-symbols-outlined text-[#0071BC]">library_music</span>
-                    <span>Conocer Compositores</span>
+                    <span>{heroData.btn2_text}</span>
                   </Link>
                 </div>
 
                 {/* Trust notation badge */}
                 <div className="flex items-center gap-2 pt-2 text-[#4C4546]">
                   <span className="material-symbols-outlined text-[#0071BC] text-lg">verified</span>
-                  <span className="text-xs font-medium">Edición revisada con digitaciones de concierto y notas históricas bilingües (ES/EN).</span>
+                  <span className="text-xs font-medium">{heroData.footer_notice}</span>
                 </div>
               </div>
 
@@ -92,22 +143,21 @@ export default function Home() {
                       <span className="w-3 h-3 rounded-full bg-[#C1272D]/70"></span>
                       <span className="w-3 h-3 rounded-full bg-[#FBB03B]"></span>
                       <span className="w-3 h-3 rounded-full bg-[#0071BC]"></span>
-                      <span className="ml-2 text-[10px] font-bold text-[#4C4546] uppercase tracking-widest font-montserrat">Urtext Edición No. 042</span>
+                      <span className="ml-2 text-[10px] font-bold text-[#4C4546] uppercase tracking-widest font-montserrat">{heroData.featured_badge_text || "Urtext Edición No. 042"}</span>
                     </div>
-                    <span className="px-2.5 py-1 rounded-full bg-[#F0F3FF] text-[10px] font-bold text-[#0071BC] font-montserrat">ISMN 979-0-901</span>
+                    <span className="px-2.5 py-1 rounded-full bg-[#F0F3FF] text-[10px] font-bold text-[#0071BC] font-montserrat">{heroData.featured_ismn}</span>
                   </div>
 
                   {/* Showcase Content */}
                   <div className="relative rounded-2xl bg-[#F9F9FF] p-5 shadow-inner mt-4 overflow-hidden border border-black/5">
                     <div className="flex justify-between items-start">
                       <div>
-                        <span className="text-[10px] font-extrabold text-[#0071BC] uppercase tracking-wider block font-montserrat">Pasillo Lírico</span>
-                        <h3 className="text-xl font-black font-montserrat text-[#111C2D]">Malvaloca</h3>
-                        <p className="text-xs text-[#4C4546] font-medium">Luis A. Calvo (1882–1945) · Op. 12</p>
+                        <span className="text-[10px] font-extrabold text-[#0071BC] uppercase tracking-wider block font-montserrat">{heroData.featured_genre}</span>
+                        <h3 className="text-xl font-black font-montserrat text-[#111C2D]">{heroData.featured_title}</h3>
+                        <p className="text-xs text-[#4C4546] font-medium">{heroData.featured_author}</p>
                       </div>
                       <div className="flex flex-col items-end">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#FBB03B]/30 text-[#111C2D] font-montserrat">Andante cantabile</span>
-                        <span className="text-[10px] text-[#4C4546] font-semibold mt-1">♩ = 68</span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#FBB03B]/30 text-[#111C2D] font-montserrat">{heroData.featured_tempo}</span>
                       </div>
                     </div>
 
@@ -155,7 +205,7 @@ export default function Home() {
                         </button>
                         <div className="flex flex-col min-w-0">
                           <span className="text-[10px] font-extrabold text-[#0071BC] uppercase tracking-wider font-montserrat">Muestra en Vivo</span>
-                          <span className="text-xs font-bold text-[#111C2D] truncate font-montserrat">Pasillo No. 1 — L. A. Calvo</span>
+                          <span className="text-xs font-bold text-[#111C2D] truncate font-montserrat">{heroData.featured_audio_sample}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
@@ -172,9 +222,9 @@ export default function Home() {
                   <div className="mt-4 flex items-center justify-between text-[#4C4546] text-xs">
                     <span className="flex items-center gap-1 font-medium">
                       <span className="material-symbols-outlined text-sm text-[#0071BC]">picture_as_pdf</span>
-                      Formato Vectorial · 8 Páginas
+                      Formato Vectorial · Urtext
                     </span>
-                    <Link href="/partitura/score_1" className="text-xs font-bold text-[#111C2D] hover:underline flex items-center gap-0.5 font-montserrat">
+                    <Link href={heroData.featured_link_url} className="text-xs font-bold text-[#111C2D] hover:underline flex items-center gap-0.5 font-montserrat">
                       Ver Partitura <span className="material-symbols-outlined text-xs">north_east</span>
                     </Link>
                   </div>

@@ -9,7 +9,6 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
     const scoreModuleService = req.scope.resolve(SCORE_MODULE)
     const { is_featured } = req.query
 
-    // Requisito estricto de tienda: El compositor SOLO debe aparecer en la tienda cuando tenga mínimo una partitura aprobada
     const approvedScores = await scoreModuleService.listScores({ status: "APPROVED" })
 
     const approvedScoresCountMap = new Map<string, number>()
@@ -19,18 +18,8 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
       }
     }
 
-    const eligibleComposerIds = Array.from(approvedScoresCountMap.keys())
-
-    if (eligibleComposerIds.length === 0) {
-      return res.status(200).json({
-        composers: [],
-        count: 0,
-      })
-    }
-
     const filters: Record<string, any> = {
       status: "APPROVED",
-      id: eligibleComposerIds,
     }
     if (is_featured !== undefined) filters.is_featured = is_featured === "true"
 

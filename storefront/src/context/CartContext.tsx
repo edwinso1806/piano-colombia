@@ -23,18 +23,32 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [cart, setCart] = useState<CartItem[]>([
-    {
-      score: MOCK_SCORES[0], // Malvaloca - Luis A. Calvo
-      quantity: 1,
-      licenseType: "personal",
-    },
-    {
-      score: MOCK_SCORES[1], // Bambuco en Fa Mayor - Pedro Morales Pino
-      quantity: 1,
-      licenseType: "personal",
-    },
-  ]);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  // Load cart from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedCart = localStorage.getItem("piano_colombia_cart");
+      if (savedCart) {
+        setCart(JSON.parse(savedCart));
+      }
+    } catch (err) {
+      console.warn("Error cargando carrito de compras de localStorage:", err);
+    } finally {
+      setIsLoaded(true);
+    }
+  }, []);
+
+  // Sync cart to localStorage on change
+  useEffect(() => {
+    if (!isLoaded) return;
+    try {
+      localStorage.setItem("piano_colombia_cart", JSON.stringify(cart));
+    } catch (err) {
+      console.warn("Error guardando carrito en localStorage:", err);
+    }
+  }, [cart, isLoaded]);
 
   const addToCart = (score: Score, licenseType: "personal" | "institutional" = "personal") => {
     setCart((prev) => {

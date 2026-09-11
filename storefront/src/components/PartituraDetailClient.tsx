@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useLanguage } from "@/context/LanguageContext";
+import { useCart } from "@/context/CartContext";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SaveScoreButton from "@/components/SaveScoreButton";
@@ -37,7 +38,9 @@ interface PartituraDetailClientProps {
 
 export default function PartituraDetailClient({ score }: PartituraDetailClientProps) {
   const { t, language } = useLanguage();
+  const { addToCart } = useCart();
   const [selectedPageIndex, setSelectedPageIndex] = useState(0);
+  const [addedToCart, setAddedToCart] = useState(false);
 
   const previews = score.preview_images && score.preview_images.length > 0
     ? score.preview_images
@@ -90,29 +93,31 @@ export default function PartituraDetailClient({ score }: PartituraDetailClientPr
             )}
           </div>
 
-          {/* Contenedor del Preview */}
-          <div className="relative w-full aspect-[1/1.414] bg-white rounded-2xl overflow-hidden border border-slate-300 shadow-[0_12px_40px_rgba(0,0,0,0.08)] flex flex-col justify-between">
+          {/* Contenedor del Preview Proporcional */}
+          <div className="relative w-full max-w-xl mx-auto bg-[#F8F9FA] rounded-2xl overflow-hidden border border-black/10 shadow-[0_8px_30px_rgba(0,0,0,0.06)] flex flex-col justify-between">
             {previews.length > 0 ? (
-              <img
-                src={previews[selectedPageIndex]}
-                alt={`${score.title} - Página ${selectedPageIndex + 1}`}
-                className="w-full h-full object-contain select-none pointer-events-none"
-              />
+              <div className="relative w-full p-4 sm:p-6 bg-slate-100/50 flex items-center justify-center min-h-[380px] max-h-[600px]">
+                <img
+                  src={previews[selectedPageIndex]}
+                  alt={`${score.title} - Página ${selectedPageIndex + 1}`}
+                  className="max-h-[550px] w-auto h-auto max-w-full object-contain rounded shadow-md select-none pointer-events-none"
+                />
+              </div>
             ) : (
               /* Visualizador Urtext Simulado Fallback */
-              <div className="relative w-full h-full flex flex-col justify-between p-8 text-[#111C2D] select-none">
+              <div className="relative w-full aspect-[3/4] max-h-[520px] flex flex-col justify-between p-6 sm:p-8 text-[#111C2D] select-none bg-white">
                 <div className="absolute inset-0 bg-white/40 backdrop-blur-[3px] pointer-events-none z-10"></div>
                 <div className="absolute inset-0 pointer-events-none z-20 flex items-center justify-center rotate-[-35deg] opacity-20">
-                  <span className="text-4xl md:text-5xl font-black tracking-widest text-[#C1272D] uppercase whitespace-nowrap font-montserrat">
+                  <span className="text-3xl sm:text-4xl font-black tracking-widest text-[#C1272D] uppercase whitespace-nowrap font-montserrat">
                     PIANO COLOMBIA — MUESTRA PROTEGIDA
                   </span>
                 </div>
                 <div className="relative z-0 opacity-40 filter blur-[1px]">
-                  <div className="text-center mb-8">
-                    <h3 className="text-xl font-bold font-serif tracking-widest uppercase">{score.title}</h3>
+                  <div className="text-center mb-6">
+                    <h3 className="text-lg font-bold font-serif tracking-widest uppercase">{score.title}</h3>
                     <p className="text-xs font-serif italic mt-1">Para Piano Solo — {composerName}</p>
                   </div>
-                  <div className="space-y-6">
+                  <div className="space-y-4">
                     {[1, 2, 3, 4].map((p) => (
                       <div key={p} className="space-y-1">
                         <div className="h-0.5 bg-[#111C2D] w-full"></div>
@@ -128,7 +133,7 @@ export default function PartituraDetailClient({ score }: PartituraDetailClientPr
             )}
 
             {/* Aviso inferior de protección editorial */}
-            <div className="absolute inset-x-0 bottom-0 bg-[#111C2D]/95 backdrop-blur-md p-3.5 text-center border-t border-[#FBB03B]/30 text-white z-30">
+            <div className="bg-[#111C2D]/95 backdrop-blur-md p-3 text-center border-t border-[#FBB03B]/30 text-white z-30">
               <p className="text-[11px] font-medium text-slate-200 flex items-center justify-center gap-1.5">
                 <span className="material-symbols-outlined text-sm text-[#FBB03B]">lock</span>
                 {t(
@@ -222,13 +227,67 @@ export default function PartituraDetailClient({ score }: PartituraDetailClientPr
               </p>
             </div>
 
-            {/* Botones de Compra */}
+            {/* Botones de Compra y Carrito */}
             <div className="space-y-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  addToCart({
+                    id: score.id,
+                    title: score.title,
+                    composer: composerName,
+                    composerId: score.composer?.id || "",
+                    category: (score.genre || score.category || "Piano Solo") as any,
+                    level: (score.difficulty || score.level || "Intermedio") as any,
+                    priceCOP: score.priceCOP || 45000,
+                    priceUSD: score.priceUSD || 12,
+                    slug: score.slug || score.id,
+                    previewPages: previews,
+                    mediaUrl: score.audio_sample_url || "",
+                    description: score.description || "",
+                    tags: [],
+                  });
+                  setAddedToCart(true);
+                  setTimeout(() => setAddedToCart(false), 2500);
+                }}
+                className={`w-full py-3.5 text-center font-extrabold text-xs uppercase tracking-wider rounded-xl transition shadow-sm font-montserrat flex items-center justify-center gap-2 cursor-pointer border ${
+                  addedToCart
+                    ? "bg-emerald-600 text-white border-emerald-600"
+                    : "bg-[#0071BC] hover:bg-[#005a96] text-white border-[#0071BC]"
+                }`}
+              >
+                <span className="material-symbols-outlined text-base">
+                  {addedToCart ? "check_circle" : "add_shopping_cart"}
+                </span>
+                <span>
+                  {addedToCart
+                    ? t("catalog.added_to_cart_success", "¡Agregado al Carrito!")
+                    : t("catalog.add_to_cart", "Añadir al Carrito")}
+                </span>
+              </button>
+
               <Link
                 href="/checkout"
-                className="w-full py-4 text-center block font-extrabold text-sm uppercase tracking-wider bg-[#FBB03B] hover:bg-[#e09b2d] text-[#111C2D] rounded-xl transition shadow-md hover:shadow-lg font-montserrat flex items-center justify-center gap-2 cursor-pointer"
+                onClick={() => {
+                  addToCart({
+                    id: score.id,
+                    title: score.title,
+                    composer: composerName,
+                    composerId: score.composer?.id || "",
+                    category: (score.genre || score.category || "Piano Solo") as any,
+                    level: (score.difficulty || score.level || "Intermedio") as any,
+                    priceCOP: score.priceCOP || 45000,
+                    priceUSD: score.priceUSD || 12,
+                    slug: score.slug || score.id,
+                    previewPages: previews,
+                    mediaUrl: score.audio_sample_url || "",
+                    description: score.description || "",
+                    tags: [],
+                  });
+                }}
+                className="w-full py-3.5 text-center block font-extrabold text-xs uppercase tracking-wider bg-[#FBB03B] hover:bg-[#e09b2d] text-[#111C2D] rounded-xl transition shadow-md hover:shadow-lg font-montserrat flex items-center justify-center gap-2 cursor-pointer"
               >
-                <span className="material-symbols-outlined text-lg">shopping_cart</span>
+                <span className="material-symbols-outlined text-base">shopping_bag</span>
                 <span>{t("score.buy_now", "Comprar Ahora & Descargar PDF")}</span>
               </Link>
               
@@ -243,12 +302,12 @@ export default function PartituraDetailClient({ score }: PartituraDetailClientPr
                   priceUSD: score.priceUSD || 12,
                 }}
                 variant="button"
-                className="w-full py-3.5"
+                className="w-full py-3"
               />
 
               <p className="text-[11px] text-center text-[#4C4546] font-medium flex items-center justify-center gap-1">
                 <span className="material-symbols-outlined text-xs text-[#0071BC]">bolt</span>
-                <span>Descarga digital inmediata post-pago con marca de agua personalizada con tu nombre.</span>
+                <span>{t("score.instant_download_notice", "Descarga digital inmediata post-pago con marca de agua personalizada con tu nombre.")}</span>
               </p>
             </div>
 

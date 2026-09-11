@@ -100,42 +100,39 @@ export default async function TiendaPage() {
             {scores.map((score: any) => (
               <div key={score.id} className="group flex flex-col rounded-2xl bg-white border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 overflow-hidden">
                 
-                {/* Miniature Preview Container */}
-                <div className="relative aspect-[4/3] bg-[#F9F9FF] p-4 flex flex-col justify-between overflow-hidden border-b border-black/5">
-                  <div className="flex items-center justify-between z-10">
-                    <div className="flex items-center gap-1.5">
-                      <span className="px-2.5 py-1 rounded-full bg-[#FBB03B]/20 text-[#111C2D] font-montserrat font-extrabold text-[10px] uppercase">
+                {/* Miniature Preview Container (100% Clean Image View - Sin Íconos Encima) */}
+                <div className="relative aspect-[4/3] bg-slate-100/70 p-3 overflow-hidden border-b border-black/5 flex items-center justify-center">
+                  {score.previewPages && score.previewPages.length > 0 ? (
+                    <img
+                      src={score.previewPages[0]}
+                      alt={score.title}
+                      className="w-full h-full object-contain filter group-hover:scale-105 transition-transform duration-500 rounded shadow-xs"
+                    />
+                  ) : (
+                    /* Stylized Miniature Score Staves Fallback */
+                    <div className="py-6 opacity-30 select-none text-center flex flex-col justify-center px-4 w-full">
+                      <div className="h-0.5 w-full bg-slate-300 my-1"></div>
+                      <div className="h-0.5 w-full bg-slate-300 my-1"></div>
+                      <div className="h-0.5 w-full bg-slate-300 my-1"></div>
+                      <div className="h-0.5 w-full bg-slate-300 my-1"></div>
+                      <div className="mt-2 font-serif italic text-[#111C2D] font-bold text-sm truncate">{score.title}</div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Body Content limpio */}
+                <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
+                  <div>
+                    {/* Badges de Género & Dificultad */}
+                    <div className="flex items-center gap-1.5 mb-2.5">
+                      <span className="px-2.5 py-0.5 rounded-full bg-[#FBB03B]/20 text-[#111C2D] font-montserrat font-extrabold text-[10px] uppercase">
                         {score.category}
                       </span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 bg-white border border-black/10 text-[#4C4546] rounded-full shadow-2xs font-montserrat">
+                      <span className="px-2.5 py-0.5 rounded-full bg-[#F0F3FF] text-[#0071BC] font-montserrat font-extrabold text-[10px]">
                         {score.level}
                       </span>
                     </div>
 
-                    <SaveScoreButton score={score} variant="icon" />
-                  </div>
-
-                  {/* Stylized Miniature Score Staves */}
-                  <div className="py-2 opacity-40 select-none text-center">
-                    <div className="h-0.5 w-full bg-slate-300 my-1"></div>
-                    <div className="h-0.5 w-full bg-slate-300 my-1"></div>
-                    <div className="h-0.5 w-full bg-slate-300 my-1"></div>
-                    <div className="h-0.5 w-full bg-slate-300 my-1"></div>
-                    <div className="mt-2 font-serif italic text-[#111C2D] font-bold text-sm">{score.title}</div>
-                  </div>
-
-                  <div className="flex items-center justify-between text-[11px] text-[#4C4546] font-medium z-10">
-                    <span className="flex items-center gap-1">
-                      <span className="material-symbols-outlined text-sm text-[#0071BC]">picture_as_pdf</span>
-                      Formato Vectorial
-                    </span>
-                    <span className="text-[#0071BC] font-bold">PDF Imprimible</span>
-                  </div>
-                </div>
-
-                {/* Body */}
-                <div className="p-5 flex-1 flex flex-col justify-between">
-                  <div>
                     <h3 className="text-base font-bold text-[#111C2D] font-montserrat group-hover:text-[#0071BC] transition-colors leading-snug">
                       {score.title}
                     </h3>
@@ -145,17 +142,30 @@ export default async function TiendaPage() {
                     </p>
                   </div>
 
-                  <div className="mt-5 pt-3 border-t border-black/5 flex justify-between items-center">
-                    <div>
-                      <span className="text-base font-black text-[#111C2D] font-montserrat">${score.priceCOP.toLocaleString('es-CO')} COP</span>
-                      <span className="text-[10px] text-[#4C4546] block font-medium">~${score.priceUSD} USD</span>
+                  {/* Sección inferior organizada en filas limpias */}
+                  <div className="pt-3 border-t border-black/5 space-y-3">
+                    {/* Fila del Precio + Ícono de Guardar al lado */}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-lg font-black text-[#111C2D] font-montserrat tracking-tight">
+                          ${score.priceCOP.toLocaleString('es-CO')} <span className="text-xs text-[#4C4546] font-bold">COP</span>
+                        </div>
+                        <span className="text-[11px] text-[#4C4546] font-medium block">
+                          (~${score.priceUSD} USD)
+                        </span>
+                      </div>
+
+                      {/* Botón de guardar en marcadores al lado del precio */}
+                      <SaveScoreButton score={score} variant="icon" />
                     </div>
+
+                    {/* Botón Ver Detalle solo */}
                     <Link
                       href={`/partitura/${score.slug}`}
-                      className="px-3.5 py-2 bg-[#FBB03B] hover:bg-[#e09b2d] text-[#111C2D] font-extrabold text-xs uppercase tracking-wider rounded-xl transition shadow-xs font-montserrat flex items-center gap-1"
+                      className="w-full py-2.5 bg-[#FBB03B] hover:bg-[#e09b2d] text-[#111C2D] font-extrabold text-xs uppercase tracking-wider rounded-xl transition shadow-xs font-montserrat flex items-center justify-center gap-1.5"
                     >
                       <span>Ver Detalle</span>
-                      <span className="material-symbols-outlined text-xs">north_east</span>
+                      <span className="material-symbols-outlined text-sm">north_east</span>
                     </Link>
                   </div>
                 </div>

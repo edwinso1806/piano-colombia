@@ -105,7 +105,7 @@ function CompositorDashboardContent() {
       let previewPdfUrl = editingScore.preview_pdf_url;
       let newPreviews = editPreviewImages;
 
-      // Si se seleccionó un nuevo PDF maestro, subirlo a Cloudflare R2
+      // Si se seleccionó un nuevo PDF maestro, subirlo a Cloudflare R2 y subir sus imágenes de vista previa difuminadas a Cloudflare R2
       if (editPdfFile) {
         const fileBase64 = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
@@ -127,6 +127,32 @@ function CompositorDashboardContent() {
 
         masterPdfUrl = uploadRes.url || `/store/media?key=${encodeURIComponent(uploadRes.key)}`;
         previewPdfUrl = masterPdfUrl;
+
+        // Subir a Cloudflare R2 cada una de las imágenes de muestra difuminadas recién generadas
+        if (editPreviewImages.length > 0) {
+          const uploadedPreviews: string[] = [];
+          for (let i = 0; i < editPreviewImages.length; i++) {
+            const imgData = editPreviewImages[i];
+            if (imgData.startsWith("data:image/")) {
+              const previewUploadRes = await uploadFileApi({
+                base64: imgData,
+                fileName: `preview_page_${i + 1}_${Date.now()}.png`,
+                fileType: "image/png",
+                folder: "previews",
+              });
+              if (previewUploadRes && (previewUploadRes.url || previewUploadRes.key)) {
+                uploadedPreviews.push(
+                  previewUploadRes.url || `/store/media?key=${encodeURIComponent(previewUploadRes.key)}`
+                );
+              } else {
+                uploadedPreviews.push(imgData);
+              }
+            } else {
+              uploadedPreviews.push(imgData);
+            }
+          }
+          newPreviews = uploadedPreviews;
+        }
       }
 
       await updateScoreApi(editingScore.id, {

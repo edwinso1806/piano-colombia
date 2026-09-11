@@ -42,16 +42,29 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
     const cmsModuleService = req.scope.resolve(CMS_MODULE)
     const body = req.body as any
 
+    const mappedData = {
+      title_part1: body.title_part1 || body.hero_title || "EL ARCHIVO DIGITAL DEL",
+      title_part2_highlight: body.title_part2_highlight || "",
+      description: body.description || body.hero_subtitle || "",
+      button1_text: body.button1_text || body.btn1_text || "Explorar Catálogo",
+      button1_url: body.button1_url || body.btn1_url || "/tienda",
+      button2_text: body.button2_text || body.btn2_text || "Portal Compositores",
+      button2_url: body.button2_url || body.btn2_url || "/compositores",
+      urtext_badge_text: body.urtext_badge_text || body.footer_notice || "EDICIÓN CRÍTICA & URTEXT COLOMBIANA",
+      featured_score_slug: body.featured_link_url?.replace("/partitura/", "") || "score_1",
+      is_active: true,
+    }
+
     const existing = await cmsModuleService.listHeroContents({})
 
     let hero
     if (existing.length > 0) {
       hero = await cmsModuleService.updateHeroContents({
         id: existing[0].id,
-        ...body,
+        ...mappedData,
       })
     } else {
-      hero = await cmsModuleService.createHeroContents(body)
+      hero = await cmsModuleService.createHeroContents(mappedData)
     }
 
     return res.status(200).json({

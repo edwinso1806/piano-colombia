@@ -56,6 +56,10 @@ export default defineMiddlewares({
       middlewares: [customCorsMiddleware],
     },
     {
+      matcher: "/admin/cms*",
+      middlewares: [customCorsMiddleware],
+    },
+    {
       matcher: "/store/auth*",
       middlewares: [customCorsMiddleware],
     },

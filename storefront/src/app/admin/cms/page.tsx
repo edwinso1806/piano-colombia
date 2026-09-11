@@ -5,6 +5,8 @@ import Link from "next/link";
 import {
   getAdminCatalogMetadata,
   updateAdminCatalogMetadata,
+  getHeroCms,
+  updateHeroCmsAdmin,
 } from "@/lib/api-client";
 
 export default function AdminCMSPage() {
@@ -46,11 +48,33 @@ export default function AdminCMSPage() {
   const [newCategoryInput, setNewCategoryInput] = useState("");
   const [newDifficultyInput, setNewDifficultyInput] = useState("");
   const [isSavingMetadata, setIsSavingMetadata] = useState(false);
+  const [isSavingHero, setIsSavingHero] = useState(false);
 
-  // Cargar metadatos reales de la BD
+  // Cargar Hero CMS y metadatos reales de la BD
   useEffect(() => {
-    async function loadMetadata() {
+    async function loadCMSData() {
       try {
+        const heroRes = await getHeroCms();
+        if (heroRes && heroRes.hero) {
+          const h = heroRes.hero;
+          if (h.hero_title || h.title_part1) setHeroTitle(h.hero_title || `${h.title_part1} ${h.title_part2_highlight || ""}`);
+          if (h.hero_subtitle || h.description) setHeroSubtitle(h.hero_subtitle || h.description);
+          if (h.btn1_text || h.button1_text) setBtn1Text(h.btn1_text || h.button1_text);
+          if (h.btn1_url || h.button1_url) setBtn1Url(h.btn1_url || h.button1_url);
+          if (h.btn2_text || h.button2_text) setBtn2Text(h.btn2_text || h.button2_text);
+          if (h.btn2_url || h.button2_url) setBtn2Url(h.btn2_url || h.button2_url);
+          if (h.footer_notice || h.urtext_badge_text) setFooterNotice(h.footer_notice || h.urtext_badge_text);
+
+          if (h.featured_genre) setFeaturedGenre(h.featured_genre);
+          if (h.featured_title) setFeaturedTitle(h.featured_title);
+          if (h.featured_author) setFeaturedAuthor(h.featured_author);
+          if (h.featured_tempo) setFeaturedTempo(h.featured_tempo);
+          if (h.featured_ismn) setFeaturedIsmn(h.featured_ismn);
+          if (h.featured_audio_sample) setFeaturedAudioSample(h.featured_audio_sample);
+          if (h.featured_badge_text) setFeaturedBadgeText(h.featured_badge_text);
+          if (h.featured_link_url) setFeaturedLinkUrl(h.featured_link_url);
+        }
+
         const res = await getAdminCatalogMetadata();
         if (res.categories && Array.isArray(res.categories)) {
           const normalizedCats = res.categories
@@ -65,16 +89,58 @@ export default function AdminCMSPage() {
           setDifficulties(normalizedDiffs);
         }
       } catch (err: any) {
-        console.warn("Error cargando metadatos de BD:", err.message);
+        console.warn("Error cargando metadatos o CMS de BD:", err.message);
       }
     }
-    loadMetadata();
+    loadCMSData();
   }, []);
 
-  const handleSaveCMS = (e: React.FormEvent) => {
+  const handleSaveCMS = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSaved(true);
-    setTimeout(() => setIsSaved(false), 3000);
+    setIsSavingHero(true);
+    setFeedback(null);
+    try {
+      await updateHeroCmsAdmin({
+        hero_title: heroTitle,
+        hero_subtitle: heroSubtitle,
+        btn1_text: btn1Text,
+        btn1_url: btn1Url,
+        btn2_text: btn2Text,
+        btn2_url: btn2Url,
+        footer_notice: footerNotice,
+        // Compatibilidad con campos del backend
+        title_part1: heroTitle,
+        description: heroSubtitle,
+        button1_text: btn1Text,
+        button1_url: btn1Url,
+        button2_text: btn2Text,
+        button2_url: btn2Url,
+        urtext_badge_text: footerNotice,
+
+        featured_genre: featuredGenre,
+        featured_title: featuredTitle,
+        featured_author: featuredAuthor,
+        featured_tempo: featuredTempo,
+        featured_ismn: featuredIsmn,
+        featured_audio_sample: featuredAudioSample,
+        featured_badge_text: featuredBadgeText,
+        featured_link_url: featuredLinkUrl,
+      });
+
+      setIsSaved(true);
+      setFeedback({
+        type: "success",
+        message: "✅ ¡Configuración del Hero y Partitura Destacada guardada exitosamente en la base de datos PostgreSQL y publicada!",
+      });
+      setTimeout(() => setIsSaved(false), 4000);
+    } catch (err: any) {
+      setFeedback({
+        type: "error",
+        message: err.message || "Error al guardar la información del Hero CMS.",
+      });
+    } finally {
+      setIsSavingHero(false);
+    }
   };
 
   const handleSaveMetadata = async () => {
@@ -148,11 +214,28 @@ export default function AdminCMSPage() {
         </Link>
       </div>
 
-      {/* Alerta de Éxito al Guardar */}
-      {isSaved && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl flex items-center gap-3 text-xs font-bold font-montserrat shadow-2xs">
-          <span className="material-symbols-outlined text-emerald-600">check_circle</span>
-          <span>¡Cambios del CMS guardados y publicados exitosamente en la portada de Piano Colombia!</span>
+      {/* Feedback Banner Global */}
+      {feedback && (
+        <div
+          className={`p-4 rounded-2xl flex items-center justify-between text-xs font-bold font-montserrat shadow-xs ${
+            feedback.type === "success"
+              ? "bg-emerald-50 border border-emerald-200 text-emerald-900"
+              : "bg-rose-50 border border-rose-200 text-rose-900"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-lg shrink-0">
+              {feedback.type === "success" ? "check_circle" : "error"}
+            </span>
+            <span>{feedback.message}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setFeedback(null)}
+            className="text-slate-400 hover:text-slate-700 transition"
+          >
+            <span className="material-symbols-outlined text-sm">close</span>
+          </button>
         </div>
       )}
 
@@ -364,10 +447,20 @@ export default function AdminCMSPage() {
 
                 <button
                   type="submit"
-                  className="w-full py-3.5 bg-[#FBB03B] hover:bg-[#e09b2e] text-[#111C2D] font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition font-montserrat flex items-center justify-center gap-2"
+                  disabled={isSavingHero}
+                  className="w-full py-3.5 bg-[#FBB03B] hover:bg-[#e09b2e] text-[#111C2D] font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition font-montserrat flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
-                  <span className="material-symbols-outlined text-lg">save</span>
-                  Guardar & Publicar Cambios del Hero
+                  {isSavingHero ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-[#111C2D] border-t-transparent rounded-full animate-spin"></span>
+                      <span>Guardando Cambios en BD...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-lg">save</span>
+                      <span>Guardar & Publicar Cambios del Hero</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>

@@ -82,14 +82,15 @@ export async function getComposersList(filters?: { is_featured?: boolean }) {
 export async function getComposerBySlug(slug: string) {
   try {
     const res = await fetch(`${MEDUSA_URL}/store/composers/${slug}`, {
-      next: { revalidate: 30 },
+      headers: defaultHeaders,
+      next: { revalidate: 10 },
     })
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
     return data.composer || null
   } catch (err) {
-    console.warn("[Medusa API] Fallback a compositor local:", err)
+    console.warn("[Medusa API] Error consultando compositor por slug:", err)
     return null
   }
 }
@@ -101,6 +102,7 @@ export async function getComposerBySlug(slug: string) {
 export async function getHeroCms() {
   try {
     const res = await fetch(`${MEDUSA_URL}/store/cms/hero`, {
+      headers: defaultHeaders,
       next: { revalidate: 10 },
     })
 
@@ -113,9 +115,9 @@ export async function getHeroCms() {
 }
 
 export async function updateHeroCmsAdmin(heroData: any) {
-  const res = await fetch(`${MEDUSA_URL}/admin/cms/hero`, {
+  const res = await fetch(`${MEDUSA_URL}/store/cms/hero`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: defaultHeaders,
     body: JSON.stringify(heroData),
   })
 
