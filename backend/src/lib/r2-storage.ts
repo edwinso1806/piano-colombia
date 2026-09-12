@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3"
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import { Readable } from "stream"
 
@@ -40,12 +40,52 @@ export async function uploadFileToR2({ key, body, contentType, metadata }: Uploa
 }
 
 /**
- * Obtiene el stream de lectura de un archivo almacenado en Cloudflare R2
+ * Elimina un archivo de Cloudflare R2 dado su key o URL
  */
-export async function getFileStreamFromR2(key: string): Promise<{ stream: Readable; contentType: string; contentLength?: number }> {
+export async function deleteFileFromR2(fileKeyOrUrl: string): Promise<boolean> {
+  try {
+    if (!fileKeyOrUrl) return false
+
+    let key = decodeURIComponent(fileKeyOrUrl)
+      .replace(/^https?:\/\/[^\/]+/, "")
+      .replace(/^\/store\/media\?key=/, "")
+      .replace(/^\/media\?key=/, "")
+      .replace(/^\//, "")
+
+    if (!key) return false
+
+    const command = new DeleteObjectCommand({
+      Bucket: R2_BUCKET,
+      Key: key,
+    })
+
+    await r2Client.send(command)
+    console.log(`🗑️ [R2 Storage] Archivo eliminado con éxito de R2: ${key}`)
+    return true
+  } catch (err: any) {
+    console.warn(`⚠️ [R2 Storage] Error intentando eliminar archivo key="${fileKeyOrUrl}":`, err.message)
+    return false
+  }
+}
+
+/**
+ * Obtiene el stream de lectura de un archivo almacenado en Cloudflare R2 con soporte opcional de Range (streaming)
+ */
+export async function getFileStreamFromR2(
+  key: string,
+  range?: string
+): Promise<{
+  stream: Readable
+  contentType: string
+  contentLength?: number
+  contentRange?: string
+  acceptRanges?: string
+  statusCode?: number
+}> {
   const command = new GetObjectCommand({
     Bucket: R2_BUCKET,
     Key: key,
+    Range: range,
   })
 
   const response = await r2Client.send(command)
@@ -53,6 +93,9 @@ export async function getFileStreamFromR2(key: string): Promise<{ stream: Readab
     stream: response.Body as Readable,
     contentType: response.ContentType || "application/octet-stream",
     contentLength: response.ContentLength,
+    contentRange: response.ContentRange,
+    acceptRanges: response.AcceptRanges || "bytes",
+    statusCode: range && response.ContentRange ? 206 : 200,
   }
 }
 
@@ -67,3 +110,4 @@ export async function getPresignedDownloadUrl(key: string, expiresInSeconds = 36
 
   return await getSignedUrl(r2Client, command, { expiresIn: expiresInSeconds })
 }
+

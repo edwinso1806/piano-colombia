@@ -6,12 +6,21 @@ import { useState, useEffect } from "react";
 import { MOCK_COMPOSERS, MOCK_SCORES } from "@/lib/mock-data";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { getHeroCms } from "@/lib/api-client";
+import { getHeroCms, getCmsCategories } from "@/lib/api-client";
 
 export default function Home() {
   const [isPlayingHero, setIsPlayingHero] = useState(false);
   const [currency, setCurrency] = useState<"COP" | "USD">("COP");
   const [activeComposerFilter, setActiveComposerFilter] = useState("todos");
+  const [audioDuration, setAudioDuration] = useState<number | null>(null);
+  const [audioCurrentTime, setAudioCurrentTime] = useState<number>(0);
+
+  const formatAudioTime = (sec: number) => {
+    if (isNaN(sec) || !isFinite(sec)) return "00:00";
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  };
 
   // Estado dinámico del CMS Hero de la BD
   const [heroData, setHeroData] = useState<any>({
@@ -32,29 +41,135 @@ export default function Home() {
     featured_link_url: "/partitura/malvaloca",
   });
 
+  // Estadísticas dinámicas reales de la Base de Datos
+  const [statsCards, setStatsCards] = useState<any[]>([
+    {
+      id: "card_scores",
+      display_value: "4+",
+      title: "Partituras Digitales",
+      subtitle: "Editadas bajo rigurosa musicología",
+    },
+    {
+      id: "card_composers",
+      display_value: "4+",
+      title: "Compositores",
+      subtitle: "Desde el siglo XIX hasta hoy",
+    },
+    {
+      id: "card_genres",
+      display_value: "6",
+      title: "Ritmos Tradicionales",
+      subtitle: "Piano Solo, Piano a 4 Manos, Cámara...",
+    },
+    {
+      id: "card_format",
+      display_value: "PDF",
+      has_bolt: true,
+      title: "Descarga Inmediata",
+      subtitle: "Con licencia legal autorizada",
+    },
+  ]);
+
+  // Estado dinámico de Categorías Principales cargadas desde PostgreSQL
+  const [categoriesList, setCategoriesList] = useState<any[]>([
+    {
+      id: "cat_piano_solo",
+      title: "Piano Solo",
+      slug: "piano-solo",
+      description: "Obras maestras para recital, concurso y profundización técnica individual. Pasillos virtuosos, bambucos de concierto e intermezzos líricos.",
+      icon: "piano",
+      cta_text: "Explorar piezas solistas",
+      link: "/tienda?categoria=piano-solo",
+      display_count: "3 Obras",
+    },
+    {
+      id: "cat_piano_4_manos",
+      title: "Piano a 4 Manos",
+      slug: "piano-a-4-manos",
+      description: "Dúos concertantes y reducciones orquestales a cuatro manos. Ideal para cátedras de música de cámara y recitales colaborativos a dos intérpretes.",
+      icon: "group",
+      cta_text: "Ver dúos de piano",
+      link: "/tienda?categoria=piano-a-4-manos",
+      display_count: "1 Obra",
+    },
+    {
+      id: "cat_piano_orquesta",
+      title: "Piano y Orquesta",
+      slug: "piano-y-orquesta",
+      description: "Partituras de dirección, guiones generales y reducciones a segundo piano de conciertos para piano y orquesta sinfónica colombiana.",
+      icon: "stadium",
+      cta_text: "Catálogo orquestal",
+      link: "/tienda?categoria=piano-y-orquesta",
+      display_count: "0 Conciertos",
+    },
+    {
+      id: "cat_musica_camara",
+      title: "Música de Cámara",
+      slug: "musica-de-camara",
+      description: "Tríos con violín y violonchelo, sonatas para instrumentos solistas con acompañamiento de piano y ensambles folclóricos de cámara.",
+      icon: "diversity_3",
+      cta_text: "Explorar cámara",
+      link: "/tienda?categoria=musica-de-camara",
+      display_count: "0 Partituras",
+    },
+    {
+      id: "cat_piezas_pedagogicas",
+      title: "Piezas Pedagógicas",
+      slug: "piezas-pedagogicas",
+      description: "Metodologías progresivas, iniciación al teclado y repertorio graduado por niveles (Preparatorio al Nivel 6) con canciones tradicionales colombianas.",
+      icon: "school",
+      cta_text: "Ver repertorio didáctico",
+      link: "/tienda?categoria=piezas-pedagogicas",
+      display_count: "0 Cuadernos",
+    },
+    {
+      id: "cat_piano_electronica",
+      title: "Piano y Electrónica",
+      slug: "piano-y-electronica",
+      description: "Vanguardia contemporánea, obras para piano preparado con cinta magnética, procesamiento digital en vivo (Max/MSP) y paisajes bio-acústicos.",
+      icon: "graphic_eq",
+      cta_text: "Explorar vanguardia",
+      link: "/tienda?categoria=piano-y-electronica",
+      display_count: "0 Obras",
+    },
+  ]);
+
   useEffect(() => {
     async function fetchHero() {
       try {
         const res = await getHeroCms();
-        if (res && res.hero) {
-          const h = res.hero;
-          setHeroData({
-            hero_title: h.hero_title || `${h.title_part1 || ""} ${h.title_part2_highlight || ""}`.trim() || "La tradición del piano colombiano y latinoamericano en tus manos.",
-            hero_subtitle: h.hero_subtitle || h.description || "Un proyecto cultural con enfoque musical riguroso en pro del rescate, edición filológica y difusión de obras patrimoniales y contemporáneas para teclado.",
-            btn1_text: h.btn1_text || h.button1_text || "Explorar Partituras",
-            btn1_url: h.btn1_url || h.button1_url || "/tienda",
-            btn2_text: h.btn2_text || h.button2_text || "Conocer Compositores",
-            btn2_url: h.btn2_url || h.button2_url || "/compositores",
-            footer_notice: h.footer_notice || h.urtext_badge_text || "Edición revisada con digitaciones de concierto y notas históricas bilingües (ES/EN).",
-            featured_genre: h.featured_genre || "PASILLO LÍRICO",
-            featured_title: h.featured_title || "Malvaloca",
-            featured_author: h.featured_author || "Luis A. Calvo (1882–1945) · Op. 12",
-            featured_tempo: h.featured_tempo || "Andante cantabile",
-            featured_ismn: h.featured_ismn || "ISMN 979-0-901314-18-2",
-            featured_audio_sample: h.featured_audio_sample || "Pasillo No. 1 — L. A. Calvo",
-            featured_badge_text: h.featured_badge_text || "GRABADO URTEXT 100% Alta Resolución",
-            featured_link_url: h.featured_link_url || "/partitura/malvaloca",
-          });
+        if (res) {
+          if (res.stats && Array.isArray(res.stats.cards) && res.stats.cards.length > 0) {
+            setStatsCards(res.stats.cards);
+          }
+          if (res.categories && Array.isArray(res.categories) && res.categories.length > 0) {
+            setCategoriesList(res.categories);
+          } else {
+            getCmsCategories().then((cats) => {
+              if (Array.isArray(cats) && cats.length > 0) setCategoriesList(cats);
+            }).catch(() => {});
+          }
+          if (res.hero) {
+            const h = res.hero;
+            setHeroData({
+              hero_title: h.hero_title || `${h.title_part1 || ""} ${h.title_part2_highlight || ""}`.trim() || "La tradición del piano colombiano y latinoamericano en tus manos.",
+              hero_subtitle: h.hero_subtitle || h.description || "Un proyecto cultural con enfoque musical riguroso en pro del rescate, edición filológica y difusión de obras patrimoniales y contemporáneas para teclado.",
+              btn1_text: h.btn1_text || h.button1_text || "Explorar Partituras",
+              btn1_url: h.btn1_url || h.button1_url || "/tienda",
+              btn2_text: h.btn2_text || h.button2_text || "Conocer Compositores",
+              btn2_url: h.btn2_url || h.button2_url || "/compositores",
+              footer_notice: h.footer_notice || h.urtext_badge_text || "Edición revisada con digitaciones de concierto y notas históricas bilingües (ES/EN).",
+              featured_genre: h.featured_genre || "PASILLO LÍRICO",
+              featured_title: h.featured_title || "Malvaloca",
+              featured_author: h.featured_author || "Luis A. Calvo (1882–1945) · Op. 12",
+              featured_tempo: h.featured_tempo || "Andante cantabile",
+              featured_ismn: h.featured_ismn || "ISMN 979-0-901314-18-2",
+              featured_audio_sample: h.featured_audio_sample || "Pasillo No. 1 — L. A. Calvo",
+              featured_audio_url: h.featured_audio_url || "",
+              featured_badge_text: h.featured_badge_text || "GRABADO URTEXT 100% Alta Resolución",
+              featured_link_url: h.featured_link_url || "/partitura/malvaloca",
+            });
+          }
         }
       } catch (err) {
         console.warn("Error cargando CMS Hero en home:", err);
@@ -194,29 +309,78 @@ export default function Home() {
                       </svg>
                     </div>
 
-                    {/* Reproductor de Audio Demo Flotante */}
-                    <div className="mt-4 flex items-center justify-between gap-3 p-3 rounded-xl bg-white shadow-xs border border-black/5">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <button
-                          onClick={() => setIsPlayingHero(!isPlayingHero)}
-                          className="w-10 h-10 shrink-0 rounded-full bg-[#111C2D] text-[#FBB03B] flex items-center justify-center shadow-md hover:scale-105 active:scale-95 transition-all"
-                        >
-                          <span className="material-symbols-outlined text-xl">{isPlayingHero ? "pause" : "play_arrow"}</span>
-                        </button>
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-[10px] font-extrabold text-[#0071BC] uppercase tracking-wider font-montserrat">Muestra en Vivo</span>
-                          <span className="text-xs font-bold text-[#111C2D] truncate font-montserrat">{heroData.featured_audio_sample}</span>
+                    {/* Reproductor de Audio Demo Administrable */}
+                    <div className="mt-4 flex flex-col gap-2 p-3 rounded-xl bg-white shadow-xs border border-black/5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const audioEl = document.getElementById("hero-audio-player") as HTMLAudioElement;
+                              if (audioEl && heroData.featured_audio_url) {
+                                if (!audioEl.paused) {
+                                  audioEl.pause();
+                                  setIsPlayingHero(false);
+                                } else {
+                                  audioEl.play().then(() => {
+                                    setIsPlayingHero(true);
+                                  }).catch((err) => {
+                                    console.warn("Reproducción de audio:", err.message);
+                                  });
+                                }
+                              } else {
+                                setIsPlayingHero(!isPlayingHero);
+                              }
+                            }}
+                            className="w-10 h-10 shrink-0 rounded-full bg-[#111C2D] text-[#FBB03B] flex items-center justify-center shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                          >
+                            <span className="material-symbols-outlined text-xl">{isPlayingHero ? "pause" : "play_arrow"}</span>
+                          </button>
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-[10px] font-extrabold text-[#0071BC] uppercase tracking-wider font-montserrat">Muestra en Vivo</span>
+                            <span className="text-xs font-bold text-[#111C2D] truncate font-montserrat">{heroData.featured_audio_sample}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className={`h-2 w-1 bg-[#0071BC] rounded-full transition-all ${isPlayingHero ? 'animate-pulse' : ''}`}></span>
+                          <span className={`h-4 w-1 bg-[#0071BC] rounded-full transition-all ${isPlayingHero ? 'animate-pulse' : ''}`}></span>
+                          <span className={`h-6 w-1 bg-[#FBB03B] rounded-full transition-all ${isPlayingHero ? 'animate-pulse' : ''}`}></span>
+                          <span className={`h-3 w-1 bg-[#C1272D] rounded-full transition-all ${isPlayingHero ? 'animate-pulse' : ''}`}></span>
+                          <span className="text-[10px] text-[#4C4546] font-semibold ml-1">
+                            {audioDuration ? `${formatAudioTime(audioCurrentTime)} / ${formatAudioTime(audioDuration)}` : "01:42"}
+                          </span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <span className={`h-2 w-1 bg-[#0071BC] rounded-full ${isPlayingHero ? 'animate-pulse' : ''}`}></span>
-                        <span className={`h-4 w-1 bg-[#0071BC] rounded-full ${isPlayingHero ? 'animate-pulse' : ''}`}></span>
-                        <span className={`h-6 w-1 bg-[#FBB03B] rounded-full ${isPlayingHero ? 'animate-pulse' : ''}`}></span>
-                        <span className={`h-3 w-1 bg-[#C1272D] rounded-full ${isPlayingHero ? 'animate-pulse' : ''}`}></span>
-                        <span className="text-[10px] text-[#4C4546] font-semibold ml-1">01:42</span>
-                      </div>
+
+                      {/* Elemento de Audio Nativo HTML5 */}
+                      {heroData.featured_audio_url ? (
+                        <audio
+                          id="hero-audio-player"
+                          key={heroData.featured_audio_url}
+                          src={heroData.featured_audio_url}
+                          crossOrigin="anonymous"
+                          preload="metadata"
+                          onLoadedMetadata={(e) => setAudioDuration(e.currentTarget.duration)}
+                          onTimeUpdate={(e) => setAudioCurrentTime(e.currentTarget.currentTime)}
+                          onPlay={() => setIsPlayingHero(true)}
+                          onPause={() => setIsPlayingHero(false)}
+                          onEnded={() => {
+                            setIsPlayingHero(false);
+                            setAudioCurrentTime(0);
+                          }}
+                          className="w-full h-8 mt-1"
+                          controls
+                        />
+                      ) : (
+                        <div className="text-[10px] text-slate-400 italic text-center py-1">
+                          (Sin muestra de audio configurada)
+                        </div>
+                      )}
                     </div>
                   </div>
+
+
 
                   {/* Card Footer */}
                   <div className="mt-4 flex items-center justify-between text-[#4C4546] text-xs">
@@ -230,52 +394,44 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* Overlapping Badge Accent */}
+                {/* Overlapping Badge Accent Dinámico */}
                 <div className="absolute -bottom-4 -left-4 hidden sm:flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-white shadow-xl border border-black/5">
                   <div className="w-9 h-9 rounded-xl bg-[#FBB03B]/20 flex items-center justify-center text-[#111C2D]">
                     <span className="material-symbols-outlined text-lg">piano</span>
                   </div>
                   <div>
-                    <p className="text-[10px] uppercase font-bold text-[#4C4546] leading-tight font-montserrat">Grabado Urtext</p>
-                    <p className="text-xs text-[#111C2D] font-black font-montserrat">100% Alta Resolución</p>
+                    <p className="text-[10px] uppercase font-bold text-[#4C4546] leading-tight font-montserrat">Calidad Editorial</p>
+                    <p className="text-xs text-[#111C2D] font-black font-montserrat">{heroData.featured_badge_text || "100% Alta Resolución"}</p>
                   </div>
                 </div>
               </div>
 
+
             </div>
 
-            {/* Quick Stats Counter Strip (Bento Pattern) */}
+            {/* Quick Stats Counter Strip Dinámico de Base de Datos (Bento Pattern) */}
             <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-2xl bg-white shadow-xs border border-black/5">
-              <div className="flex flex-col p-4 rounded-xl hover:bg-[#F0F3FF] transition-colors">
-                <span className="text-3xl font-black font-montserrat text-[#111C2D] tracking-tight">350+</span>
-                <span className="text-xs font-bold text-[#111C2D] font-montserrat mt-1">Partituras Digitales</span>
-                <span className="text-[11px] text-[#4C4546] mt-0.5">Editadas bajo rigurosa musicología</span>
-              </div>
-              <div className="flex flex-col p-4 rounded-xl hover:bg-[#F0F3FF] transition-colors">
-                <span className="text-3xl font-black font-montserrat text-[#0071BC] tracking-tight">85+</span>
-                <span className="text-xs font-bold text-[#111C2D] font-montserrat mt-1">Compositores</span>
-                <span className="text-[11px] text-[#4C4546] mt-0.5">Desde el siglo XIX hasta hoy</span>
-              </div>
-              <div className="flex flex-col p-4 rounded-xl hover:bg-[#F0F3FF] transition-colors">
-                <span className="text-3xl font-black font-montserrat text-[#111C2D] tracking-tight">12</span>
-                <span className="text-xs font-bold text-[#111C2D] font-montserrat mt-1">Ritmos Tradicionales</span>
-                <span className="text-[11px] text-[#4C4546] mt-0.5">Pasillo, Bambuco, Danza, Guabina...</span>
-              </div>
-              <div className="flex flex-col p-4 rounded-xl hover:bg-[#F0F3FF] transition-colors">
-                <div className="flex items-center gap-1">
-                  <span className="text-3xl font-black font-montserrat text-[#111C2D] tracking-tight">PDF</span>
-                  <span className="material-symbols-outlined text-[#0071BC] text-xl">bolt</span>
+              {statsCards.map((card: any, idx: number) => (
+                <div key={card.id || idx} className="flex flex-col p-4 rounded-xl hover:bg-[#F0F3FF] transition-colors">
+                  <div className="flex items-center gap-1">
+                    <span className={`text-3xl font-black font-montserrat tracking-tight ${idx === 1 ? 'text-[#0071BC]' : 'text-[#111C2D]'}`}>
+                      {card.display_value || card.auto_value || "0"}
+                    </span>
+                    {card.has_bolt && (
+                      <span className="material-symbols-outlined text-[#0071BC] text-xl">bolt</span>
+                    )}
+                  </div>
+                  <span className="text-xs font-bold text-[#111C2D] font-montserrat mt-1">{card.title}</span>
+                  <span className="text-[11px] text-[#4C4546] mt-0.5 truncate">{card.subtitle}</span>
                 </div>
-                <span className="text-xs font-bold text-[#111C2D] font-montserrat mt-1">Descarga Inmediata</span>
-                <span className="text-[11px] text-[#4C4546] mt-0.5">Con licencia legal autorizada</span>
-              </div>
+              ))}
             </div>
 
           </div>
         </section>
 
         {/* ==========================================
-               SECCIÓN 2: CATEGORÍAS PRINCIPALES (BENTO GRID 6)
+               SECCIÓN 2: CATEGORÍAS PRINCIPALES (BENTO GRID DESDE BD)
                ========================================== */}
         <section className="w-full py-16 bg-[#F0F3FF]/40 border-b border-black/5" id="categorias">
           <div className="max-w-7xl mx-auto px-6">
@@ -292,147 +448,52 @@ export default function Home() {
                 </p>
               </div>
               <div className="hidden sm:flex items-center gap-2 text-xs text-[#4C4546] font-semibold">
-                <span>6 Formatos Disponibles</span>
+                <span>{categoriesList.length} Formatos Disponibles</span>
                 <span>•</span>
-                <span>Actualización Semanal</span>
+                <span>Actualización en Tiempo Real</span>
               </div>
             </div>
 
-            {/* 6-Card Non-Carousel Responsive Bento Grid */}
+            {/* Responsive Bento Grid de Categorías Dinámicas de BD */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              
-              {/* 1. Piano Solo */}
-              <Link href="/tienda" className="group flex flex-col justify-between p-6 rounded-2xl bg-white border border-black/5 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300">
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="w-14 h-14 rounded-2xl bg-[#F0F3FF] flex items-center justify-center text-[#111C2D] group-hover:bg-[#111C2D] group-hover:text-white transition-colors">
-                      <span className="material-symbols-outlined text-3xl">piano</span>
-                    </div>
-                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-[#FBB03B]/20 text-[#111C2D] font-montserrat">
-                      210 Obras
-                    </span>
-                  </div>
-                  <h3 className="text-xl font-bold font-montserrat text-[#111C2D] group-hover:text-[#0071BC] transition-colors">Piano Solo</h3>
-                  <p className="text-xs text-[#4C4546] mt-2 leading-relaxed">
-                    Obras maestras para recital, concurso y profundización técnica individual. Pasillos virtuosos, bambucos de concierto e intermezzos líricos.
-                  </p>
-                </div>
-                <div className="mt-6 pt-4 border-t border-black/5 flex items-center justify-between text-xs font-bold text-[#0071BC] font-montserrat group-hover:text-[#111C2D]">
-                  <span>Explorar piezas solistas</span>
-                  <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">east</span>
-                </div>
-              </Link>
+              {categoriesList.map((cat, idx) => {
+                // Alternar colores sutiles de badge para mantener estética vibrante
+                const badgeStyle =
+                  idx % 3 === 0
+                    ? "bg-[#FBB03B]/20 text-[#111C2D]"
+                    : idx % 3 === 1
+                    ? "bg-[#F0F3FF] text-[#0071BC]"
+                    : "bg-[#C1272D]/10 text-[#C1272D]";
 
-              {/* 2. Piano a 4 Manos */}
-              <Link href="/tienda" className="group flex flex-col justify-between p-6 rounded-2xl bg-white border border-black/5 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300">
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="w-14 h-14 rounded-2xl bg-[#F0F3FF] flex items-center justify-center text-[#111C2D] group-hover:bg-[#0071BC] group-hover:text-white transition-colors">
-                      <span className="material-symbols-outlined text-3xl">group</span>
+                return (
+                  <Link
+                    key={cat.id || idx}
+                    href={cat.link || `/tienda?categoria=${cat.slug || encodeURIComponent(cat.title)}`}
+                    className="group flex flex-col justify-between p-6 rounded-2xl bg-white border border-black/5 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="w-14 h-14 rounded-2xl bg-[#F0F3FF] flex items-center justify-center text-[#111C2D] group-hover:bg-[#111C2D] group-hover:text-white transition-colors">
+                          <span className="material-symbols-outlined text-3xl">{cat.icon || "piano"}</span>
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold font-montserrat ${badgeStyle}`}>
+                          {cat.display_count || `${cat.count ?? 0} ${cat.count_unit || "Obras"}`}
+                        </span>
+                      </div>
+                      <h3 className="text-xl font-bold font-montserrat text-[#111C2D] group-hover:text-[#0071BC] transition-colors">
+                        {cat.title}
+                      </h3>
+                      <p className="text-xs text-[#4C4546] mt-2 leading-relaxed line-clamp-4">
+                        {cat.description}
+                      </p>
                     </div>
-                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-[#F0F3FF] text-[#0071BC] font-montserrat">
-                      48 Obras
-                    </span>
-                  </div>
-                  <h3 className="text-xl font-bold font-montserrat text-[#111C2D] group-hover:text-[#0071BC] transition-colors">Piano a 4 Manos</h3>
-                  <p className="text-xs text-[#4C4546] mt-2 leading-relaxed">
-                    Dúos concertantes y reducciones orquestales a cuatro manos. Ideal para cátedras de música de cámara y recitales colaborativos a dos intérpretes.
-                  </p>
-                </div>
-                <div className="mt-6 pt-4 border-t border-black/5 flex items-center justify-between text-xs font-bold text-[#0071BC] font-montserrat group-hover:text-[#111C2D]">
-                  <span>Ver dúos de piano</span>
-                  <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">east</span>
-                </div>
-              </Link>
-
-              {/* 3. Piano y Orquesta */}
-              <Link href="/tienda" className="group flex flex-col justify-between p-6 rounded-2xl bg-white border border-black/5 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300">
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="w-14 h-14 rounded-2xl bg-[#F0F3FF] flex items-center justify-center text-[#111C2D] group-hover:bg-[#111C2D] group-hover:text-white transition-colors">
-                      <span className="material-symbols-outlined text-3xl">stadium</span>
+                    <div className="mt-6 pt-4 border-t border-black/5 flex items-center justify-between text-xs font-bold text-[#0071BC] font-montserrat group-hover:text-[#111C2D]">
+                      <span>{cat.cta_text || "Explorar repertorio"}</span>
+                      <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">east</span>
                     </div>
-                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-[#C1272D]/10 text-[#C1272D] font-montserrat">
-                      22 Conciertos
-                    </span>
-                  </div>
-                  <h3 className="text-xl font-bold font-montserrat text-[#111C2D] group-hover:text-[#0071BC] transition-colors">Piano y Orquesta</h3>
-                  <p className="text-xs text-[#4C4546] mt-2 leading-relaxed">
-                    Partituras de dirección, guiones generales y reducciones a segundo piano de conciertos para piano y orquesta sinfónica colombiana.
-                  </p>
-                </div>
-                <div className="mt-6 pt-4 border-t border-black/5 flex items-center justify-between text-xs font-bold text-[#0071BC] font-montserrat group-hover:text-[#111C2D]">
-                  <span>Catálogo orquestal</span>
-                  <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">east</span>
-                </div>
-              </Link>
-
-              {/* 4. Música de Cámara */}
-              <Link href="/tienda" className="group flex flex-col justify-between p-6 rounded-2xl bg-white border border-black/5 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300">
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="w-14 h-14 rounded-2xl bg-[#F0F3FF] flex items-center justify-center text-[#111C2D] group-hover:bg-[#111C2D] group-hover:text-white transition-colors">
-                      <span className="material-symbols-outlined text-3xl">diversity_3</span>
-                    </div>
-                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-[#F0F3FF] text-[#111C2D] font-montserrat">
-                      39 Partituras
-                    </span>
-                  </div>
-                  <h3 className="text-xl font-bold font-montserrat text-[#111C2D] group-hover:text-[#0071BC] transition-colors">Música de Cámara</h3>
-                  <p className="text-xs text-[#4C4546] mt-2 leading-relaxed">
-                    Tríos con violín y violonchelo, sonatas para instrumentos solistas con acompañamiento de piano y ensambles folclóricos de cámara.
-                  </p>
-                </div>
-                <div className="mt-6 pt-4 border-t border-black/5 flex items-center justify-between text-xs font-bold text-[#0071BC] font-montserrat group-hover:text-[#111C2D]">
-                  <span>Explorar cámara</span>
-                  <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">east</span>
-                </div>
-              </Link>
-
-              {/* 5. Piezas Pedagógicas */}
-              <Link href="/tienda" className="group flex flex-col justify-between p-6 rounded-2xl bg-white border border-black/5 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300">
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="w-14 h-14 rounded-2xl bg-[#F0F3FF] flex items-center justify-center text-[#111C2D] group-hover:bg-[#0071BC] group-hover:text-white transition-colors">
-                      <span className="material-symbols-outlined text-3xl">school</span>
-                    </div>
-                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-[#FBB03B]/20 text-[#111C2D] font-montserrat">
-                      64 Cuadernos
-                    </span>
-                  </div>
-                  <h3 className="text-xl font-bold font-montserrat text-[#111C2D] group-hover:text-[#0071BC] transition-colors">Piezas Pedagógicas</h3>
-                  <p className="text-xs text-[#4C4546] mt-2 leading-relaxed">
-                    Metodologías progresivas, iniciación al teclado y repertorio graduado por niveles (Preparatorio al Nivel 6) con canciones tradicionales colombianas.
-                  </p>
-                </div>
-                <div className="mt-6 pt-4 border-t border-black/5 flex items-center justify-between text-xs font-bold text-[#0071BC] font-montserrat group-hover:text-[#111C2D]">
-                  <span>Ver repertorio didáctico</span>
-                  <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">east</span>
-                </div>
-              </Link>
-
-              {/* 6. Piano y Electrónica */}
-              <Link href="/tienda" className="group flex flex-col justify-between p-6 rounded-2xl bg-white border border-black/5 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300">
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="w-14 h-14 rounded-2xl bg-[#F0F3FF] flex items-center justify-center text-[#111C2D] group-hover:bg-[#111C2D] group-hover:text-white transition-colors">
-                      <span className="material-symbols-outlined text-3xl">graphic_eq</span>
-                    </div>
-                    <span className="px-3 py-1 rounded-full text-xs font-bold bg-[#F0F3FF] text-[#0071BC] font-montserrat">
-                      15 Obras
-                    </span>
-                  </div>
-                  <h3 className="text-xl font-bold font-montserrat text-[#111C2D] group-hover:text-[#0071BC] transition-colors">Piano y Electrónica</h3>
-                  <p className="text-xs text-[#4C4546] mt-2 leading-relaxed">
-                    Vanguardia contemporánea, obras para piano preparado con cinta magnética, procesamiento digital en vivo (Max/MSP) y paisajes bio-acústicos.
-                  </p>
-                </div>
-                <div className="mt-6 pt-4 border-t border-black/5 flex items-center justify-between text-xs font-bold text-[#0071BC] font-montserrat group-hover:text-[#111C2D]">
-                  <span>Explorar vanguardia</span>
-                  <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">east</span>
-                </div>
-              </Link>
-
+                  </Link>
+                );
+              })}
             </div>
           </div>
         </section>

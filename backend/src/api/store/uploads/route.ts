@@ -25,14 +25,22 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       "image/webp",
       "image/gif",
       "application/pdf",
+      "audio/mpeg",
+      "audio/mp3",
+      "audio/wav",
+      "audio/ogg",
+      "audio/m4a",
+      "audio/aac",
+      "audio/x-m4a",
     ]
 
     if (!allowedTypes.includes(fileType.toLowerCase())) {
       return res.status(400).json({
         success: false,
-        message: `Tipo de archivo no permitido: ${fileType}. Solo se admiten imágenes (JPG, PNG, WEBP) y documentos PDF.`,
+        message: `Tipo de archivo no permitido: ${fileType}. Se admiten imágenes (JPG, PNG, WEBP), PDF y archivos de audio (MP3, WAV, OGG, M4A).`,
       })
     }
+
 
     // Tamaño máximo 25MB
     if (buffer.length > 25 * 1024 * 1024) {

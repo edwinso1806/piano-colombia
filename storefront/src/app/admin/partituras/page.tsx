@@ -390,6 +390,27 @@ export default function AdminPartiturasPage() {
                   </div>
                 </div>
 
+                {/* Reproductor de Audio si existe */}
+                {(s.audio_sample_url || (s as any).audio_preview_url) && (
+                  <div className="p-3 bg-amber-50/60 border border-amber-200/70 rounded-xl flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-[#0071BC] text-white flex items-center justify-center shrink-0">
+                      <span className="material-symbols-outlined text-base">music_note</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[11px] font-bold text-slate-800 block font-montserrat truncate">
+                        Muestra de Audio / Grabación de Referencia
+                      </span>
+                      <audio
+                        controls
+                        crossOrigin="anonymous"
+                        preload="none"
+                        src={getPdfUrl(s.audio_sample_url || (s as any).audio_preview_url)}
+                        className="w-full h-7 mt-1"
+                      />
+                    </div>
+                  </div>
+                )}
+
                 {/* Miniaturas de Muestras Protegidas */}
                 {s.preview_images && s.preview_images.length > 0 && (
                   <div>
@@ -529,6 +550,27 @@ export default function AdminPartiturasPage() {
                   <span className="material-symbols-outlined text-base">download</span>
                   <span>Descargar PDF Maestro</span>
                 </a>
+              </div>
+            )}
+
+            {/* Audio de Referencia en el Modal de Inspección */}
+            {(inspectingScore.audio_sample_url || (inspectingScore as any).audio_preview_url) && (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-[#0071BC] text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <span className="material-symbols-outlined text-xl">audiotrack</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs font-black text-[#111C2D] block font-montserrat">
+                    Audio de Referencia / Grabación de la Obra
+                  </span>
+                  <audio
+                    controls
+                    crossOrigin="anonymous"
+                    preload="metadata"
+                    src={getPdfUrl(inspectingScore.audio_sample_url || (inspectingScore as any).audio_preview_url)}
+                    className="w-full h-8 mt-1.5"
+                  />
+                </div>
               </div>
             )}
 

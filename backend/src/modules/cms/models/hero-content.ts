@@ -11,5 +11,18 @@ export const HeroContent = model.define("hero_content", {
   button2_url: model.text().default("/compositor/registro"),
   urtext_badge_text: model.text().default("EDICIÓN CRÍTICA & URTEXT COLOMBIANA"),
   featured_score_slug: model.text().default("score_1"),
+
+  // Campos de la Partitura Destacada Administrable (Card Hero Derecha)
+  featured_genre: model.text().nullable(),
+  featured_title: model.text().nullable(),
+  featured_author: model.text().nullable(),
+  featured_tempo: model.text().nullable(),
+  featured_ismn: model.text().nullable(),
+  featured_audio_sample: model.text().nullable(),
+  featured_audio_url: model.text().nullable(),
+  featured_badge_text: model.text().nullable(),
+  featured_link_url: model.text().nullable(),
+
   is_active: model.boolean().default(true),
 })
+

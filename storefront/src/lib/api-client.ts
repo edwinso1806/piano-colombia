@@ -37,6 +37,46 @@ export async function getCatalogScores(filters?: {
   }
 }
 
+export async function uploadFileToCloudflareR2(
+  file: File,
+  folder: string = "audio-samples"
+): Promise<{ url: string; key: string }> {
+  const reader = new FileReader()
+  return new Promise((resolve, reject) => {
+    reader.readAsDataURL(file)
+    reader.onload = async () => {
+      try {
+        const base64Data = reader.result as string
+        const res = await fetch(`${MEDUSA_URL}/store/uploads`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-publishable-api-key": PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({
+            base64: base64Data,
+            fileName: file.name,
+            fileType: file.type || "audio/mpeg",
+            folder,
+          }),
+        })
+
+        if (!res.ok) {
+          const errData = await res.json()
+          throw new Error(errData.message || "Error al subir archivo a R2")
+        }
+
+        const data = await res.json()
+        resolve({ url: data.url, key: data.key })
+      } catch (err: any) {
+        reject(err)
+      }
+    }
+    reader.onerror = (error) => reject(error)
+  })
+}
+
+
 export async function getComposerScoresApi(composerId: string, status?: string) {
   try {
     const params = new URLSearchParams()
@@ -96,14 +136,14 @@ export async function getComposerBySlug(slug: string) {
 }
 
 // ----------------------------------------------------------------------
-// 3. CMS Hero Banner
+// 3. CMS Hero Banner & Partitura Destacada (BD Real + Cloudflare R2)
 // ----------------------------------------------------------------------
 
 export async function getHeroCms() {
   try {
-    const res = await fetch(`${MEDUSA_URL}/store/cms/hero`, {
+    const res = await fetch(`${MEDUSA_URL}/admin/cms/hero`, {
       headers: defaultHeaders,
-      next: { revalidate: 10 },
+      cache: "no-store",
     })
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -115,7 +155,7 @@ export async function getHeroCms() {
 }
 
 export async function updateHeroCmsAdmin(heroData: any) {
-  const res = await fetch(`${MEDUSA_URL}/store/cms/hero`, {
+  const res = await fetch(`${MEDUSA_URL}/admin/cms/hero`, {
     method: "POST",
     headers: defaultHeaders,
     body: JSON.stringify(heroData),
@@ -127,6 +167,7 @@ export async function updateHeroCmsAdmin(heroData: any) {
   }
   return await res.json()
 }
+
 
 // ----------------------------------------------------------------------
 // 4. Portal de Compositores (Registro & Moderación)
@@ -739,6 +780,129 @@ export async function updateAdminCatalogMetadata(payload: { categories?: string[
 }
 
 // ----------------------------------------------------------------------
+// 9b. Categorías Principales del Home (CMS Administrable & BD)
+// ----------------------------------------------------------------------
+
+export async function getCmsCategories() {
+  try {
+    const res = await fetch(`${MEDUSA_URL}/store/cms/categories`, {
+      headers: defaultHeaders,
+      cache: "no-store",
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    return data.categories || []
+  } catch (err) {
+    console.warn("Fallback a categorías locales:", err)
+    return [
+      {
+        id: "cat_piano_solo",
+        title: "Piano Solo",
+        description: "Obras maestras para recital, concurso y profundización técnica individual. Pasillos virtuosos, bambucos de concierto e intermezzos líricos.",
+        icon: "piano",
+        cta_text: "Explorar piezas solistas",
+        link: "/tienda?categoria=Piano Solo",
+        is_active: true,
+        order: 1,
+        count: 3,
+        display_count: "3 Obras",
+      },
+      {
+        id: "cat_piano_4_manos",
+        title: "Piano a 4 Manos",
+        description: "Dúos concertantes y reducciones orquestales a cuatro manos. Ideal para cátedras de música de cámara y recitales colaborativos a dos intérpretes.",
+        icon: "group",
+        cta_text: "Ver dúos de piano",
+        link: "/tienda?categoria=Piano a 4 Manos",
+        is_active: true,
+        order: 2,
+        count: 1,
+        display_count: "1 Obra",
+      },
+      {
+        id: "cat_piano_orquesta",
+        title: "Piano y Orquesta",
+        description: "Partituras de dirección, guiones generales y reducciones a segundo piano de conciertos para piano y orquesta sinfónica colombiana.",
+        icon: "stadium",
+        cta_text: "Catálogo orquestal",
+        link: "/tienda?categoria=Piano y Orquesta",
+        is_active: true,
+        order: 3,
+        count: 0,
+        display_count: "0 Conciertos",
+      },
+      {
+        id: "cat_musica_camara",
+        title: "Música de Cámara",
+        description: "Tríos con violín y violonchelo, sonatas para instrumentos solistas con acompañamiento de piano y ensambles folclóricos de cámara.",
+        icon: "diversity_3",
+        cta_text: "Explorar cámara",
+        link: "/tienda?categoria=Música de Cámara",
+        is_active: true,
+        order: 4,
+        count: 0,
+        display_count: "0 Partituras",
+      },
+      {
+        id: "cat_piezas_pedagogicas",
+        title: "Piezas Pedagógicas",
+        description: "Metodologías progresivas, iniciación al teclado y repertorio graduado por niveles (Preparatorio al Nivel 6) con canciones tradicionales colombianas.",
+        icon: "school",
+        cta_text: "Ver repertorio didáctico",
+        link: "/tienda?categoria=Piezas Pedagógicas",
+        is_active: true,
+        order: 5,
+        count: 0,
+        display_count: "0 Cuadernos",
+      },
+      {
+        id: "cat_piano_electronica",
+        title: "Piano y Electrónica",
+        description: "Vanguardia contemporánea, obras para piano preparado con cinta magnética, procesamiento digital en vivo (Max/MSP) y paisajes bio-acústicos.",
+        icon: "graphic_eq",
+        cta_text: "Explorar vanguardia",
+        link: "/tienda?categoria=Piano y Electrónica",
+        is_active: true,
+        order: 6,
+        count: 0,
+        display_count: "0 Obras",
+      },
+    ]
+  }
+}
+
+export async function getAdminCmsCategories() {
+  try {
+    const res = await fetch(`${MEDUSA_URL}/admin/cms/categories`, {
+      headers: defaultHeaders,
+      cache: "no-store",
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    return data
+  } catch (err) {
+    console.warn("Fallback a categorías admin locales:", err)
+    return {
+      success: true,
+      categories: [],
+      total_categories: 0,
+      active_categories_count: 0,
+    }
+  }
+}
+
+export async function updateAdminCmsCategories(categories: any[]) {
+  const res = await fetch(`${MEDUSA_URL}/admin/cms/categories`, {
+    method: "POST",
+    headers: defaultHeaders,
+    body: JSON.stringify({ categories }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.message || "Error al guardar categorías CMS")
+  return data
+}
+
+// ----------------------------------------------------------------------
 // 10. Gestión de Partituras por el Compositor (Creación & Edición)
 // ----------------------------------------------------------------------
 
@@ -770,3 +934,6 @@ export async function updateScoreApi(slugOrId: string, scoreData: Record<string,
   if (!res.ok) throw new Error(data.message || "Error al actualizar la partitura")
   return data
 }
+
+
+
