@@ -13,6 +13,7 @@ export default function MisDescargasPage() {
     savedScores,
     collections,
     removeSavedScore,
+    clearAllSavedScores,
     createCollection,
     deleteCollection,
     moveScoreToCollection,
@@ -23,6 +24,38 @@ export default function MisDescargasPage() {
   const [categoryFilter, setCategoryFilter] = useState("todas");
   const [scoresList, setScoresList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Sincronizar pestaña con query params y permitir navegación directa
+  const handleTabChange = (tab: "descargas" | "pedidos" | "colecciones") => {
+    setActiveTab(tab);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (tab === "colecciones") {
+        url.searchParams.set("tab", "colecciones");
+      } else if (tab === "pedidos") {
+        url.searchParams.set("tab", "pedidos");
+      } else {
+        url.searchParams.delete("tab");
+      }
+      window.history.replaceState({}, "", url.toString());
+    }
+  };
+
+  useEffect(() => {
+    const updateFromUrl = () => {
+      if (typeof window !== "undefined") {
+        const p = new URLSearchParams(window.location.search).get("tab");
+        if (p === "colecciones" || p === "guardadas") {
+          setActiveTab("colecciones");
+        } else if (p === "pedidos") {
+          setActiveTab("pedidos");
+        }
+      }
+    };
+    updateFromUrl();
+    window.addEventListener("popstate", updateFromUrl);
+    return () => window.removeEventListener("popstate", updateFromUrl);
+  }, []);
 
   // Estados para colecciones y guardadas
   const [collectionFilter, setCollectionFilter] = useState<string>("todas");
@@ -208,46 +241,55 @@ export default function MisDescargasPage() {
           {/* Account Navigation Pills */}
           <div className="flex items-center space-x-2 w-full overflow-x-auto overscroll-x-contain scrollbar-none pt-1 pb-3 text-xs font-semibold border-t border-black/5">
             <button
-              onClick={() => setActiveTab("descargas")}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-montserrat font-bold whitespace-nowrap transition ${
+              type="button"
+              onClick={() => handleTabChange("descargas")}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-montserrat font-bold whitespace-nowrap transition cursor-pointer ${
                 activeTab === "descargas"
-                  ? "text-[#111C2D] border-b-2 border-[#FBB03B] font-black bg-[#F0F3FF]/60"
-                  : "text-[#4C4546] hover:text-[#111C2D] hover:bg-[#F0F3FF]/40"
+                  ? "bg-[#111C2D] text-white shadow-sm"
+                  : "bg-slate-100/80 text-[#4C4546] hover:text-[#111C2D] hover:bg-slate-200/80"
               }`}
             >
               <span className="material-symbols-outlined text-base text-[#FBB03B]">description</span>
               Mis Partituras Compradas
-              <span className="bg-[#FBB03B]/20 text-[#111C2D] text-[10px] px-2 py-0.5 rounded-full font-black">
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${
+                activeTab === "descargas" ? "bg-white/20 text-white" : "bg-[#FBB03B]/25 text-[#111C2D]"
+              }`}>
                 {scoresList.length}
               </span>
             </button>
 
             <button
-              onClick={() => setActiveTab("pedidos")}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-montserrat font-bold whitespace-nowrap transition ${
+              type="button"
+              onClick={() => handleTabChange("pedidos")}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-montserrat font-bold whitespace-nowrap transition cursor-pointer ${
                 activeTab === "pedidos"
-                  ? "text-[#111C2D] border-b-2 border-[#FBB03B] font-black bg-[#F0F3FF]/60"
-                  : "text-[#4C4546] hover:text-[#111C2D] hover:bg-[#F0F3FF]/40"
+                  ? "bg-[#111C2D] text-white shadow-sm"
+                  : "bg-slate-100/80 text-[#4C4546] hover:text-[#111C2D] hover:bg-slate-200/80"
               }`}
             >
               <span className="material-symbols-outlined text-base text-[#0071BC]">receipt_long</span>
               Historial de Pedidos & Facturas
-              <span className="bg-[#F0F3FF] text-[#0071BC] text-[10px] px-2 py-0.5 rounded-full font-black border border-[#0071BC]/10">
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${
+                activeTab === "pedidos" ? "bg-white/20 text-white" : "bg-[#0071BC]/15 text-[#0071BC]"
+              }`}>
                 {scoresList.length}
               </span>
             </button>
 
             <button
-              onClick={() => setActiveTab("colecciones")}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-montserrat font-bold whitespace-nowrap transition ${
+              type="button"
+              onClick={() => handleTabChange("colecciones")}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-montserrat font-bold whitespace-nowrap transition cursor-pointer ${
                 activeTab === "colecciones"
-                  ? "text-[#111C2D] border-b-2 border-[#FBB03B] font-black bg-[#F0F3FF]/60"
-                  : "text-[#4C4546] hover:text-[#111C2D] hover:bg-[#F0F3FF]/40"
+                  ? "bg-[#C1272D] text-white shadow-sm"
+                  : "bg-slate-100/80 text-[#4C4546] hover:text-[#111C2D] hover:bg-slate-200/80"
               }`}
             >
-              <span className="material-symbols-outlined text-base text-[#C1272D]">bookmark</span>
+              <span className={`material-symbols-outlined text-base ${activeTab === "colecciones" ? "text-white" : "text-[#C1272D]"}`}>bookmark</span>
               Colecciones Guardadas
-              <span className="bg-[#F0F3FF] text-[#C1272D] text-[10px] px-2 py-0.5 rounded-full font-black border border-[#C1272D]/10">
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${
+                activeTab === "colecciones" ? "bg-white/25 text-white" : "bg-[#C1272D]/15 text-[#C1272D]"
+              }`}>
                 {savedScores.length}
               </span>
             </button>
@@ -437,7 +479,7 @@ export default function MisDescargasPage() {
                     Explora nuestro catálogo de partituras Urtext y adquiere obras de compositores colombianos con tu licencia legal nominativa.
                   </p>
                 </div>
-                <div className="pt-2">
+                <div className="pt-2 flex flex-col items-center gap-3">
                   <Link
                     href="/tienda"
                     className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl bg-[#FBB03B] hover:bg-[#e09b2e] text-[#111C2D] font-extrabold text-xs uppercase tracking-wider font-montserrat shadow-md transition"
@@ -445,6 +487,22 @@ export default function MisDescargasPage() {
                     <span className="material-symbols-outlined text-lg">storefront</span>
                     Explorar Catálogo de Partituras
                   </Link>
+
+                  {savedScores.length > 0 && (
+                    <div className="inline-flex items-center gap-2 px-4 py-2.5 bg-red-50/70 border border-red-200/60 rounded-2xl text-xs text-[#111C2D]">
+                      <span className="material-symbols-outlined text-base text-[#C1272D]">bookmark</span>
+                      <span>
+                        Tienes <strong className="font-bold text-[#C1272D]">{savedScores.length} partitura{savedScores.length > 1 ? "s" : ""}</strong> guardada{savedScores.length > 1 ? "s" : ""} para comprar más adelante.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleTabChange("colecciones")}
+                        className="ml-1 text-xs font-bold text-[#C1272D] hover:underline cursor-pointer"
+                      >
+                        Ver mis guardadas ({savedScores.length}) →
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -650,54 +708,72 @@ export default function MisDescargasPage() {
               </div>
             )}
 
-            {/* Filtros de Colecciones */}
-            <div className="flex flex-wrap items-center gap-2 pt-1 pb-1">
-              <button
-                onClick={() => setCollectionFilter("todas")}
-                className={`px-4 py-2 rounded-xl text-xs font-montserrat font-bold transition ${
-                  collectionFilter === "todas"
-                    ? "bg-[#111C2D] text-white shadow-2xs"
-                    : "bg-white text-[#4C4546] border border-black/5 hover:text-[#111C2D]"
-                }`}
-              >
-                Todas las Guardadas ({savedScores.length})
-              </button>
+            {/* Filtros de Colecciones y Acciones */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1 pb-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setCollectionFilter("todas")}
+                  className={`px-4 py-2 rounded-xl text-xs font-montserrat font-bold transition ${
+                    collectionFilter === "todas"
+                      ? "bg-[#111C2D] text-white shadow-2xs"
+                      : "bg-white text-[#4C4546] border border-black/5 hover:text-[#111C2D]"
+                  }`}
+                >
+                  Todas las Guardadas ({savedScores.length})
+                </button>
 
-              {collections.map((col) => {
-                const count = savedScores.filter((s) => s.collectionId === col.id).length;
-                return (
-                  <div
-                    key={col.id}
-                    className={`inline-flex items-center gap-1 rounded-xl text-xs font-montserrat font-bold transition border ${
-                      collectionFilter === col.id
-                        ? "bg-[#0071BC] text-white border-[#0071BC] shadow-2xs"
-                        : "bg-white text-[#4C4546] border-black/5 hover:text-[#111C2D]"
-                    }`}
-                  >
-                    <button
-                      onClick={() => setCollectionFilter(col.id)}
-                      className="px-3.5 py-2 flex items-center gap-1.5"
+                {collections.map((col) => {
+                  const count = savedScores.filter((s) => s.collectionId === col.id).length;
+                  return (
+                    <div
+                      key={col.id}
+                      className={`inline-flex items-center gap-1 rounded-xl text-xs font-montserrat font-bold transition border ${
+                        collectionFilter === col.id
+                          ? "bg-[#0071BC] text-white border-[#0071BC] shadow-2xs"
+                          : "bg-white text-[#4C4546] border-black/5 hover:text-[#111C2D]"
+                      }`}
                     >
-                      <span className="material-symbols-outlined text-sm">{col.icon || "folder"}</span>
-                      <span>{col.name}</span>
-                      <span className="text-[10px] opacity-80">({count})</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (confirm(`¿Deseas eliminar la colección "${col.name}"?`)) {
-                          deleteCollection(col.id);
-                          if (collectionFilter === col.id) setCollectionFilter("todas");
-                        }
-                      }}
-                      title="Eliminar colección"
-                      className="pr-2.5 pl-1 py-2 text-xs opacity-60 hover:opacity-100 hover:text-red-300 transition"
-                    >
-                      ×
-                    </button>
-                  </div>
-                );
-              })}
+                      <button
+                        onClick={() => setCollectionFilter(col.id)}
+                        className="px-3.5 py-2 flex items-center gap-1.5"
+                      >
+                        <span className="material-symbols-outlined text-sm">{col.icon || "folder"}</span>
+                        <span>{col.name}</span>
+                        <span className="text-[10px] opacity-80">({count})</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm(`¿Deseas eliminar la colección "${col.name}"?`)) {
+                            deleteCollection(col.id);
+                            if (collectionFilter === col.id) setCollectionFilter("todas");
+                          }
+                        }}
+                        title="Eliminar colección"
+                        className="pr-2.5 pl-1 py-2 text-xs opacity-60 hover:opacity-100 hover:text-red-300 transition"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {savedScores.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm("¿Estás seguro de que deseas eliminar todas las partituras de tu lista de guardadas?")) {
+                      clearAllSavedScores();
+                    }
+                  }}
+                  className="px-3.5 py-2 rounded-xl text-xs font-montserrat font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition flex items-center gap-1.5 cursor-pointer shrink-0"
+                  title="Eliminar todas las obras guardadas"
+                >
+                  <span className="material-symbols-outlined text-base">delete_sweep</span>
+                  Vaciar todas ({savedScores.length})
+                </button>
+              )}
             </div>
 
             {/* Grid de Partituras Guardadas o Empty State */}
@@ -716,9 +792,9 @@ export default function MisDescargasPage() {
                         
                         <button
                           type="button"
-                          onClick={() => removeSavedScore(score.slug || score.id)}
+                          onClick={() => removeSavedScore(score)}
                           title="Quitar de guardadas"
-                          className="w-8 h-8 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center transition border border-red-200/50"
+                          className="w-8 h-8 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center transition border border-red-200/50 cursor-pointer"
                         >
                           <span className="material-symbols-outlined text-base">delete</span>
                         </button>

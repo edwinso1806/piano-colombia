@@ -294,6 +294,7 @@ export default function PartituraDetailClient({ score }: PartituraDetailClientPr
               <SaveScoreButton
                 score={{
                   id: score.id,
+                  slug: score.slug,
                   title: score.title,
                   composer: composerName,
                   category: score.genre || score.category || "Piano Solo",

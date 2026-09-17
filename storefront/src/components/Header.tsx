@@ -7,6 +7,7 @@ import { useCart } from "@/context/CartContext";
 import MobileDrawer from "@/components/dashboard/MobileDrawer";
 
 import { useAuth } from "@/context/AuthContext";
+import { useSavedScores } from "@/context/SavedScoresContext";
 import { useLanguage } from "@/context/LanguageContext";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 
@@ -18,6 +19,7 @@ export default function Header({ activePage }: HeaderProps) {
   const router = useRouter();
   const { totalItems } = useCart();
   const { customer, logoutCustomer } = useAuth();
+  const { savedScores } = useSavedScores();
   const { t } = useLanguage();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -143,6 +145,21 @@ export default function Header({ activePage }: HeaderProps) {
                     >
                       <span className="material-symbols-outlined text-base text-[#0071BC]">cloud_download</span>
                       <span>Mis Partituras & Descargas</span>
+                    </Link>
+                    <Link
+                      href="/mi-cuenta/descargas?tab=colecciones"
+                      onClick={() => setIsUserMenuOpen(false)}
+                      className="flex items-center justify-between px-4 py-2 text-[#111C2D] hover:bg-[#F0F3FF] transition font-semibold"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <span className="material-symbols-outlined text-base text-[#C1272D]">bookmark</span>
+                        <span>Partituras Guardadas</span>
+                      </div>
+                      {savedScores.length > 0 && (
+                        <span className="px-2 py-0.5 rounded-full bg-red-100 text-[#C1272D] text-[10px] font-black font-montserrat">
+                          {savedScores.length}
+                        </span>
+                      )}
                     </Link>
                     <button
                       type="button"
@@ -300,6 +317,23 @@ export default function Header({ activePage }: HeaderProps) {
                     <span>Mis Partituras & Licencias</span>
                   </div>
                   <span className="material-symbols-outlined text-sm text-[#4C4546]/50">chevron_right</span>
+                </Link>
+                <Link
+                  href="/mi-cuenta/descargas?tab=colecciones"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-white border border-black/5 text-xs font-bold text-[#111C2D] hover:bg-[#F0F3FF] transition font-montserrat"
+                >
+                  <div className="flex items-center gap-2.5 text-[#C1272D]">
+                    <span className="material-symbols-outlined text-base">bookmark</span>
+                    <span>Partituras Guardadas</span>
+                  </div>
+                  {savedScores.length > 0 ? (
+                    <span className="px-2 py-0.5 rounded-full bg-red-100 text-[#C1272D] text-[10px] font-black font-montserrat">
+                      {savedScores.length}
+                    </span>
+                  ) : (
+                    <span className="material-symbols-outlined text-sm text-[#4C4546]/50">chevron_right</span>
+                  )}
                 </Link>
               </div>
             ) : (

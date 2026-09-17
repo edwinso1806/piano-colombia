@@ -25,13 +25,16 @@ export interface ScoreCollection {
   createdAt: string;
 }
 
+export type ScoreIdentifier = string | { id?: string; slug?: string; title?: string };
+
 interface SavedScoresContextType {
   savedScores: SavedScore[];
   collections: ScoreCollection[];
   isLoaded: boolean;
-  isSaved: (slugOrId: string) => boolean;
+  isSaved: (target: ScoreIdentifier) => boolean;
   toggleSaveScore: (score: Omit<SavedScore, "savedAt">, collectionId?: string) => boolean;
-  removeSavedScore: (slugOrId: string) => void;
+  removeSavedScore: (target: ScoreIdentifier) => void;
+  clearAllSavedScores: () => void;
   createCollection: (name: string, description?: string, icon?: string) => ScoreCollection;
   deleteCollection: (id: string) => void;
   moveScoreToCollection: (slugOrId: string, collectionId?: string) => void;
@@ -39,74 +42,219 @@ interface SavedScoresContextType {
 
 const SavedScoresContext = createContext<SavedScoresContextType | undefined>(undefined);
 
+// Helper para comparar si dos partituras son la misma por ID, Slug o Título
+function matchesScore(
+  saved: SavedScore,
+  target: ScoreIdentifier
+): boolean {
+  if (!target) return false;
+
+  if (typeof target === "string") {
+    const q = target.toLowerCase().trim();
+    return Boolean(
+      (saved.id && saved.id.toLowerCase().trim() === q) ||
+      (saved.slug && saved.slug.toLowerCase().trim() === q) ||
+      (saved.title && saved.title.toLowerCase().trim() === q)
+    );
+  }
+
+  // Coincidencia por ID
+  if (target.id && saved.id && target.id === saved.id) return true;
+
+  // Coincidencia por Slug
+  if (
+    target.slug &&
+    saved.slug &&
+    target.slug.toLowerCase().trim() === saved.slug.toLowerCase().trim()
+  ) {
+    return true;
+  }
+
+  // Coincidencia cruzada Slug <-> ID
+  if (
+    target.slug &&
+    saved.id &&
+    target.slug.toLowerCase().trim() === saved.id.toLowerCase().trim()
+  ) {
+    return true;
+  }
+  if (
+    target.id &&
+    saved.slug &&
+    target.id.toLowerCase().trim() === saved.slug.toLowerCase().trim()
+  ) {
+    return true;
+  }
+
+  // Coincidencia por Título (muy importante para partituras de catálogo)
+  if (
+    target.title &&
+    saved.title &&
+    target.title.toLowerCase().trim() === saved.title.toLowerCase().trim()
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 export function SavedScoresProvider({ children }: { children: React.ReactNode }) {
   const { customer } = useAuth();
+  const customerEmail = customer?.email ? customer.email.toLowerCase().trim() : null;
+
   const [savedScores, setSavedScores] = useState<SavedScore[]>([]);
   const [collections, setCollections] = useState<ScoreCollection[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
   const getStorageKey = () => {
-    return customer?.email
-      ? `piano_colombia_saved_scores_${customer.email.toLowerCase().trim()}`
-      : "piano_colombia_saved_scores_guest";
+    return customerEmail ? `piano_colombia_saved_scores_${customerEmail}` : null;
   };
 
   const getCollectionsKey = () => {
-    return customer?.email
-      ? `piano_colombia_collections_${customer.email.toLowerCase().trim()}`
-      : "piano_colombia_collections_guest";
+    return customerEmail ? `piano_colombia_collections_${customerEmail}` : null;
   };
 
-  // Load saved scores & collections when customer session changes
+  // Cargar partituras guardadas y colecciones cuando el cliente inicia sesión o cambia
   useEffect(() => {
     if (typeof window !== "undefined") {
+      if (!customerEmail) {
+        setSavedScores([]);
+        setCollections([]);
+        setIsLoaded(true);
+        return;
+      }
+
       try {
-        const scoresKey = getStorageKey();
+        const scoresKey = `piano_colombia_saved_scores_${customerEmail}`;
         const rawScores = localStorage.getItem(scoresKey);
+        let currentScores: SavedScore[] = [];
         if (rawScores) {
-          setSavedScores(JSON.parse(rawScores));
-        } else {
-          setSavedScores([]);
+          try {
+            currentScores = JSON.parse(rawScores);
+          } catch {
+            currentScores = [];
+          }
         }
 
-        const colsKey = getCollectionsKey();
+        // Migración única: Revisar y vaciar llaves de invitado o residuos previos para que no resuciten
+        try {
+          const guestKey = "piano_colombia_saved_scores_guest";
+          const guestRaw = localStorage.getItem(guestKey);
+          if (guestRaw) {
+            try {
+              const guestList: SavedScore[] = JSON.parse(guestRaw);
+              if (Array.isArray(guestList)) {
+                for (const oldItem of guestList) {
+                  if (!currentScores.some((s) => matchesScore(s, oldItem))) {
+                    currentScores.push({
+                      ...oldItem,
+                      savedAt: oldItem.savedAt || new Date().toISOString(),
+                    });
+                  }
+                }
+              }
+            } catch (err) {
+              console.warn("No se pudo parsear llave guest:", err);
+            }
+            // ELIMINAR definitivamente la llave guest para que las eliminaciones persistan
+            localStorage.removeItem(guestKey);
+          }
+
+          // Limpiar cualquier otra llave huérfana de pruebas para que no cause conflictos
+          const orphanKeys: string[] = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith("piano_colombia_saved_scores_") && k !== scoresKey) {
+              orphanKeys.push(k);
+            }
+          }
+          orphanKeys.forEach((k) => localStorage.removeItem(k));
+        } catch (e) {
+          console.warn("Error limpiando llaves locales secundarias:", e);
+        }
+
+        // Revisar si el usuario venía de intentar guardar una partitura como favorita antes del login
+        const pending = sessionStorage.getItem("piano_colombia_pending_favorite");
+        if (pending) {
+          try {
+            const pendingScore = JSON.parse(pending);
+            sessionStorage.removeItem("piano_colombia_pending_favorite");
+
+            const alreadySaved = currentScores.some((s) => matchesScore(s, pendingScore));
+
+            if (!alreadySaved) {
+              const item: SavedScore = {
+                ...pendingScore,
+                savedAt: new Date().toISOString(),
+                collectionId: "default",
+              };
+              currentScores = [item, ...currentScores];
+            }
+          } catch (e) {
+            console.error("Error al procesar partitura pendiente post-login:", e);
+          }
+        }
+
+        setSavedScores(currentScores);
+        localStorage.setItem(scoresKey, JSON.stringify(currentScores));
+
+        const colsKey = `piano_colombia_collections_${customerEmail}`;
         const rawCols = localStorage.getItem(colsKey);
         if (rawCols) {
-          setCollections(JSON.parse(rawCols));
+          try {
+            setCollections(JSON.parse(rawCols));
+          } catch {
+            setCollections([]);
+          }
         } else {
           setCollections([]);
         }
       } catch (err) {
-        console.error("Error loading saved scores from localStorage:", err);
+        console.error("Error al cargar partituras guardadas de localStorage:", err);
       } finally {
         setIsLoaded(true);
       }
     }
-  }, [customer?.email]);
+  }, [customerEmail]);
 
   const saveToStorage = (newScores: SavedScore[]) => {
     setSavedScores(newScores);
-    if (typeof window !== "undefined") {
-      localStorage.setItem(getStorageKey(), JSON.stringify(newScores));
+    if (typeof window !== "undefined" && customerEmail) {
+      localStorage.setItem(`piano_colombia_saved_scores_${customerEmail}`, JSON.stringify(newScores));
     }
   };
 
   const saveCollectionsToStorage = (newCollections: ScoreCollection[]) => {
     setCollections(newCollections);
-    if (typeof window !== "undefined") {
-      localStorage.setItem(getCollectionsKey(), JSON.stringify(newCollections));
+    if (typeof window !== "undefined" && customerEmail) {
+      localStorage.setItem(`piano_colombia_collections_${customerEmail}`, JSON.stringify(newCollections));
     }
   };
 
-  const isSaved = (slugOrId: string) => {
-    return savedScores.some((s) => s.slug === slugOrId || s.id === slugOrId);
+  const isSaved = (target: ScoreIdentifier): boolean => {
+    if (!customerEmail) return false;
+    return savedScores.some((s) => matchesScore(s, target));
   };
 
   const toggleSaveScore = (score: Omit<SavedScore, "savedAt">, collectionId?: string): boolean => {
-    const exists = isSaved(score.slug || score.id);
+    if (!customerEmail) return false;
+
+    const exists = isSaved(score);
     if (exists) {
-      const updated = savedScores.filter((s) => s.slug !== score.slug && s.id !== score.id);
+      const updated = savedScores.filter((s) => !matchesScore(s, score));
       saveToStorage(updated);
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("piano_colombia_saved_scores_guest");
+        const pending = sessionStorage.getItem("piano_colombia_pending_favorite");
+        if (pending) {
+          try {
+            const pendingScore = JSON.parse(pending);
+            if (matchesScore(pendingScore, score)) {
+              sessionStorage.removeItem("piano_colombia_pending_favorite");
+            }
+          } catch {}
+        }
+      }
       return false; // removed
     } else {
       const item: SavedScore = {
@@ -120,9 +268,22 @@ export function SavedScoresProvider({ children }: { children: React.ReactNode })
     }
   };
 
-  const removeSavedScore = (slugOrId: string) => {
-    const updated = savedScores.filter((s) => s.slug !== slugOrId && s.id !== slugOrId);
+  const removeSavedScore = (target: ScoreIdentifier) => {
+    if (!customerEmail) return;
+    const updated = savedScores.filter((s) => !matchesScore(s, target));
     saveToStorage(updated);
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("piano_colombia_saved_scores_guest");
+      const pending = sessionStorage.getItem("piano_colombia_pending_favorite");
+      if (pending) {
+        try {
+          const pendingScore = JSON.parse(pending);
+          if (matchesScore(pendingScore, target)) {
+            sessionStorage.removeItem("piano_colombia_pending_favorite");
+          }
+        } catch {}
+      }
+    }
   };
 
   const createCollection = (name: string, description?: string, icon?: string): ScoreCollection => {
@@ -156,6 +317,15 @@ export function SavedScoresProvider({ children }: { children: React.ReactNode })
     saveToStorage(updated);
   };
 
+  const clearAllSavedScores = () => {
+    if (!customerEmail) return;
+    saveToStorage([]);
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("piano_colombia_saved_scores_guest");
+      sessionStorage.removeItem("piano_colombia_pending_favorite");
+    }
+  };
+
   return (
     <SavedScoresContext.Provider
       value={{
@@ -165,6 +335,7 @@ export function SavedScoresProvider({ children }: { children: React.ReactNode })
         isSaved,
         toggleSaveScore,
         removeSavedScore,
+        clearAllSavedScores,
         createCollection,
         deleteCollection,
         moveScoreToCollection,

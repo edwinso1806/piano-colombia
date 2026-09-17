@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getComposerBySlug } from "@/lib/api-client";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import SaveScoreButton from "@/components/SaveScoreButton";
 
 export default async function CompositorDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -97,12 +98,28 @@ export default async function CompositorDetailPage({ params }: { params: Promise
                 </p>
                 <div className="mt-auto pt-4 border-t border-black/5 flex justify-between items-center">
                   <span className="text-xs text-[#4C4546] font-medium">{score.genre || "Piano Solo"}</span>
-                  <Link
-                    href={`/partitura/${score.slug}`}
-                    className="text-xs font-extrabold px-4 py-2 bg-[#FBB03B] hover:bg-[#e09b2d] text-[#111C2D] rounded-xl transition font-montserrat flex items-center gap-1 shadow-xs"
-                  >
-                    Ver Partitura <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                  </Link>
+                  <div className="flex items-center gap-2">
+                    <SaveScoreButton
+                      score={{
+                        id: score.id,
+                        slug: score.slug,
+                        title: score.title,
+                        composer: composerName,
+                        category: score.genre || "Piano Solo",
+                        level: score.difficulty || "Intermedio",
+                        priceCOP: Number(score.price_cop || 45000),
+                        priceUSD: Number(score.price_usd || 12),
+                        description: score.description_es || score.description,
+                      }}
+                      variant="icon"
+                    />
+                    <Link
+                      href={`/partitura/${score.slug}`}
+                      className="text-xs font-extrabold px-4 py-2 bg-[#FBB03B] hover:bg-[#e09b2d] text-[#111C2D] rounded-xl transition font-montserrat flex items-center gap-1 shadow-xs"
+                    >
+                      Ver Partitura <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                    </Link>
+                  </div>
                 </div>
               </div>
             ))}

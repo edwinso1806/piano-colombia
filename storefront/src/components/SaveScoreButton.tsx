@@ -1,7 +1,9 @@
 "use client";
 
 import React from "react";
+import { useRouter } from "next/navigation";
 import { useSavedScores } from "@/context/SavedScoresContext";
+import { useAuth } from "@/context/AuthContext";
 
 interface SaveScoreButtonProps {
   score: {
@@ -26,13 +28,36 @@ export default function SaveScoreButton({
   variant = "icon",
   showText = false,
 }: SaveScoreButtonProps) {
+  const router = useRouter();
+  const { customer } = useAuth();
   const { isSaved, toggleSaveScore } = useSavedScores();
-  const saved = isSaved(score.slug || score.id);
+
+  const isLoggedIn = Boolean(customer?.email);
+  const saved = isLoggedIn && isSaved(score);
 
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+
+    if (!isLoggedIn) {
+      if (typeof window !== "undefined") {
+        try {
+          sessionStorage.setItem("piano_colombia_pending_favorite", JSON.stringify(score));
+        } catch (err) {
+          console.warn("No se pudo guardar la partitura pendiente:", err);
+        }
+        const currentUrl = `${window.location.pathname}${window.location.search}`;
+        router.push(`/login?redirect=${encodeURIComponent(currentUrl)}`);
+      }
+      return;
+    }
+
     toggleSaveScore(score);
+  };
+
+  const getTitle = () => {
+    if (!isLoggedIn) return "Inicia sesión para guardar en tus favoritos";
+    return saved ? "Quitar de mis partituras favoritas" : "Guardar en favoritos";
   };
 
   if (variant === "button") {
@@ -40,8 +65,8 @@ export default function SaveScoreButton({
       <button
         type="button"
         onClick={handleClick}
-        title={saved ? "Quitar de mis partituras guardadas" : "Guardar en mis partituras"}
-        className={`px-4 py-3 rounded-xl font-bold text-xs font-montserrat flex items-center justify-center gap-2 transition-all duration-200 border ${
+        title={getTitle()}
+        className={`px-4 py-3 rounded-xl font-bold text-xs font-montserrat flex items-center justify-center gap-2 transition-all duration-200 border cursor-pointer ${
           saved
             ? "bg-[#F0F3FF] border-[#0071BC]/40 text-[#0071BC] hover:bg-red-50 hover:border-red-200 hover:text-red-700"
             : "bg-white border-black/10 text-[#4C4546] hover:text-[#111C2D] hover:bg-[#F0F3FF]/70"
@@ -65,8 +90,8 @@ export default function SaveScoreButton({
       <button
         type="button"
         onClick={handleClick}
-        title={saved ? "Quitar de guardadas" : "Guardar partitura"}
-        className={`px-3 py-1.5 rounded-full font-bold text-[11px] font-montserrat flex items-center gap-1.5 transition-all duration-200 border ${
+        title={getTitle()}
+        className={`px-3 py-1.5 rounded-full font-bold text-[11px] font-montserrat flex items-center gap-1.5 transition-all duration-200 border cursor-pointer ${
           saved
             ? "bg-[#0071BC] text-white border-[#0071BC] shadow-xs"
             : "bg-white text-[#4C4546] border-black/10 hover:border-[#0071BC]/30 hover:text-[#0071BC]"
@@ -88,8 +113,8 @@ export default function SaveScoreButton({
     <button
       type="button"
       onClick={handleClick}
-      title={saved ? "Quitar de mis partituras guardadas" : "Guardar en mi lista"}
-      className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 backdrop-blur-md ${
+      title={getTitle()}
+      className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 backdrop-blur-md cursor-pointer ${
         saved
           ? "bg-[#0071BC] text-white shadow-md hover:bg-red-600 scale-105"
           : "bg-white/90 text-[#4C4546] border border-black/10 hover:bg-white hover:text-[#0071BC] hover:scale-105 shadow-2xs"

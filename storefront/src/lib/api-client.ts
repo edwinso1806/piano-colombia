@@ -935,5 +935,57 @@ export async function updateScoreApi(slugOrId: string, scoreData: Record<string,
   return data
 }
 
+// ----------------------------------------------------------------------
+// 11. Compositores Destacados del Home (CMS & Portada)
+// ----------------------------------------------------------------------
+
+export async function getStoreFeaturedComposers() {
+  try {
+    const res = await fetch(`${MEDUSA_URL}/store/cms/featured-composers`, {
+      headers: defaultHeaders,
+      cache: "no-store",
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    return data
+  } catch (err) {
+    console.warn("[Medusa API] Fallback local para compositores destacados del home:", err)
+    return null
+  }
+}
+
+export async function getAdminFeaturedComposers() {
+  try {
+    const res = await fetch(`${MEDUSA_URL}/admin/cms/featured-composers`, {
+      headers: defaultHeaders,
+      cache: "no-store",
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    return data
+  } catch (err) {
+    console.warn("[Medusa API] Error consultando compositores destacados admin:", err)
+    return {
+      success: true,
+      tabs: [],
+      all_composers: [],
+      active_composers_directory: [],
+      total_active_composers: 0,
+    }
+  }
+}
+
+export async function updateAdminFeaturedComposers(tabs: any[]) {
+  const res = await fetch(`${MEDUSA_URL}/admin/cms/featured-composers`, {
+    method: "POST",
+    headers: defaultHeaders,
+    body: JSON.stringify({ tabs }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.message || "Error al guardar compositores destacados CMS")
+  return data
+}
+
+
 
 

@@ -5,13 +5,83 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SaveScoreButton from "@/components/SaveScoreButton";
 
+const DIFFICULTY_LEVELS = ["Principiante", "Intermedio", "Avanzado", "Virtuoso"] as const;
+type DifficultyLevel = (typeof DIFFICULTY_LEVELS)[number];
+
+function normalizeDifficulty(diff?: string | null): DifficultyLevel {
+  if (!diff) return "Intermedio";
+  const str = diff.toLowerCase();
+  if (str.includes("principi") || str.includes("beginner")) return "Principiante";
+  if (str.includes("avanzad") || str.includes("advanced")) return "Avanzado";
+  if (str.includes("virtuos")) return "Virtuoso";
+  return "Intermedio";
+}
+
 export default async function TiendaPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ categoria?: string; nivel?: string }>;
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const resolvedParams = searchParams ? await searchParams : {};
-  const activeCategorySlug = (resolvedParams?.categoria || "").toLowerCase().trim();
+  const activeCategorySlug = (
+    typeof resolvedParams?.categoria === "string" ? resolvedParams.categoria : ""
+  ).toLowerCase().trim();
+
+  // Extraer niveles activos seleccionados
+  const rawNivel = resolvedParams?.nivel;
+  const activeLevels: string[] = [];
+  if (Array.isArray(rawNivel)) {
+    rawNivel.forEach((n) => {
+      n.split(",").forEach((sub) => {
+        const trimmed = sub.trim().toLowerCase();
+        if (trimmed && !activeLevels.includes(trimmed)) activeLevels.push(trimmed);
+      });
+    });
+  } else if (typeof rawNivel === "string" && rawNivel.trim()) {
+    rawNivel.split(",").forEach((sub) => {
+      const trimmed = sub.trim().toLowerCase();
+      if (trimmed && !activeLevels.includes(trimmed)) activeLevels.push(trimmed);
+    });
+  }
+
+  // Función para construir URLs de filtros manteniendo o alternando parámetros
+  const getFilterUrl = (options: {
+    categorySlug?: string | null;
+    toggleLevel?: string;
+    removeLevel?: string;
+  }) => {
+    const q = new URLSearchParams();
+
+    // Categoría
+    const cat =
+      options.categorySlug !== undefined
+        ? options.categorySlug
+        : activeCategorySlug;
+    if (cat && cat !== "todas") {
+      q.set("categoria", cat);
+    }
+
+    // Niveles de dificultad
+    let levels = [...activeLevels];
+    if (options.toggleLevel) {
+      const target = options.toggleLevel.toLowerCase();
+      if (levels.includes(target)) {
+        levels = levels.filter((l) => l !== target);
+      } else {
+        levels.push(target);
+      }
+    } else if (options.removeLevel) {
+      const target = options.removeLevel.toLowerCase();
+      levels = levels.filter((l) => l !== target);
+    }
+
+    if (levels.length > 0) {
+      q.set("nivel", levels.join(","));
+    }
+
+    const qs = q.toString();
+    return qs ? `/tienda?${qs}` : "/tienda";
+  };
 
   // Consultar partituras y categorías reales desde la base de datos
   const [liveScores, liveCategories] = await Promise.all([
@@ -26,7 +96,7 @@ export default async function TiendaPage({
         slug: s.slug || s.id,
         composer: s.composer?.artistic_name || `${s.composer?.first_name || ""} ${s.composer?.last_name || ""}`.trim() || "Compositor Colombiano",
         composerId: s.composer_id,
-        level: s.difficulty || "Intermedio",
+        level: normalizeDifficulty(s.difficulty),
         category: s.genre || "Piano Solo",
         tags: s.tags || [],
         priceCOP: Number(s.price_cop) || 45000,
@@ -34,7 +104,10 @@ export default async function TiendaPage({
         previewPages: s.preview_images || [],
         description: s.description || "Edición filológica y digital de alta calidad con licencias oficiales.",
       }))
-    : MOCK_SCORES;
+    : MOCK_SCORES.map((s) => ({
+        ...s,
+        level: normalizeDifficulty(s.level),
+      }));
 
   const categories = Array.isArray(liveCategories) && liveCategories.length > 0
     ? liveCategories
@@ -47,6 +120,21 @@ export default async function TiendaPage({
         { title: "Piano y Electrónica", slug: "piano-y-electronica", count: 0, display_count: "0 Obras", icon: "graphic_eq" },
       ];
 
+  // Contadores de obras por nivel de dificultad
+  const difficultyCounts: Record<DifficultyLevel, number> = {
+    Principiante: 0,
+    Intermedio: 0,
+    Avanzado: 0,
+    Virtuoso: 0,
+  };
+
+  allScores.forEach((s: any) => {
+    const lvl = normalizeDifficulty(s.level);
+    if (difficultyCounts[lvl] !== undefined) {
+      difficultyCounts[lvl]++;
+    }
+  });
+
   // Encontrar la categoría seleccionada si hay slug
   const activeCategory = categories.find((c: any) => {
     const cSlug = (c.slug || "").toLowerCase();
@@ -54,26 +142,41 @@ export default async function TiendaPage({
     return cSlug === activeCategorySlug || cTitle === activeCategorySlug;
   });
 
-  // Filtrar partituras si hay categoría activa
+  // Filtrar partituras si hay categoría activa o niveles de dificultad
   const filteredScores = allScores.filter((score: any) => {
-    if (!activeCategorySlug || activeCategorySlug === "todas") return true;
+    // 1. Filtro por categoría
+    if (activeCategorySlug && activeCategorySlug !== "todas") {
+      let matchesCat = false;
+      if (activeCategory) {
+        const catTitleLower = activeCategory.title.toLowerCase();
+        const scoreCatLower = (score.category || "").toLowerCase();
+        const matching = (activeCategory.matching_genres || [activeCategory.title]).map((m: string) => m.toLowerCase());
 
-    if (activeCategory) {
-      const catTitleLower = activeCategory.title.toLowerCase();
-      const scoreCatLower = (score.category || "").toLowerCase();
-      const matching = (activeCategory.matching_genres || [activeCategory.title]).map((m: string) => m.toLowerCase());
+        matchesCat = (
+          scoreCatLower === catTitleLower ||
+          scoreCatLower.includes(catTitleLower) ||
+          catTitleLower.includes(scoreCatLower) ||
+          matching.some((mg: string) => scoreCatLower === mg || scoreCatLower.includes(mg) || mg.includes(scoreCatLower))
+        );
+      } else {
+        const scoreGenreSlug = (score.category || "").toLowerCase().replace(/\s+/g, "-");
+        matchesCat = scoreGenreSlug.includes(activeCategorySlug) || activeCategorySlug.includes(scoreGenreSlug);
+      }
 
-      return (
-        scoreCatLower === catTitleLower ||
-        scoreCatLower.includes(catTitleLower) ||
-        catTitleLower.includes(scoreCatLower) ||
-        matching.some((mg: string) => scoreCatLower === mg || scoreCatLower.includes(mg) || mg.includes(scoreCatLower))
-      );
+      if (!matchesCat) return false;
     }
 
-    const scoreGenreSlug = (score.category || "").toLowerCase().replace(/\s+/g, "-");
-    return scoreGenreSlug.includes(activeCategorySlug) || activeCategorySlug.includes(scoreGenreSlug);
+    // 2. Filtro por nivel de dificultad
+    if (activeLevels.length > 0) {
+      const scoreNormalizedLevel = normalizeDifficulty(score.level).toLowerCase();
+      const matchesLevel = activeLevels.includes(scoreNormalizedLevel);
+      if (!matchesLevel) return false;
+    }
+
+    return true;
   });
+
+  const hasActiveFilters = Boolean(activeCategorySlug) || activeLevels.length > 0;
 
   return (
     <div className="min-h-screen bg-[#F9F9FF] text-[#111C2D] flex flex-col font-inter antialiased selection:bg-[#FBB03B]/30 selection:text-[#111C2D]">
@@ -92,7 +195,7 @@ export default async function TiendaPage({
                 <span className="material-symbols-outlined text-[#0071BC]">tune</span>
                 Filtros
               </h3>
-              {activeCategorySlug && (
+              {hasActiveFilters && (
                 <Link
                   href="/tienda"
                   className="text-[11px] font-bold text-rose-600 hover:underline font-montserrat"
@@ -110,7 +213,7 @@ export default async function TiendaPage({
               <div className="space-y-2 text-xs text-[#4C4546] font-medium">
                 {/* Opción Todas */}
                 <Link
-                  href="/tienda"
+                  href={getFilterUrl({ categorySlug: null })}
                   className={`flex items-center justify-between p-2 rounded-xl transition ${
                     !activeCategorySlug
                       ? "bg-[#F0F3FF] text-[#0071BC] font-bold"
@@ -133,10 +236,13 @@ export default async function TiendaPage({
                 {/* Categorías dinámicas desde BD */}
                 {categories.map((cat: any, i: number) => {
                   const isSelected = activeCategorySlug === (cat.slug || "").toLowerCase();
+                  const catHref = getFilterUrl({
+                    categorySlug: isSelected ? null : (cat.slug || cat.title),
+                  });
                   return (
                     <Link
                       key={cat.id || i}
-                      href={`/tienda?categoria=${cat.slug || encodeURIComponent(cat.title)}`}
+                      href={catHref}
                       className={`flex items-center justify-between p-2 rounded-xl transition ${
                         isSelected
                           ? "bg-[#F0F3FF] text-[#0071BC] font-bold border border-[#0071BC]/20"
@@ -162,32 +268,53 @@ export default async function TiendaPage({
               </div>
             </div>
 
-            {/* Nivel */}
-            <div className="mb-6 pt-4 border-t border-black/5">
+            {/* Nivel de Dificultad */}
+            <div className="pt-4 border-t border-black/5">
               <label className="text-xs font-extrabold uppercase tracking-wider text-[#0071BC] block mb-3 font-montserrat">
                 Nivel de Dificultad
               </label>
-              <div className="space-y-2.5 text-xs text-[#4C4546] font-medium">
-                {["Principiante", "Intermedio", "Avanzado", "Virtuoso"].map((lvl, i) => (
-                  <label key={i} className="flex items-center gap-2.5 cursor-pointer hover:text-[#111C2D] transition">
-                    <input type="checkbox" className="w-4 h-4 rounded accent-[#0071BC] border-black/10" />
-                    <span>{lvl}</span>
-                  </label>
-                ))}
+              <div className="space-y-1.5 text-xs text-[#4C4546] font-medium">
+                {DIFFICULTY_LEVELS.map((lvl) => {
+                  const lvlLower = lvl.toLowerCase();
+                  const isChecked = activeLevels.includes(lvlLower);
+                  const count = difficultyCounts[lvl] || 0;
+                  const href = getFilterUrl({ toggleLevel: lvlLower });
+
+                  return (
+                    <Link
+                      key={lvl}
+                      href={href}
+                      className={`flex items-center justify-between p-2 rounded-xl transition cursor-pointer select-none ${
+                        isChecked
+                          ? "bg-[#F0F3FF] text-[#0071BC] font-bold border border-[#0071BC]/20 shadow-xs"
+                          : "hover:bg-slate-50 text-slate-700"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div
+                          className={`w-4 h-4 rounded flex items-center justify-center transition-colors border ${
+                            isChecked
+                              ? "bg-[#0071BC] border-[#0071BC] text-white"
+                              : "border-slate-300 bg-white"
+                          }`}
+                        >
+                          {isChecked && (
+                            <span className="material-symbols-outlined text-xs font-bold leading-none select-none">
+                              check
+                            </span>
+                          )}
+                        </div>
+                        <span className="truncate">{lvl}</span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-mono shrink-0 ml-1">
+                        ({count})
+                      </span>
+                    </Link>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Rango de precio */}
-            <div className="pt-4 border-t border-black/5">
-              <label className="text-xs font-extrabold uppercase tracking-wider text-[#0071BC] block mb-3 font-montserrat">
-                Precio COP
-              </label>
-              <input type="range" min="10000" max="150000" step="5000" className="w-full accent-[#0071BC]" />
-              <div className="flex justify-between text-xs text-[#4C4546] mt-2 font-bold font-montserrat">
-                <span>$10.000</span>
-                <span>$150.000+</span>
-              </div>
-            </div>
           </div>
         </aside>
 
@@ -207,17 +334,56 @@ export default async function TiendaPage({
                 {activeCategory?.description || "Repertorio revisado con marcaciones de digitación y licencias legalmente firmadas."}
               </p>
 
-              {/* Tag activo de categoría si aplica */}
-              {activeCategory && (
-                <div className="flex items-center gap-2 mt-3">
+              {/* Tags activos de filtrado */}
+              {hasActiveFilters && (
+                <div className="flex flex-wrap items-center gap-2 mt-3">
                   <span className="text-[11px] text-[#4C4546] font-semibold">Filtrado activo:</span>
-                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#0071BC]/10 text-[#0071BC] text-xs font-bold font-montserrat">
-                    <span className="material-symbols-outlined text-sm">{activeCategory.icon || "piano"}</span>
-                    <span>{activeCategory.title}</span>
-                    <Link href="/tienda" className="hover:text-rose-600 transition ml-1" title="Quitar filtro">
-                      <span className="material-symbols-outlined text-xs">close</span>
+                  
+                  {/* Tag categoría */}
+                  {activeCategory && (
+                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#0071BC]/10 text-[#0071BC] text-xs font-bold font-montserrat border border-[#0071BC]/20">
+                      <span className="material-symbols-outlined text-sm">{activeCategory.icon || "piano"}</span>
+                      <span>Categoría: {activeCategory.title}</span>
+                      <Link
+                        href={getFilterUrl({ categorySlug: null })}
+                        className="hover:text-rose-600 transition ml-1 inline-flex items-center"
+                        title="Quitar filtro de categoría"
+                      >
+                        <span className="material-symbols-outlined text-xs">close</span>
+                      </Link>
+                    </span>
+                  )}
+
+                  {/* Tags dificultad */}
+                  {activeLevels.map((lvl) => {
+                    const originalName = DIFFICULTY_LEVELS.find((d) => d.toLowerCase() === lvl) || lvl;
+                    return (
+                      <span
+                        key={lvl}
+                        className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#FBB03B]/20 text-[#111C2D] text-xs font-bold font-montserrat border border-[#FBB03B]/40"
+                      >
+                        <span className="material-symbols-outlined text-sm">signal_cellular_alt</span>
+                        <span>Nivel: {originalName}</span>
+                        <Link
+                          href={getFilterUrl({ removeLevel: lvl })}
+                          className="hover:text-rose-600 transition ml-1 inline-flex items-center"
+                          title={`Quitar filtro ${originalName}`}
+                        >
+                          <span className="material-symbols-outlined text-xs">close</span>
+                        </Link>
+                      </span>
+                    );
+                  })}
+
+                  {/* Botón limpiar todos si hay más de 1 filtro activo */}
+                  {((Boolean(activeCategory) && activeLevels.length > 0) || activeLevels.length > 1) && (
+                    <Link
+                      href="/tienda"
+                      className="text-[11px] text-rose-600 hover:underline font-bold font-montserrat ml-1"
+                    >
+                      Limpiar todos
                     </Link>
-                  </span>
+                  )}
                 </div>
               )}
             </div>
@@ -310,10 +476,10 @@ export default async function TiendaPage({
                 </span>
               </div>
               <h3 className="text-base font-bold font-montserrat text-[#111C2D]">
-                No hay partituras aprobadas aún en "{activeCategory?.title || activeCategorySlug}"
+                No hay partituras disponibles con los filtros seleccionados
               </h3>
               <p className="text-xs text-[#4C4546] max-w-md mx-auto leading-relaxed">
-                Actualmente se están preparando y editando filológicamente nuevas obras para esta categoría.
+                Prueba cambiando o limpiando los filtros de categoría o nivel de dificultad.
               </p>
               <Link
                 href="/tienda"

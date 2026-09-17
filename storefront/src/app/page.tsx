@@ -6,12 +6,86 @@ import { useState, useEffect } from "react";
 import { MOCK_COMPOSERS, MOCK_SCORES } from "@/lib/mock-data";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { getHeroCms, getCmsCategories } from "@/lib/api-client";
+import SaveScoreButton from "@/components/SaveScoreButton";
+import { getHeroCms, getCmsCategories, getStoreFeaturedComposers } from "@/lib/api-client";
+
+function FeaturedComposerCard({ comp }: { comp: any }) {
+  const [imgError, setImgError] = useState(false);
+
+  const photo = comp.photo_url || comp.image_url;
+  const showPhoto = Boolean(photo) && !imgError;
+  const initials =
+    comp.initials ||
+    (comp.name
+      ? comp.name
+          .split(" ")
+          .filter(Boolean)
+          .map((n: string) => n[0])
+          .join("")
+          .slice(0, 2)
+          .toUpperCase()
+      : "PC");
+
+  const bio = comp.bio_es || comp.bio || comp.short_bio || "Compositor destacado del catálogo de Piano Colombia.";
+  const subtitle = [comp.era || comp.period, comp.region || comp.origin].filter(Boolean).join(" · ") || "Colombia";
+
+  return (
+    <div className="group flex flex-col items-center text-center p-6 rounded-2xl bg-white border border-black/5 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+      <div className="relative w-28 h-28 mb-4">
+        <div className="absolute inset-0 rounded-full bg-[#FBB03B]/40 blur-md group-hover:blur-lg group-hover:scale-110 transition-all"></div>
+        {showPhoto ? (
+          <img
+            src={photo}
+            alt={comp.name}
+            onError={() => setImgError(true)}
+            className="relative w-28 h-28 rounded-full object-cover border-2 border-white shadow-md"
+          />
+        ) : (
+          <div className="relative w-28 h-28 rounded-full bg-[#F0F3FF] border-2 border-white flex items-center justify-center text-3xl font-montserrat font-black text-[#111C2D] shadow-md">
+            {initials}
+          </div>
+        )}
+        <span className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-[#111C2D] text-white flex items-center justify-center text-xs shadow border border-white">
+          <span className="material-symbols-outlined text-sm">
+            {comp.category_icon || "piano"}
+          </span>
+        </span>
+      </div>
+      <h4 className="text-lg font-bold font-montserrat text-[#111C2D] group-hover:text-[#0071BC] transition-colors line-clamp-1">
+        {comp.name}
+      </h4>
+      <span className="text-[11px] font-bold text-[#4C4546] uppercase tracking-wider mt-0.5 font-montserrat line-clamp-1">
+        {subtitle}
+      </span>
+      <p className="text-xs text-[#4C4546] mt-2 line-clamp-2 leading-relaxed min-h-[32px]" title={bio}>
+        {bio}
+      </p>
+      <div className="mt-6 pt-3 flex items-center justify-between w-full border-t border-black/5 text-xs">
+        <span className="font-bold text-[#0071BC]">
+          {comp.scoreCount || 0} {comp.scoreCount === 1 ? "Partitura" : "Partituras"}
+        </span>
+        <Link
+          href={`/compositores/${comp.slug || comp.id}`}
+          className="font-bold text-[#111C2D] hover:underline flex items-center font-montserrat"
+        >
+          Ver perfil <span className="material-symbols-outlined text-xs ml-0.5">chevron_right</span>
+        </Link>
+      </div>
+    </div>
+  );
+}
 
 export default function Home() {
   const [isPlayingHero, setIsPlayingHero] = useState(false);
   const [currency, setCurrency] = useState<"COP" | "USD">("COP");
   const [activeComposerFilter, setActiveComposerFilter] = useState("todos");
+  const [featuredComposersData, setFeaturedComposersData] = useState<{
+    tabs: any[];
+    all_composers: any[];
+  }>({
+    tabs: [],
+    all_composers: [],
+  });
   const [audioDuration, setAudioDuration] = useState<number | null>(null);
   const [audioCurrentTime, setAudioCurrentTime] = useState<number>(0);
 
@@ -174,9 +248,41 @@ export default function Home() {
       } catch (err) {
         console.warn("Error cargando CMS Hero en home:", err);
       }
+
+      // Cargar Compositores Destacados dinámicos desde Medusa / PostgreSQL
+      try {
+        const compRes = await getStoreFeaturedComposers();
+        if (compRes && compRes.tabs) {
+          setFeaturedComposersData({
+            tabs: compRes.tabs || [],
+            all_composers: compRes.all_composers || [],
+          });
+        }
+      } catch (err) {
+        console.warn("Error cargando compositores destacados en home:", err);
+      }
     }
     fetchHero();
   }, []);
+
+  // Tabs dinámicos para compositores destacados (filtrando los que no tienen compositores activos)
+  const visibleTabs = [
+    ...(featuredComposersData.all_composers && featuredComposersData.all_composers.length > 0
+      ? [{ id: "todos", label: "Todos" }]
+      : []),
+    ...(featuredComposersData.tabs || []).map((t: any) => ({ id: t.id, label: t.name })),
+  ];
+
+  const displayedComposers =
+    activeComposerFilter === "todos"
+      ? featuredComposersData.all_composers || []
+      : (featuredComposersData.tabs?.find((t: any) => t.id === activeComposerFilter)?.composers || []);
+
+  useEffect(() => {
+    if (visibleTabs.length > 0 && !visibleTabs.some((t) => t.id === activeComposerFilter)) {
+      setActiveComposerFilter(visibleTabs[0].id);
+    }
+  }, [visibleTabs, activeComposerFilter]);
 
   return (
     <div className="min-h-screen bg-[#F9F9FF] text-[#111C2D] flex flex-col font-inter antialiased selection:bg-[#FBB03B]/30 selection:text-[#111C2D]">
@@ -258,7 +364,9 @@ export default function Home() {
                       <span className="w-3 h-3 rounded-full bg-[#C1272D]/70"></span>
                       <span className="w-3 h-3 rounded-full bg-[#FBB03B]"></span>
                       <span className="w-3 h-3 rounded-full bg-[#0071BC]"></span>
-                      <span className="ml-2 text-[10px] font-bold text-[#4C4546] uppercase tracking-widest font-montserrat">{heroData.featured_badge_text || "Urtext Edición No. 042"}</span>
+                      <span className="ml-2 text-[10px] font-bold text-[#4C4546] uppercase tracking-widest font-montserrat">
+                        Edición Urtext Certificada
+                      </span>
                     </div>
                     <span className="px-2.5 py-1 rounded-full bg-[#F0F3FF] text-[10px] font-bold text-[#0071BC] font-montserrat">{heroData.featured_ismn}</span>
                   </div>
@@ -382,26 +490,15 @@ export default function Home() {
 
 
 
-                  {/* Card Footer */}
-                  <div className="mt-4 flex items-center justify-between text-[#4C4546] text-xs">
-                    <span className="flex items-center gap-1 font-medium">
-                      <span className="material-symbols-outlined text-sm text-[#0071BC]">picture_as_pdf</span>
-                      Formato Vectorial · Urtext
-                    </span>
-                    <Link href={heroData.featured_link_url} className="text-xs font-bold text-[#111C2D] hover:underline flex items-center gap-0.5 font-montserrat">
-                      Ver Partitura <span className="material-symbols-outlined text-xs">north_east</span>
+                  {/* Card Footer: Solo botón Ver Partitura */}
+                  <div className="mt-5 pt-4 border-t border-black/5 flex items-center justify-end">
+                    <Link
+                      href={heroData.featured_link_url || "/tienda"}
+                      className="px-5 py-2.5 bg-[#111C2D] hover:bg-[#0071BC] text-white rounded-xl text-xs font-bold font-montserrat transition flex items-center gap-2 shadow-sm group"
+                    >
+                      <span>Ver Partitura</span>
+                      <span className="material-symbols-outlined text-sm group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform">north_east</span>
                     </Link>
-                  </div>
-                </div>
-
-                {/* Overlapping Badge Accent Dinámico */}
-                <div className="absolute -bottom-4 -left-4 hidden sm:flex items-center gap-3 px-4 py-2.5 rounded-2xl bg-white shadow-xl border border-black/5">
-                  <div className="w-9 h-9 rounded-xl bg-[#FBB03B]/20 flex items-center justify-center text-[#111C2D]">
-                    <span className="material-symbols-outlined text-lg">piano</span>
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase font-bold text-[#4C4546] leading-tight font-montserrat">Calidad Editorial</p>
-                    <p className="text-xs text-[#111C2D] font-black font-montserrat">{heroData.featured_badge_text || "100% Alta Resolución"}</p>
                   </div>
                 </div>
               </div>
@@ -517,128 +614,38 @@ export default function Home() {
               </div>
 
               {/* Filter Pills Tabs */}
-              <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-2xl bg-[#F0F3FF] self-start md:self-auto border border-black/5">
-                {[
-                  { id: "todos", label: "Todos" },
-                  { id: "historico", label: "Patrimonio Histórico" },
-                  { id: "contemporaneo", label: "Contemporáneos" },
-                  { id: "mujeres", label: "Mujeres Compositoras" },
-                ].map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveComposerFilter(tab.id)}
-                    className={`px-3.5 py-1.5 rounded-xl text-xs font-montserrat font-bold transition-colors ${
-                      activeComposerFilter === tab.id
-                        ? "bg-[#111C2D] text-white shadow-xs"
-                        : "text-[#4C4546] hover:text-[#111C2D]"
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
+              {visibleTabs.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-2xl bg-[#F0F3FF] self-start md:self-auto border border-black/5">
+                  {visibleTabs.map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveComposerFilter(tab.id)}
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-montserrat font-bold transition-colors ${
+                        activeComposerFilter === tab.id
+                          ? "bg-[#111C2D] text-white shadow-xs"
+                          : "text-[#4C4546] hover:text-[#111C2D]"
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Grid Dynamic Profiles with circular portraits & golden glow */}
+            {displayedComposers.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                {displayedComposers.map((comp: any) => (
+                  <FeaturedComposerCard key={comp.id} comp={comp} />
                 ))}
               </div>
-            </div>
-
-            {/* Grid 4 Profiles with circular portraits & golden glow */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              
-              {/* 1. Luis A. Calvo */}
-              <div className="group flex flex-col items-center text-center p-6 rounded-2xl bg-white border border-black/5 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
-                <div className="relative w-28 h-28 mb-4">
-                  <div className="absolute inset-0 rounded-full bg-[#FBB03B]/40 blur-md group-hover:blur-lg group-hover:scale-110 transition-all"></div>
-                  <div className="relative w-28 h-28 rounded-full bg-[#F0F3FF] border-2 border-white flex items-center justify-center text-3xl font-montserrat font-black text-[#111C2D] shadow-md">
-                    LC
-                  </div>
-                  <span className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-[#111C2D] text-white flex items-center justify-center text-xs shadow">
-                    <span className="material-symbols-outlined text-sm">piano</span>
-                  </span>
-                </div>
-                <h4 className="text-lg font-bold font-montserrat text-[#111C2D] group-hover:text-[#0071BC] transition-colors">Luis A. Calvo</h4>
-                <span className="text-[11px] font-bold text-[#4C4546] uppercase tracking-wider mt-0.5 font-montserrat">1882 – 1945 · Boyacá</span>
-                <p className="text-xs text-[#4C4546] mt-2 line-clamp-2 leading-relaxed">
-                  El máximo maestro de la poesía romántica para piano. Creador de pasillos inmortales como Malvaloca y Lejano Azul.
-                </p>
-                <div className="mt-6 pt-3 flex items-center justify-between w-full border-t border-black/5 text-xs">
-                  <span className="font-bold text-[#0071BC]">42 Partituras</span>
-                  <Link href="/compositores/luis-a-calvo" className="font-bold text-[#111C2D] hover:underline flex items-center font-montserrat">
-                    Ver perfil <span className="material-symbols-outlined text-xs ml-0.5">chevron_right</span>
-                  </Link>
-                </div>
+            ) : (
+              <div className="py-12 text-center text-[#4C4546] bg-[#F0F3FF]/50 rounded-2xl border border-dashed border-black/10">
+                <span className="material-symbols-outlined text-4xl text-[#111C2D]/30 mb-2">person_search</span>
+                <p className="text-sm font-montserrat font-medium">No hay compositores configurados para esta categoría en este momento.</p>
               </div>
-
-              {/* 2. Pedro Morales Pino */}
-              <div className="group flex flex-col items-center text-center p-6 rounded-2xl bg-white border border-black/5 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
-                <div className="relative w-28 h-28 mb-4">
-                  <div className="absolute inset-0 rounded-full bg-[#0071BC]/40 blur-md group-hover:blur-lg group-hover:scale-110 transition-all"></div>
-                  <div className="relative w-28 h-28 rounded-full bg-[#F0F3FF] border-2 border-white flex items-center justify-center text-3xl font-montserrat font-black text-[#0071BC] shadow-md">
-                    PM
-                  </div>
-                  <span className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-[#0071BC] text-white flex items-center justify-center text-xs shadow">
-                    <span className="material-symbols-outlined text-sm">music_note</span>
-                  </span>
-                </div>
-                <h4 className="text-lg font-bold font-montserrat text-[#111C2D] group-hover:text-[#0071BC] transition-colors">Pedro Morales Pino</h4>
-                <span className="text-[11px] font-bold text-[#4C4546] uppercase tracking-wider mt-0.5 font-montserrat">1863 – 1926 · Cartago</span>
-                <p className="text-xs text-[#4C4546] mt-2 line-clamp-2 leading-relaxed">
-                  Pionero de la notación musical andina. Sistematizó el bambuco y el pasillo para piano y ensambles instrumentales.
-                </p>
-                <div className="mt-6 pt-3 flex items-center justify-between w-full border-t border-black/5 text-xs">
-                  <span className="font-bold text-[#0071BC]">28 Partituras</span>
-                  <Link href="/compositores/pedro-morales-pino" className="font-bold text-[#111C2D] hover:underline flex items-center font-montserrat">
-                    Ver perfil <span className="material-symbols-outlined text-xs ml-0.5">chevron_right</span>
-                  </Link>
-                </div>
-              </div>
-
-              {/* 3. Teresa Tanco de H. */}
-              <div className="group flex flex-col items-center text-center p-6 rounded-2xl bg-white border border-black/5 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
-                <div className="relative w-28 h-28 mb-4">
-                  <div className="absolute inset-0 rounded-full bg-[#FBB03B]/40 blur-md group-hover:blur-lg group-hover:scale-110 transition-all"></div>
-                  <div className="relative w-28 h-28 rounded-full bg-[#F0F3FF] border-2 border-white flex items-center justify-center text-3xl font-montserrat font-black text-[#111C2D] shadow-md">
-                    TT
-                  </div>
-                  <span className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-[#FBB03B] text-[#111C2D] flex items-center justify-center text-xs shadow">
-                    <span className="material-symbols-outlined text-sm">star</span>
-                  </span>
-                </div>
-                <h4 className="text-lg font-bold font-montserrat text-[#111C2D] group-hover:text-[#0071BC] transition-colors">Teresa Tanco de H.</h4>
-                <span className="text-[11px] font-bold text-[#4C4546] uppercase tracking-wider mt-0.5 font-montserrat">1859 – 1946 · Bogotá</span>
-                <p className="text-xs text-[#4C4546] mt-2 line-clamp-2 leading-relaxed">
-                  Gran pionera de la composición académica y pianística en Colombia. Primera autora de zarzuelas y polkas de salón.
-                </p>
-                <div className="mt-6 pt-3 flex items-center justify-between w-full border-t border-black/5 text-xs">
-                  <span className="font-bold text-[#0071BC]">14 Partituras</span>
-                  <Link href="/compositores" className="font-bold text-[#111C2D] hover:underline flex items-center font-montserrat">
-                    Ver perfil <span className="material-symbols-outlined text-xs ml-0.5">chevron_right</span>
-                  </Link>
-                </div>
-              </div>
-
-              {/* 4. Adolfo Mejía */}
-              <div className="group flex flex-col items-center text-center p-6 rounded-2xl bg-white border border-black/5 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
-                <div className="relative w-28 h-28 mb-4">
-                  <div className="absolute inset-0 rounded-full bg-[#0071BC]/40 blur-md group-hover:blur-lg group-hover:scale-110 transition-all"></div>
-                  <div className="relative w-28 h-28 rounded-full bg-[#F0F3FF] border-2 border-white flex items-center justify-center text-3xl font-montserrat font-black text-[#111C2D] shadow-md">
-                    AM
-                  </div>
-                  <span className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-[#111C2D] text-white flex items-center justify-center text-xs shadow">
-                    <span className="material-symbols-outlined text-sm">waves</span>
-                  </span>
-                </div>
-                <h4 className="text-lg font-bold font-montserrat text-[#111C2D] group-hover:text-[#0071BC] transition-colors">Adolfo Mejía</h4>
-                <span className="text-[11px] font-bold text-[#4C4546] uppercase tracking-wider mt-0.5 font-montserrat">1905 – 1973 · Cartagena</span>
-                <p className="text-xs text-[#4C4546] mt-2 line-clamp-2 leading-relaxed">
-                  Impresionismo caribeño en su máxima expresión. Fusión magistral entre el influjo francés de Ravel y los ritmos del litoral.
-                </p>
-                <div className="mt-6 pt-3 flex items-center justify-between w-full border-t border-black/5 text-xs">
-                  <span className="font-bold text-[#0071BC]">19 Partituras</span>
-                  <Link href="/compositores/adolfo-mejia" className="font-bold text-[#111C2D] hover:underline flex items-center font-montserrat">
-                    Ver perfil <span className="material-symbols-outlined text-xs ml-0.5">chevron_right</span>
-                  </Link>
-                </div>
-              </div>
-
-            </div>
+            )}
 
             {/* Extended Composers Chips Row & Link */}
             <div className="mt-10 p-4 rounded-2xl bg-[#F0F3FF] border border-black/5 flex flex-col md:flex-row items-center justify-between gap-4">
@@ -772,12 +779,16 @@ export default function Home() {
                           {currency === "COP" ? `~$${score.priceUSD} USD` : `~$${score.priceCOP.toLocaleString('es-CO')} COP`}
                         </span>
                       </div>
-                      <Link
-                        href={`/partitura/${score.slug}`}
-                        className="p-3 rounded-xl bg-[#111C2D] text-white hover:bg-[#FBB03B] hover:text-[#111C2D] transition-all shadow-xs flex items-center justify-center"
-                      >
-                        <span className="material-symbols-outlined text-lg">add_shopping_cart</span>
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <SaveScoreButton score={score} variant="icon" />
+                        <Link
+                          href={`/partitura/${score.slug}`}
+                          className="p-2.5 rounded-xl bg-[#111C2D] text-white hover:bg-[#FBB03B] hover:text-[#111C2D] transition-all shadow-xs flex items-center justify-center"
+                          title="Ver partitura"
+                        >
+                          <span className="material-symbols-outlined text-lg">add_shopping_cart</span>
+                        </Link>
+                      </div>
                     </div>
                   </div>
 

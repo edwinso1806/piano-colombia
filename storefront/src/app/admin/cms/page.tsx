@@ -9,10 +9,14 @@ import {
   updateHeroCmsAdmin,
   getAdminCmsCategories,
   updateAdminCmsCategories,
+  getAdminFeaturedComposers,
+  updateAdminFeaturedComposers,
 } from "@/lib/api-client";
 
 export default function AdminCMSPage() {
-  const [activeTab, setActiveTab] = useState<"hero" | "featured_score" | "stats" | "categories" | "metadata" | "legals">("hero");
+  const [activeTab, setActiveTab] = useState<
+    "hero" | "featured_score" | "stats" | "categories" | "featured_composers" | "metadata" | "legals"
+  >("hero");
   const [isSaved, setIsSaved] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
@@ -219,15 +223,29 @@ export default function AdminCMSPage() {
   const [newCatIsActive, setNewCatIsActive] = useState(true);
   const [editingIconIdx, setEditingIconIdx] = useState<number | null>(null);
 
+  // Estado de Compositores Destacados del Home
+  const [featuredTabs, setFeaturedTabs] = useState<any[]>([
+    { id: "historico", name: "Patrimonio Histórico", icon: "piano", composer_ids: [] },
+    { id: "contemporaneo", name: "Contemporáneos", icon: "music_note", composer_ids: [] },
+    { id: "mujeres", name: "Mujeres Compositoras", icon: "star", composer_ids: [] },
+  ]);
+  const [activeComposersDirectory, setActiveComposersDirectory] = useState<any[]>([]);
+  const [isSavingFeaturedComposers, setIsSavingFeaturedComposers] = useState(false);
+  const [editingComposerIconTabId, setEditingComposerIconTabId] = useState<string | null>(null);
+  const [selectedComposerToAdd, setSelectedComposerToAdd] = useState<{ [tabId: string]: string }>({});
+
   const POPULAR_ICONS = [
     { name: "piano", label: "Piano" },
+    { name: "music_note", label: "Partitura" },
+    { name: "star", label: "Pionera / Estrella" },
+    { name: "waves", label: "Caribe / Litoral" },
+    { name: "history_edu", label: "Histórico" },
     { name: "group", label: "Dúo / 4 Manos" },
     { name: "stadium", label: "Orquesta" },
     { name: "diversity_3", label: "Cámara" },
     { name: "school", label: "Pedagógico" },
     { name: "graphic_eq", label: "Electrónica" },
     { name: "library_music", label: "Archivo" },
-    { name: "music_note", label: "Partitura" },
     { name: "headphones", label: "Audio" },
     { name: "mic", label: "Canto / Voz" },
     { name: "theater_comedy", label: "Teatro" },
@@ -295,6 +313,25 @@ export default function AdminCMSPage() {
           }
         } catch (e: any) {
           console.warn("Fallo cargando categorías de BD:", e.message);
+        }
+
+        // Cargar compositores destacados desde backend
+        try {
+          const compData = await getAdminFeaturedComposers();
+          if (compData && compData.tabs && Array.isArray(compData.tabs) && compData.tabs.length > 0) {
+            const normalizedTabs = compData.tabs.map((t: any) => ({
+              ...t,
+              composer_ids: Array.isArray(t.composer_ids)
+                ? t.composer_ids
+                : (Array.isArray(t.composers) ? t.composers.map((c: any) => c.id) : []),
+            }));
+            setFeaturedTabs(normalizedTabs);
+          }
+          if (compData && compData.active_composers_directory && Array.isArray(compData.active_composers_directory)) {
+            setActiveComposersDirectory(compData.active_composers_directory);
+          }
+        } catch (e: any) {
+          console.warn("Fallo cargando compositores destacados de BD:", e.message);
         }
       } catch (err: any) {
         console.warn("Error cargando metadatos o CMS de BD:", err.message);
@@ -536,6 +573,70 @@ export default function AdminCMSPage() {
     setDifficulties(difficulties.filter((d) => d !== diff));
   };
 
+  const handleUpdateFeaturedTabName = (tabId: string, newName: string) => {
+    setFeaturedTabs((prev) =>
+      prev.map((t) => (t.id === tabId ? { ...t, name: newName } : t))
+    );
+  };
+
+  const handleUpdateFeaturedTabIcon = (tabId: string, newIcon: string) => {
+    setFeaturedTabs((prev) =>
+      prev.map((t) => (t.id === tabId ? { ...t, icon: newIcon } : t))
+    );
+  };
+
+  const handleAddComposerToTab = (tabId: string, composerId: string) => {
+    if (!composerId) return;
+    setFeaturedTabs((prev) =>
+      prev.map((t) => {
+        if (t.id !== tabId) return t;
+        const currentIds = Array.isArray(t.composer_ids) ? t.composer_ids : [];
+        if (currentIds.includes(composerId)) return t;
+        if (currentIds.length >= 8) {
+          alert("Máximo 8 compositores permitidos en esta pestaña.");
+          return t;
+        }
+        return { ...t, composer_ids: [...currentIds, composerId] };
+      })
+    );
+    setSelectedComposerToAdd((prev) => ({ ...prev, [tabId]: "" }));
+  };
+
+  const handleRemoveComposerFromTab = (tabId: string, composerId: string) => {
+    setFeaturedTabs((prev) =>
+      prev.map((t) => {
+        if (t.id !== tabId) return t;
+        const currentIds = Array.isArray(t.composer_ids) ? t.composer_ids : [];
+        return {
+          ...t,
+          composer_ids: currentIds.filter((id: string) => id !== composerId),
+        };
+      })
+    );
+  };
+
+  const handleSaveFeaturedComposers = async () => {
+    setIsSavingFeaturedComposers(true);
+    setFeedback(null);
+    try {
+      const res = await updateAdminFeaturedComposers(featuredTabs);
+      if (res && res.tabs) {
+        setFeaturedTabs(res.tabs);
+      }
+      setFeedback({
+        type: "success",
+        message: "✅ Pestañas y compositores destacados actualizados y persistidos en PostgreSQL.",
+      });
+    } catch (err: any) {
+      setFeedback({
+        type: "error",
+        message: err.message || "Error al guardar compositores destacados.",
+      });
+    } finally {
+      setIsSavingFeaturedComposers(false);
+    }
+  };
+
   return (
     <div className="space-y-8 text-[#111C2D]">
       
@@ -640,6 +741,19 @@ export default function AdminCMSPage() {
         >
           <span className="material-symbols-outlined text-base text-[#0071BC]">grid_view</span>
           Categorías Principales (BD & Home)
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("featured_composers")}
+          className={`flex items-center gap-2 px-5 py-3 font-extrabold text-xs rounded-t-xl transition border-b-2 whitespace-nowrap cursor-pointer ${
+            activeTab === "featured_composers"
+              ? "bg-white text-[#111C2D] border-[#FBB03B] shadow-2xs"
+              : "text-[#4C4546] hover:text-[#111C2D] border-transparent hover:bg-white/60"
+          }`}
+        >
+          <span className="material-symbols-outlined text-base text-[#0071BC]">groups</span>
+          Compositores Destacados (Home)
         </button>
 
         <button
@@ -2105,6 +2219,294 @@ export default function AdminCMSPage() {
               </button>
             </div>
 
+          </div>
+        )}
+
+        {/* ==========================================
+               TAB: COMPOSITORES DESTACADOS (HOME)
+               ========================================== */}
+        {activeTab === "featured_composers" && (
+          <div className="space-y-8">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#F0F3FF] border border-[#0071BC]/10 text-[#0071BC] text-[11px] font-extrabold uppercase tracking-wider mb-2 font-montserrat">
+                  <span className="material-symbols-outlined text-xs">groups</span>
+                  Sección Home • Compositores Destacados
+                </div>
+                <h2 className="text-2xl font-black font-montserrat text-[#111C2D]">
+                  Pestañas y Compositores Asignados
+                </h2>
+                <p className="text-xs text-[#4C4546] font-medium max-w-3xl leading-relaxed mt-1">
+                  Personalice los nombres de las 3 pestañas temáticas, seleccione el ícono representativo de su categoría y asigne hasta 8 compositores activos por pestaña. Las pestañas sin compositores asignados se ocultarán automáticamente en la portada pública.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                disabled={isSavingFeaturedComposers}
+                onClick={handleSaveFeaturedComposers}
+                className="px-6 py-3 bg-[#0071BC] hover:bg-[#005a96] text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition font-montserrat flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shrink-0"
+              >
+                {isSavingFeaturedComposers ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    <span>Guardando en BD...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-lg">save</span>
+                    <span>Guardar Compositores en BD</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Listado de las 3 Pestañas Fijas Administrables */}
+            <div className="space-y-6">
+              {featuredTabs.map((tab) => {
+                const tabComposerIds = Array.isArray(tab.composer_ids)
+                  ? tab.composer_ids
+                  : (Array.isArray(tab.composers) ? tab.composers.map((c: any) => c.id) : []);
+
+                const availableComposers = activeComposersDirectory.filter(
+                  (c) => !tabComposerIds.includes(c.id)
+                );
+
+                return (
+                  <div
+                    key={tab.id}
+                    className="p-6 rounded-3xl bg-white border border-black/5 shadow-sm space-y-5 relative overflow-hidden"
+                  >
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-black/5 pb-4">
+                      {/* Cabecera del Tab con ID y Nombre Editable */}
+                      <div className="flex flex-1 flex-col sm:flex-row sm:items-center gap-4">
+                        <div className="w-12 h-12 rounded-2xl bg-[#F0F3FF] flex items-center justify-center text-[#0071BC] shrink-0 border border-black/5">
+                          <span className="material-symbols-outlined text-2xl">{tab.icon || "piano"}</span>
+                        </div>
+
+                        <div className="flex-1 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] uppercase font-bold text-slate-400 font-mono">
+                              Pestaña ID: {tab.id}
+                            </span>
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full font-montserrat ${
+                                tabComposerIds.length > 0
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                  : "bg-slate-100 text-slate-500"
+                              }`}
+                            >
+                              {tabComposerIds.length > 0 ? "Visible en Home" : "Oculta en Home (0 asignados)"}
+                            </span>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-[#111C2D] font-montserrat mb-1">
+                              Nombre Visible de la Pestaña *
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={tab.name}
+                              onChange={(e) => handleUpdateFeaturedTabName(tab.id, e.target.value)}
+                              placeholder="Ej: Patrimonio Histórico"
+                              className="w-full sm:max-w-md bg-[#F0F3FF] border border-black/10 rounded-xl px-4 py-2 text-xs font-bold text-[#111C2D] font-montserrat focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Selector de Ícono de Categoría y Contador */}
+                      <div className="flex items-center gap-4 shrink-0">
+                        <div className="relative">
+                          <label className="block text-[11px] font-bold text-[#111C2D] mb-1 font-montserrat">
+                            Ícono de Categoría
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setEditingComposerIconTabId(
+                                editingComposerIconTabId === tab.id ? null : tab.id
+                              )
+                            }
+                            className="px-3 py-2 bg-[#F0F3FF] hover:bg-slate-200 text-[#111C2D] rounded-xl text-xs font-bold font-montserrat transition flex items-center gap-2 border border-black/5"
+                          >
+                            <span className="material-symbols-outlined text-base text-[#0071BC]">
+                              {tab.icon || "piano"}
+                            </span>
+                            <span>{tab.icon || "piano"}</span>
+                            <span className="material-symbols-outlined text-sm text-slate-400">expand_more</span>
+                          </button>
+
+                          {/* Popover selector de íconos */}
+                          {editingComposerIconTabId === tab.id && (
+                            <div className="absolute right-0 top-full mt-2 w-64 p-3 bg-white border border-black/10 rounded-2xl shadow-xl z-20 space-y-2 animate-in fade-in duration-150">
+                              <span className="text-[10px] uppercase font-bold text-slate-500 block font-montserrat">
+                                Seleccionar ícono de categoría:
+                              </span>
+                              <div className="grid grid-cols-3 gap-1.5 max-h-48 overflow-y-auto">
+                                {POPULAR_ICONS.map((ico) => (
+                                  <button
+                                    key={ico.name}
+                                    type="button"
+                                    onClick={() => {
+                                      handleUpdateFeaturedTabIcon(tab.id, ico.name);
+                                      setEditingComposerIconTabId(null);
+                                    }}
+                                    className={`p-2 rounded-xl flex flex-col items-center gap-1 border transition cursor-pointer ${
+                                      tab.icon === ico.name
+                                        ? "bg-[#0071BC] text-white border-[#0071BC]"
+                                        : "bg-[#F0F3FF] text-[#111C2D] border-transparent hover:bg-slate-200"
+                                    }`}
+                                  >
+                                    <span className="material-symbols-outlined text-lg">{ico.name}</span>
+                                    <span className="text-[9px] font-montserrat truncate w-full text-center">
+                                      {ico.label}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Contador de Cupos */}
+                        <div>
+                          <label className="block text-[11px] font-bold text-[#111C2D] mb-1 font-montserrat text-right">
+                            Capacidad
+                          </label>
+                          <span className="inline-block px-3 py-2 bg-[#F0F3FF] rounded-xl text-xs font-black font-montserrat text-[#111C2D] border border-black/5">
+                            {tabComposerIds.length} / 8
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Selector y Asignación de Compositores Activos */}
+                    <div className="space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <span className="text-xs font-bold text-[#111C2D] font-montserrat">
+                          Compositores asignados a esta pestaña ({tabComposerIds.length} de máx. 8):
+                        </span>
+
+                        {tabComposerIds.length < 8 && availableComposers.length > 0 && (
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={selectedComposerToAdd[tab.id] || ""}
+                              onChange={(e) =>
+                                setSelectedComposerToAdd((prev) => ({
+                                  ...prev,
+                                  [tab.id]: e.target.value,
+                                }))
+                              }
+                              className="bg-[#F0F3FF] border border-black/10 rounded-xl px-3 py-2 text-xs font-bold text-[#111C2D] font-montserrat focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                            >
+                              <option value="">Seleccionar compositor activo...</option>
+                              {availableComposers.map((c) => (
+                                <option key={c.id} value={c.id}>
+                                  {c.name} ({c.scoreCount} partituras)
+                                </option>
+                              ))}
+                            </select>
+
+                            <button
+                              type="button"
+                              disabled={!selectedComposerToAdd[tab.id]}
+                              onClick={() => handleAddComposerToTab(tab.id, selectedComposerToAdd[tab.id])}
+                              className="px-3.5 py-2 bg-[#111C2D] hover:bg-[#0071BC] text-white text-xs font-bold font-montserrat rounded-xl transition disabled:opacity-40 cursor-pointer shrink-0"
+                            >
+                              + Agregar
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Chips de Compositores Asignados */}
+                      {tabComposerIds.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                          {tabComposerIds.map((cId: string) => {
+                            const comp = activeComposersDirectory.find((c) => c.id === cId);
+                            if (!comp) return null;
+
+                            return (
+                              <div
+                                key={cId}
+                                className="p-3 bg-[#F9F9FF] border border-black/5 rounded-2xl flex items-center justify-between gap-2 shadow-2xs hover:border-[#0071BC]/30 transition group"
+                              >
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div className="w-8 h-8 rounded-full bg-[#0071BC] text-white flex items-center justify-center font-montserrat font-black text-xs shrink-0 overflow-hidden">
+                                    {comp.photo_url ? (
+                                      <img src={comp.photo_url} alt={comp.name} className="w-full h-full object-cover" />
+                                    ) : (
+                                      comp.name.substring(0, 2).toUpperCase()
+                                    )}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <span className="font-bold text-xs text-[#111C2D] block truncate font-montserrat">
+                                      {comp.name}
+                                    </span>
+                                    <span className="text-[10px] text-[#4C4546] block truncate">
+                                      {comp.scoreCount} {comp.scoreCount === 1 ? "partitura" : "partituras"}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveComposerFromTab(tab.id, cId)}
+                                  title="Quitar de esta pestaña"
+                                  className="w-6 h-6 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 flex items-center justify-center text-xs font-black transition shrink-0 cursor-pointer"
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/60 text-center text-xs text-slate-500 space-y-1 font-montserrat">
+                          <span className="material-symbols-outlined text-lg block text-slate-400">person_off</span>
+                          <span className="font-bold block text-slate-600">No hay compositores asignados a esta pestaña</span>
+                          <span className="text-[11px] block text-slate-400">
+                            Esta pestaña permanecerá oculta en la página de inicio hasta que agregues al menos 1 compositor activo.
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Banner inferior de guardado */}
+            <div className="p-6 bg-slate-50 border border-slate-200 rounded-3xl flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div>
+                <span className="text-xs font-bold text-[#111C2D] block font-montserrat">
+                  Persistencia en Base de Datos PostgreSQL
+                </span>
+                <p className="text-xs text-[#4C4546]">
+                  Los cambios se almacenan en <code>platform_settings</code> (clave <code>home_featured_composers</code>) y se sincronizan en tiempo real con la portada.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                disabled={isSavingFeaturedComposers}
+                onClick={handleSaveFeaturedComposers}
+                className="w-full sm:w-auto px-8 py-3.5 bg-[#0071BC] hover:bg-[#005a96] text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition font-montserrat flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shrink-0"
+              >
+                {isSavingFeaturedComposers ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    <span>Guardando en BD...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-lg">save</span>
+                    <span>Guardar Compositores en BD</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         )}
 
