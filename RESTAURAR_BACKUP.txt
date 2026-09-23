@@ -1,0 +1,78 @@
+================================================================================
+GUIA PASO A PASO: RESTAURACION DE BASE DE DATOS (PIANO COLOMBIA)
+Archivo de respaldo: backup_piano_colombia.sql
+Motor: PostgreSQL 13+ (compatible con PostgreSQL 13, 14, 15, 16)
+Base de datos destino: piano_colombia_db
+================================================================================
+
+El archivo de backup "backup_piano_colombia.sql" contiene la estructura de tablas,
+migraciones de MedusaJS v2, secuencias, relaciones y datos del proyecto Piano Colombia.
+El dump incluye sentencias DROP IF EXISTS automáticas (--clean --if-exists) para
+facilitar la sobreescritura limpia.
+
+--------------------------------------------------------------------------------
+OPCION 1: RESTAURACION POR CONSOLA (RECOMENDADA - PowerShell / CMD / Bash)
+--------------------------------------------------------------------------------
+
+Paso 1: Abrir la consola en la raíz del proyecto donde se encuentra este archivo.
+
+Paso 2: (Opcional) Si la base de datos "piano_colombia_db" NO existe en tu PostgreSQL,
+creala ejecutando:
+
+  [PowerShell / CMD]
+  psql -U postgres -h localhost -p 5432 -c "CREATE DATABASE piano_colombia_db;"
+
+  * Nota: Si te solicita contraseña, ingresa la clave de tu usuario postgres.
+
+Paso 3: Restaurar el archivo SQL en la base de datos:
+
+  En Windows PowerShell:
+  ---------------------
+  $env:PGPASSWORD="TU_PASSWORD_AQUI"
+  psql -U postgres -h localhost -p 5432 -d piano_colombia_db -f backup_piano_colombia.sql
+
+  O directamente interactivo solicitando contraseña:
+  psql -U postgres -h localhost -p 5432 -d piano_colombia_db -f backup_piano_colombia.sql
+
+  En Linux / macOS / Git Bash:
+  ---------------------------
+  PGPASSWORD="TU_PASSWORD_AQUI" psql -U postgres -h localhost -p 5432 -d piano_colombia_db -f backup_piano_colombia.sql
+
+--------------------------------------------------------------------------------
+OPCION 2: RESTAURACION DESDE pgAdmin 4 (Interfaz Grafica)
+--------------------------------------------------------------------------------
+
+1. Abre pgAdmin 4 e inicia sesión en tu servidor PostgreSQL local o remoto.
+2. En el panel izquierdo (Object Explorer), expande: Servers > PostgreSQL > Databases.
+3. Si no existe la base de datos:
+   - Clic derecho en "Databases" -> "Create" -> "Database...".
+   - Nombre: piano_colombia_db. Clic en "Save".
+4. Selecciona la base de datos "piano_colombia_db".
+5. Abre la herramienta Query Tool (Herramientas > Query Tool o clic derecho > Query Tool).
+6. Clic en el icono de carpeta ("Open File" / Abrir archivo) en la barra superior.
+7. Selecciona el archivo "backup_piano_colombia.sql" ubicado en la raíz de este proyecto.
+8. Presiona el botón "Execute" (icono de triángulo / F5).
+9. Al finalizar verás el mensaje de ejecución exitosa en el panel inferior.
+
+--------------------------------------------------------------------------------
+OPCION 3: RESTAURACION EN DOCKER (Si usas un contenedor PostgreSQL)
+--------------------------------------------------------------------------------
+
+Si tu PostgreSQL corre en un contenedor de Docker llamado por ejemplo "piano-colombia-postgres":
+
+1. Copia el archivo al contenedor o ejecútalo mediante pipe:
+   docker exec -i piano-colombia-postgres psql -U postgres -d piano_colombia_db < backup_piano_colombia.sql
+
+--------------------------------------------------------------------------------
+PASOS FINALES Y VERIFICACION
+--------------------------------------------------------------------------------
+
+1. Configura el archivo backend/.env con la cadena de conexión correcta:
+   DATABASE_URL=postgres://postgres:TU_PASSWORD@localhost:5432/piano_colombia_db
+
+2. Inicia el backend de Medusa para verificar que levante sin errores:
+   cd backend
+   npm run dev
+
+3. Accede al admin de Medusa en http://localhost:9000/app o al Storefront en http://localhost:3000.
+================================================================================
