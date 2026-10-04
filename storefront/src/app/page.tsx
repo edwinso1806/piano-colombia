@@ -7,7 +7,7 @@ import { MOCK_COMPOSERS, MOCK_SCORES } from "@/lib/mock-data";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SaveScoreButton from "@/components/SaveScoreButton";
-import { getHeroCms, getCmsCategories, getStoreFeaturedComposers } from "@/lib/api-client";
+import { getHeroCms, getCmsCategories, getStoreFeaturedComposers, getStoreFeaturedScores, getStoreBlogPosts } from "@/lib/api-client";
 
 function FeaturedComposerCard({ comp }: { comp: any }) {
   const [imgError, setImgError] = useState(false);
@@ -82,10 +82,17 @@ export default function Home() {
   const [featuredComposersData, setFeaturedComposersData] = useState<{
     tabs: any[];
     all_composers: any[];
+    recent_composers: any[];
+    total_registered_composers: number;
   }>({
     tabs: [],
     all_composers: [],
+    recent_composers: [],
+    total_registered_composers: 0,
   });
+  const [featuredScores, setFeaturedScores] = useState<any[]>([]);
+  const [isLoadingFeaturedScores, setIsLoadingFeaturedScores] = useState(true);
+  const [blogPosts, setBlogPosts] = useState<any[]>([]);
   const [audioDuration, setAudioDuration] = useState<number | null>(null);
   const [audioCurrentTime, setAudioCurrentTime] = useState<number>(0);
 
@@ -252,14 +259,39 @@ export default function Home() {
       // Cargar Compositores Destacados dinámicos desde Medusa / PostgreSQL
       try {
         const compRes = await getStoreFeaturedComposers();
-        if (compRes && compRes.tabs) {
+        if (compRes) {
           setFeaturedComposersData({
             tabs: compRes.tabs || [],
             all_composers: compRes.all_composers || [],
+            recent_composers: compRes.recent_composers || [],
+            total_registered_composers:
+              compRes.total_registered_composers ||
+              compRes.all_composers?.length ||
+              0,
           });
         }
       } catch (err) {
         console.warn("Error cargando compositores destacados en home:", err);
+      }
+
+      // Cargar Partituras Destacadas dinámicas desde Medusa / PostgreSQL
+      try {
+        const scoresRes = await getStoreFeaturedScores();
+        setFeaturedScores(scoresRes || []);
+      } catch (err) {
+        console.warn("Error cargando partituras destacadas en home:", err);
+      } finally {
+        setIsLoadingFeaturedScores(false);
+      }
+
+      // Cargar Artículos de Bitácora / Blog dinámicos
+      try {
+        const blogRes = await getStoreBlogPosts({ limit: 3 });
+        if (blogRes && Array.isArray(blogRes.posts)) {
+          setBlogPosts(blogRes.posts);
+        }
+      } catch (err) {
+        console.warn("Error cargando artículos de blog en home:", err);
       }
     }
     fetchHero();
@@ -647,26 +679,59 @@ export default function Home() {
               </div>
             )}
 
-            {/* Extended Composers Chips Row & Link */}
+            {/* Extended Composers Chips Row & Link Dinámicos */}
             <div className="mt-10 p-4 rounded-2xl bg-[#F0F3FF] border border-black/5 flex flex-col md:flex-row items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-2 justify-center md:justify-start text-xs">
-                <span className="font-bold text-[#111C2D] uppercase tracking-wider font-montserrat mr-1">Otros autores:</span>
-                <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white text-[#111C2D] font-medium shadow-2xs">
-                  <span className="w-2 h-2 rounded-full bg-[#111C2D]"></span> Oriol Rangel (1916–1977)
+                <span className="font-bold text-[#111C2D] uppercase tracking-wider font-montserrat mr-1">
+                  Otros autores:
                 </span>
-                <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white text-[#111C2D] font-medium shadow-2xs">
-                  <span className="w-2 h-2 rounded-full bg-[#FBB03B]"></span> Blas Emilio Atehortúa (1943–2020)
-                </span>
-                <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white text-[#111C2D] font-medium shadow-2xs">
-                  <span className="w-2 h-2 rounded-full bg-[#0071BC]"></span> Antonio María Valencia (1902–1952)
-                </span>
-                <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white text-[#111C2D] font-medium shadow-2xs">
-                  <span className="w-2 h-2 rounded-full bg-[#C1272D]"></span> Guillermo Uribe Holguín (1880–1971)
-                </span>
+                {featuredComposersData.recent_composers && featuredComposersData.recent_composers.length > 0 ? (
+                  featuredComposersData.recent_composers.map((comp: any, idx: number) => {
+                    const colors = ["bg-[#111C2D]", "bg-[#FBB03B]", "bg-[#0071BC]", "bg-[#C1272D]"];
+                    const dotColor = colors[idx % colors.length];
+                    return (
+                      <Link
+                        key={comp.id || idx}
+                        href={`/compositores/${comp.slug || comp.id}`}
+                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white text-[#111C2D] font-medium shadow-2xs hover:shadow-xs hover:border-[#0071BC]/40 border border-transparent transition cursor-pointer"
+                      >
+                        <span className={`w-2 h-2 rounded-full ${dotColor}`}></span>
+                        <span>{comp.name}</span>
+                        {comp.era && (
+                          <span className="text-slate-400 text-[11px] font-normal">({comp.era})</span>
+                        )}
+                      </Link>
+                    );
+                  })
+                ) : (
+                  <>
+                    <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white text-[#111C2D] font-medium shadow-2xs">
+                      <span className="w-2 h-2 rounded-full bg-[#111C2D]"></span> Oriol Rangel (1916–1977)
+                    </span>
+                    <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white text-[#111C2D] font-medium shadow-2xs">
+                      <span className="w-2 h-2 rounded-full bg-[#FBB03B]"></span> Blas Emilio Atehortúa (1943–2020)
+                    </span>
+                    <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white text-[#111C2D] font-medium shadow-2xs">
+                      <span className="w-2 h-2 rounded-full bg-[#0071BC]"></span> Antonio María Valencia (1902–1952)
+                    </span>
+                    <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white text-[#111C2D] font-medium shadow-2xs">
+                      <span className="w-2 h-2 rounded-full bg-[#C1272D]"></span> Guillermo Uribe Holguín (1880–1971)
+                    </span>
+                  </>
+                )}
               </div>
-              <Link href="/compositores" className="shrink-0 flex items-center gap-1 text-xs font-bold text-[#0071BC] hover:underline font-montserrat">
-                <span>Ver los 85+ Compositores</span>
-                <span className="material-symbols-outlined text-base">arrow_forward</span>
+              <Link
+                href="/compositores"
+                className="shrink-0 flex items-center gap-1.5 text-xs font-bold text-[#0071BC] hover:underline font-montserrat group"
+              >
+                <span>
+                  {featuredComposersData.total_registered_composers > 0
+                    ? `Ver los ${featuredComposersData.total_registered_composers} Compositores`
+                    : "Ver todos los Compositores"}
+                </span>
+                <span className="material-symbols-outlined text-base transition-transform group-hover:translate-x-1">
+                  arrow_forward
+                </span>
               </Link>
             </div>
 
@@ -675,186 +740,313 @@ export default function Home() {
 
         {/* ==========================================
                SECCIÓN 4: PARTITURAS DESTACADAS (STOREFRONT)
+               Se oculta automáticamente si no hay partituras seleccionadas
                ========================================== */}
-        <section className="w-full py-16 bg-[#F9F9FF]" id="catalogo">
-          <div className="max-w-7xl mx-auto px-6">
-            
-            <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-4">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#C1272D]"></span>
-                  <span className="text-xs font-extrabold text-[#C1272D] tracking-widest uppercase font-montserrat">Edición Digital Urtext</span>
+        {!isLoadingFeaturedScores && featuredScores.length === 0 ? null : (
+          <section className="w-full py-16 bg-[#F9F9FF]" id="catalogo">
+            <div className="max-w-7xl mx-auto px-6">
+              
+              <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#C1272D]"></span>
+                    <span className="text-xs font-extrabold text-[#C1272D] tracking-widest uppercase font-montserrat">Edición Digital Urtext</span>
+                  </div>
+                  <h2 className="text-3xl md:text-4xl font-black font-montserrat text-[#111C2D]">Partituras Destacadas</h2>
+                  <p className="text-sm text-[#4C4546] max-w-xl mt-1 leading-relaxed">
+                    Grabados limpios a 1200 DPI con digitaciones de concierto, comentarios críticos y descarga inmediata en PDF.
+                  </p>
                 </div>
-                <h2 className="text-3xl md:text-4xl font-black font-montserrat text-[#111C2D]">Partituras Destacadas</h2>
-                <p className="text-sm text-[#4C4546] max-w-xl mt-1 leading-relaxed">
-                  Grabados limpios a 1200 DPI con digitaciones de concierto, comentarios críticos y descarga inmediata en PDF.
-                </p>
+
+                {/* Currency Toggle Switch */}
+                <div className="flex items-center gap-2 bg-[#F0F3FF] p-1 rounded-xl border border-black/5 self-start md:self-auto">
+                  <span className="text-xs font-bold text-[#4C4546] px-2 font-montserrat">Moneda:</span>
+                  <button
+                    onClick={() => setCurrency("COP")}
+                    className={`px-3 py-1 rounded-lg text-xs font-montserrat font-bold transition-colors cursor-pointer ${
+                      currency === "COP" ? "bg-[#111C2D] text-white shadow-xs" : "text-[#4C4546] hover:text-[#111C2D]"
+                    }`}
+                  >
+                    COP
+                  </button>
+                  <button
+                    onClick={() => setCurrency("USD")}
+                    className={`px-3 py-1 rounded-lg text-xs font-montserrat font-bold transition-colors cursor-pointer ${
+                      currency === "USD" ? "bg-[#111C2D] text-white shadow-xs" : "text-[#4C4546] hover:text-[#111C2D]"
+                    }`}
+                  >
+                    USD
+                  </button>
+                </div>
               </div>
 
-              {/* Currency Toggle Switch */}
-              <div className="flex items-center gap-2 bg-[#F0F3FF] p-1 rounded-xl border border-black/5 self-start md:self-auto">
-                <span className="text-xs font-bold text-[#4C4546] px-2 font-montserrat">Moneda:</span>
-                <button
-                  onClick={() => setCurrency("COP")}
-                  className={`px-3 py-1 rounded-lg text-xs font-montserrat font-bold transition-colors ${
-                    currency === "COP" ? "bg-[#111C2D] text-white shadow-xs" : "text-[#4C4546] hover:text-[#111C2D]"
-                  }`}
-                >
-                  COP
-                </button>
-                <button
-                  onClick={() => setCurrency("USD")}
-                  className={`px-3 py-1 rounded-lg text-xs font-montserrat font-bold transition-colors ${
-                    currency === "USD" ? "bg-[#111C2D] text-white shadow-xs" : "text-[#4C4546] hover:text-[#111C2D]"
-                  }`}
-                >
-                  USD
-                </button>
+              {/* Grid de Partituras Destacadas Dinámicas (Hasta 6) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {featuredScores.map((score) => {
+                  const composerName =
+                    score.composer_name ||
+                    score.composer?.name ||
+                    (score.composer?.first_name ? `${score.composer.first_name} ${score.composer.last_name || ""}`.trim() : "Piano Colombia");
+                  const priceCOP = Number(score.price_cop ?? score.priceCOP ?? 0);
+                  const priceUSD = Number(score.price_usd ?? score.priceUSD ?? 0);
+                  const genre = score.genre || score.category || "PIANO SOLO";
+                  const difficulty = score.difficulty || score.level || "INTERMEDIO";
+                  const description = score.description_es || score.description || "";
+                  const scoreSlug = score.slug || score.id;
+
+                  // Extraer imagen de portada / preview si existe
+                  const coverImage = (() => {
+                    const p = score.preview_images || score.previewPages;
+                    if (!p) return null;
+                    if (Array.isArray(p) && p.length > 0) {
+                      return typeof p[0] === "string" ? p[0].trim() : null;
+                    }
+                    if (typeof p === "string") {
+                      const trimmed = p.trim();
+                      if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+                        try {
+                          const parsed = JSON.parse(trimmed);
+                          if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
+                        } catch {}
+                      }
+                      const parts = trimmed.split(/[\s,]+/).filter((s) => s.startsWith("http") || s.startsWith("/"));
+                      if (parts.length > 0) return parts[0];
+                      if (trimmed.startsWith("http") || trimmed.startsWith("/")) return trimmed;
+                    }
+                    return null;
+                  })();
+
+                  // Adaptador normalizado para SaveScoreButton y Cart
+                  const normalizedScore = {
+                    id: score.id,
+                    title: score.title,
+                    slug: scoreSlug,
+                    composer: composerName,
+                    category: genre,
+                    genre,
+                    level: difficulty,
+                    difficulty,
+                    description,
+                    priceCOP,
+                    priceUSD,
+                    price_cop: priceCOP,
+                    price_usd: priceUSD,
+                  };
+
+                  return (
+                    <div key={score.id} className="group flex flex-col rounded-xl bg-white border border-black/8 shadow-xs hover:shadow-lg hover:-translate-y-1 transition-all duration-200 overflow-hidden">
+                      
+                      {/* Miniatura Superior de la Partitura - Altura Compacta (h-36 sm:h-40) */}
+                      <div className="relative h-36 sm:h-40 bg-[#F8FAFC] p-2.5 flex flex-col justify-between overflow-hidden border-b border-black/5 select-none">
+                        
+                        {/* Foto / Muestra Real de la Partitura */}
+                        {coverImage ? (
+                          <div className="absolute inset-0 flex items-center justify-center p-2 bg-[#FAF9F6]">
+                            <img
+                              src={coverImage}
+                              alt={score.title}
+                              className="w-full h-full object-contain filter drop-shadow-sm group-hover:scale-105 transition-transform duration-300 rounded"
+                              loading="lazy"
+                              onError={(e) => {
+                                // Fallback a pentagramas si la imagen falla al cargar
+                                (e.currentTarget.parentElement as HTMLElement).style.display = 'none';
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          /* Pentagrama Clásico Estilizado Compacto como Fallback */
+                          <div className="absolute inset-0 flex flex-col justify-center items-center px-5 py-3 bg-[#FAF9F6] pointer-events-none">
+                            <div className="w-full space-y-1 opacity-25">
+                              <div className="h-[1px] w-full bg-slate-600"></div>
+                              <div className="h-[1px] w-full bg-slate-600"></div>
+                              <div className="h-[1px] w-full bg-slate-600"></div>
+                              <div className="h-[1px] w-full bg-slate-600"></div>
+                              <div className="h-[1px] w-full bg-slate-600"></div>
+                            </div>
+                            <div className="mt-2 text-center">
+                              <span className="font-serif italic text-xs font-bold text-[#111C2D]/80 line-clamp-1 block">
+                                {score.title}
+                              </span>
+                              <span className="text-[10px] text-[#4C4546]/70 font-montserrat block mt-0.5">
+                                {composerName}
+                              </span>
+                            </div>
+                            <div className="w-full space-y-1 opacity-25 mt-2">
+                              <div className="h-[1px] w-full bg-slate-600"></div>
+                              <div className="h-[1px] w-full bg-slate-600"></div>
+                              <div className="h-[1px] w-full bg-slate-600"></div>
+                              <div className="h-[1px] w-full bg-slate-600"></div>
+                              <div className="h-[1px] w-full bg-slate-600"></div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Badges Superiores Flotantes */}
+                        <div className="relative z-10 flex items-center justify-between gap-1.5">
+                          <span className="px-2 py-0.5 rounded-full font-montserrat font-extrabold text-[9px] uppercase shadow-2xs bg-white/95 text-[#111C2D] border border-black/5 backdrop-blur-xs">
+                            {genre}
+                          </span>
+                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full shadow-2xs font-montserrat bg-white/95 text-[#4C4546] border border-black/5 backdrop-blur-xs">
+                            {difficulty}
+                          </span>
+                        </div>
+
+                        {/* Hover Action Overlay */}
+                        <div className="absolute inset-0 bg-[#111C2D]/40 backdrop-blur-[1px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 z-20">
+                          <Link
+                            href={`/partitura/${scoreSlug}`}
+                            className="w-10 h-10 rounded-full bg-[#FBB03B] text-[#111C2D] shadow-md flex items-center justify-center hover:scale-110 active:scale-95 transition-transform"
+                            title="Ver partitura"
+                          >
+                            <span className="material-symbols-outlined text-xl">visibility</span>
+                          </Link>
+                        </div>
+
+                        {/* Badges Inferiores de la Miniatura */}
+                        <div className="relative z-10 flex items-center justify-between text-[9px] font-bold">
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/90 text-slate-700 backdrop-blur-xs shadow-2xs border border-black/5">
+                            <span className="material-symbols-outlined text-[12px] text-[#0071BC]">picture_as_pdf</span>
+                            Formato Vectorial
+                          </span>
+                          <span className="px-1.5 py-0.5 rounded bg-white/90 text-[#0071BC] backdrop-blur-xs shadow-2xs border border-black/5 font-semibold">
+                            Edición Urtext
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Cuerpo de la Tarjeta - Compacto y Proporcional */}
+                      <div className="p-3.5 sm:p-4 flex-1 flex flex-col justify-between">
+                        <div>
+                          <h3 className="text-sm sm:text-base font-bold text-[#111C2D] font-montserrat group-hover:text-[#0071BC] transition-colors leading-snug line-clamp-1">
+                            {score.title}
+                          </h3>
+                          <p className="text-xs text-[#0071BC] font-semibold mt-0.5 line-clamp-1">{composerName}</p>
+                          <p className="text-[11px] text-[#4C4546] mt-1.5 line-clamp-2 leading-relaxed font-normal">
+                            {description || "Edición Urtext digital de alta fidelidad para piano."}
+                          </p>
+                        </div>
+
+                        {/* Fila de Precios y Acciones */}
+                        <div className="mt-3 pt-2.5 border-t border-black/5 flex justify-between items-center">
+                          <div>
+                            <span className="text-sm sm:text-base font-black text-[#111C2D] font-montserrat">
+                              {currency === "COP" ? `$${priceCOP.toLocaleString('es-CO')} COP` : `$${priceUSD} USD`}
+                            </span>
+                            <span className="text-[10px] text-slate-400 block font-medium -mt-0.5">
+                              {currency === "COP" ? `~$${priceUSD} USD` : `~$${priceCOP.toLocaleString('es-CO')} COP`}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <SaveScoreButton score={normalizedScore} variant="icon" />
+                            <Link
+                              href={`/partitura/${scoreSlug}`}
+                              className="w-8 h-8 rounded-lg bg-[#111C2D] text-white hover:bg-[#FBB03B] hover:text-[#111C2D] transition-all shadow-xs flex items-center justify-center cursor-pointer"
+                              title="Ver partitura"
+                            >
+                              <span className="material-symbols-outlined text-[18px]">add_shopping_cart</span>
+                            </Link>
+                          </div>
+                        </div>
+                      </div>
+
+                    </div>
+                  );
+                })}
               </div>
+
             </div>
-
-            {/* Grid 3 Curated Sheet Music Product Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {MOCK_SCORES.map((score) => (
-                <div key={score.id} className="group flex flex-col rounded-2xl bg-white border border-black/5 shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 overflow-hidden">
-                  
-                  {/* Sheet Miniature Top (4:5 Aspect Ratio feel) */}
-                  <div className="relative aspect-[4/3] sm:aspect-[4/5] bg-[#F9F9FF] p-5 flex flex-col justify-between overflow-hidden border-b border-black/5">
-                    <div className="flex items-center justify-between z-10">
-                      <span className="px-2.5 py-1 rounded-full bg-[#FBB03B]/20 text-[#111C2D] font-montserrat font-extrabold text-[10px] uppercase">
-                        {score.category}
-                      </span>
-                      <span className="text-[10px] font-bold px-2.5 py-1 bg-white border border-black/10 text-[#4C4546] rounded-full shadow-2xs font-montserrat">
-                        {score.level}
-                      </span>
-                    </div>
-
-                    {/* Stylized Miniature Score Staves */}
-                    <div className="py-2 opacity-50 select-none">
-                      <div className="h-0.5 w-full bg-slate-300 my-1.5"></div>
-                      <div className="h-0.5 w-full bg-slate-300 my-1.5"></div>
-                      <div className="h-0.5 w-full bg-slate-300 my-1.5"></div>
-                      <div className="h-0.5 w-full bg-slate-300 my-1.5"></div>
-                      <div className="h-0.5 w-full bg-slate-300 my-1.5"></div>
-                      <div className="mt-3 font-serif text-center italic text-[#111C2D] font-bold text-base">{score.title}</div>
-                    </div>
-
-                    {/* Hover Action Overlay */}
-                    <div className="absolute inset-0 bg-[#111C2D]/30 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 z-20">
-                      <Link
-                        href={`/partitura/${score.slug}`}
-                        className="w-12 h-12 rounded-full bg-[#FBB03B] text-[#111C2D] shadow-lg flex items-center justify-center hover:scale-110 active:scale-95 transition-transform"
-                      >
-                        <span className="material-symbols-outlined text-2xl">visibility</span>
-                      </Link>
-                    </div>
-
-                    <div className="flex items-center justify-between text-[11px] text-[#4C4546] font-medium z-10">
-                      <span className="flex items-center gap-1">
-                        <span className="material-symbols-outlined text-sm text-[#0071BC]">picture_as_pdf</span>
-                        Formato Vectorial
-                      </span>
-                      <span className="text-[#0071BC] font-bold">Edición Urtext</span>
-                    </div>
-                  </div>
-
-                  {/* Card Body */}
-                  <div className="p-6 flex-1 flex flex-col justify-between">
-                    <div>
-                      <h3 className="text-xl font-bold text-[#111C2D] font-montserrat group-hover:text-[#0071BC] transition-colors leading-snug">
-                        {score.title}
-                      </h3>
-                      <p className="text-xs text-[#4C4546] font-semibold mt-1">{score.composer}</p>
-                      <p className="text-xs text-[#4C4546] mt-3 line-clamp-2 leading-relaxed font-normal">
-                        {score.description}
-                      </p>
-                    </div>
-
-                    <div className="mt-6 pt-4 border-t border-black/5 flex justify-between items-center">
-                      <div>
-                        <span className="text-lg font-black text-[#111C2D] font-montserrat">
-                          {currency === "COP" ? `$${score.priceCOP.toLocaleString('es-CO')} COP` : `$${score.priceUSD} USD`}
-                        </span>
-                        <span className="text-[10px] text-[#4C4546] block font-medium">
-                          {currency === "COP" ? `~$${score.priceUSD} USD` : `~$${score.priceCOP.toLocaleString('es-CO')} COP`}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <SaveScoreButton score={score} variant="icon" />
-                        <Link
-                          href={`/partitura/${score.slug}`}
-                          className="p-2.5 rounded-xl bg-[#111C2D] text-white hover:bg-[#FBB03B] hover:text-[#111C2D] transition-all shadow-xs flex items-center justify-center"
-                          title="Ver partitura"
-                        >
-                          <span className="material-symbols-outlined text-lg">add_shopping_cart</span>
-                        </Link>
-                      </div>
-                    </div>
-                  </div>
-
-                </div>
-              ))}
-            </div>
-
-          </div>
-        </section>
+          </section>
+        )}
 
         {/* ==========================================
                SECCIÓN 5: BITÁCORA & NOTICIAS
                ========================================== */}
-        <section className="w-full py-16 bg-[#F0F3FF]/40 border-t border-black/5">
-          <div className="max-w-7xl mx-auto px-6">
-            
-            <div className="flex justify-between items-end mb-10">
-              <div>
-                <span className="text-xs font-extrabold text-[#0071BC] tracking-widest uppercase font-montserrat">Bitácora Pianística</span>
-                <h2 className="text-3xl font-black font-montserrat mt-1 text-[#111C2D]">Actualidad Musical & Noticias</h2>
-              </div>
-              <Link href="/blog" className="text-xs font-bold text-[#0071BC] hover:underline font-montserrat flex items-center gap-1">
-                <span>Ver todos los artículos</span>
-                <span className="material-symbols-outlined text-sm">arrow_forward</span>
-              </Link>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {[
-                {
-                  title: "El Bambuco en el Piano: Rítmica y Articulación para Concierto",
-                  cat: "Pedagogía",
-                  date: "1 Sept, 2026",
-                  slug: "el-bambuco-en-el-piano-ritmica-y-articulacion",
-                },
-                {
-                  title: "Luis A. Calvo y el Intermezzo Romántico en Colombia",
-                  cat: "Historia",
-                  date: "28 Ago, 2026",
-                  slug: "luis-a-calvo-y-el-intermezzo-romantico",
-                },
-                {
-                  title: "Nuevas Ediciones Críticas Revisadas en Piano Colombia",
-                  cat: "Actualidad",
-                  date: "20 Ago, 2026",
-                  slug: "nuevas-ediciones-criticas-revisadas-piano-colombia",
-                },
-              ].map((post, idx) => (
-                <div key={idx} className="bg-white p-6 rounded-2xl border border-black/5 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group">
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="px-3 py-1 bg-[#F0F3FF] text-[#0071BC] rounded-full font-bold">{post.cat}</span>
-                      <span className="text-[#4C4546] font-medium">{post.date}</span>
-                    </div>
-                    <h3 className="text-lg font-bold font-montserrat text-[#111C2D] group-hover:text-[#0071BC] transition-colors leading-snug">{post.title}</h3>
-                  </div>
-                  <Link href={`/blog/${post.slug}`} className="text-xs font-bold text-[#0071BC] hover:text-[#111C2D] transition font-montserrat pt-4 inline-flex items-center gap-1">
-                    <span>Leer noticia</span>
-                    <span className="material-symbols-outlined text-xs">arrow_forward</span>
-                  </Link>
+        {blogPosts.length > 0 && (
+          <section className="w-full py-16 bg-[#F0F3FF]/40 border-t border-black/5" id="bitacora">
+            <div className="max-w-7xl mx-auto px-6">
+              
+              <div className="flex justify-between items-end mb-10">
+                <div>
+                  <span className="text-xs font-extrabold text-[#0071BC] tracking-widest uppercase font-montserrat">Bitácora Pianística</span>
+                  <h2 className="text-3xl font-black font-montserrat mt-1 text-[#111C2D]">Actualidad Musical & Noticias</h2>
                 </div>
-              ))}
-            </div>
+                <Link href="/blog" className="text-xs font-bold text-[#0071BC] hover:underline font-montserrat flex items-center gap-1">
+                  <span>Ver todos los artículos</span>
+                  <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                </Link>
+              </div>
 
-          </div>
-        </section>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {blogPosts.map((post) => {
+                  const dateStr = (() => {
+                    try {
+                      if (!post.published_at) return "";
+                      const d = new Date(post.published_at);
+                      return d.toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" });
+                    } catch {
+                      return post.published_at || "";
+                    }
+                  })();
+
+                  return (
+                    <div key={post.id} className="bg-white rounded-2xl border border-black/5 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group overflow-hidden">
+                      {/* Portada del Artículo si existe */}
+                      {post.cover_image && (
+                        <div className="relative h-44 w-full bg-slate-100 overflow-hidden border-b border-black/5">
+                          <img
+                            src={post.cover_image}
+                            alt={post.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                            loading="lazy"
+                          />
+                          <div className="absolute top-3 left-3">
+                            <span className="px-3 py-1 bg-white/95 backdrop-blur-md text-[#0071BC] rounded-full font-bold text-xs shadow-xs border border-black/5">
+                              {post.category}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="p-6 flex-1 flex flex-col justify-between">
+                        <div className="space-y-3">
+                          {!post.cover_image && (
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="px-3 py-1 bg-[#F0F3FF] text-[#0071BC] rounded-full font-bold">{post.category}</span>
+                              <span className="text-[#4C4546] font-medium">{dateStr}</span>
+                            </div>
+                          )}
+                          {post.cover_image && (
+                            <div className="flex justify-between items-center text-xs text-[#4C4546]">
+                              <span className="font-medium">{dateStr}</span>
+                              <span className="text-[11px] text-slate-400">{post.read_time || "5 min"}</span>
+                            </div>
+                          )}
+                          <h3 className="text-lg font-bold font-montserrat text-[#111C2D] group-hover:text-[#0071BC] transition-colors leading-snug line-clamp-2">
+                            {post.title}
+                          </h3>
+                          {post.excerpt && (
+                            <p className="text-xs text-[#4C4546] font-normal leading-relaxed line-clamp-2">
+                              {post.excerpt}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="pt-4 mt-4 border-t border-black/5 flex justify-between items-center">
+                          <span className="text-xs text-[#4C4546] font-medium line-clamp-1">Por {post.author}</span>
+                          <Link href={`/blog/${post.slug}`} className="text-xs font-bold text-[#0071BC] hover:text-[#111C2D] transition font-montserrat inline-flex items-center gap-1 group-hover:translate-x-0.5">
+                            <span>Leer noticia</span>
+                            <span className="material-symbols-outlined text-xs">arrow_forward</span>
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+            </div>
+          </section>
+        )}
 
       </main>
 

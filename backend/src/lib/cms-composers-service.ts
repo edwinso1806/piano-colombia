@@ -41,6 +41,14 @@ export interface FeaturedComposersResponse {
   all_composers: EnrichedComposer[]
   active_tabs_count: number
   total_composers: number
+  total_registered_composers: number
+  recent_composers: {
+    id: string
+    name: string
+    slug: string
+    era: string | null
+    photo_url: string | null
+  }[]
 }
 
 function getPgClient() {
@@ -219,11 +227,35 @@ export async function getCmsHomeFeaturedComposers(options: { onlyActiveTabs?: bo
 
     const allComposers = Array.from(allUniqueComposersMap.values())
 
+    // 5. Consultar los últimos 4 compositores aprobados registrados para el footer
+    const recentRes = await client.query(`
+      SELECT id, first_name, last_name, artistic_name, slug, era, photo_url, created_at
+      FROM composer
+      WHERE status = 'APPROVED'
+      ORDER BY created_at DESC
+      LIMIT 4;
+    `)
+    const recentComposers = recentRes.rows.map((r) => ({
+      id: r.id,
+      name: r.artistic_name || `${r.first_name || ""} ${r.last_name || ""}`.trim(),
+      slug: r.slug,
+      era: r.era || null,
+      photo_url: r.photo_url || null,
+    }))
+
+    // 6. Consultar total real de compositores registrados y aprobados
+    const totalCountRes = await client.query(`
+      SELECT COUNT(*) as total FROM composer WHERE status = 'APPROVED';
+    `)
+    const totalApprovedComposers = parseInt(totalCountRes.rows[0]?.total, 10) || allComposers.length
+
     return {
       tabs: outputTabs,
       all_composers: allComposers,
       active_tabs_count: outputTabs.length,
       total_composers: allComposers.length,
+      total_registered_composers: totalApprovedComposers,
+      recent_composers: recentComposers,
     }
   } catch (err: any) {
     console.error("[cms-composers-service] Error consultando PostgreSQL:", err.message)

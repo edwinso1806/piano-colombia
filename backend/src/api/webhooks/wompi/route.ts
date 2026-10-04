@@ -4,6 +4,7 @@ import { SCORE_MODULE } from "../../../modules/score"
 import { COMPOSER_MODULE } from "../../../modules/composer"
 import { generateWatermarkedScore } from "../../../lib/pdf-watermarker"
 import { sendEmail, generateBuyerPurchaseHTML } from "../../../lib/resend-mailer"
+import { Client } from "pg"
 import crypto from "crypto"
 
 export async function POST(req: MedusaRequest, res: MedusaResponse) {
@@ -41,6 +42,22 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
 
       const downloadToken = crypto.randomUUID()
 
+      // Consultar límite configurado en plataforma desde el CMS
+      let maxDownloadsAllowed = 5
+      try {
+        const pgClient = new Client({
+          connectionString: process.env.DATABASE_URL || "postgres://postgres:Alex%242020@localhost:5432/piano_colombia_db"
+        })
+        await pgClient.connect()
+        const limitRes = await pgClient.query("SELECT value FROM platform_settings WHERE key = 'max_downloads_per_purchase' LIMIT 1;")
+        if (limitRes.rows.length > 0 && limitRes.rows[0].value) {
+          maxDownloadsAllowed = parseInt(limitRes.rows[0].value, 10) || 5
+        }
+        await pgClient.end()
+      } catch {
+        maxDownloadsAllowed = 5
+      }
+
       // Registrar descarga protegida en PostgreSQL
       const downloadRecord = await downloadModuleService.createCustomerDownloads({
         order_id: reference,
@@ -50,7 +67,7 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
         composer_name: composerName,
         download_token: downloadToken,
         download_count: 0,
-        max_downloads: 5,
+        max_downloads: maxDownloadsAllowed,
         wompi_transaction_id: transaction?.id || reference,
         buyer_name: customerName,
         buyer_email: customerEmail,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   getAdminCatalogMetadata,
@@ -11,14 +11,136 @@ import {
   updateAdminCmsCategories,
   getAdminFeaturedComposers,
   updateAdminFeaturedComposers,
+  getAdminFeaturedScores,
+  updateAdminFeaturedScores,
+  getAdminDownloadSettings,
+  updateAdminDownloadSettings,
 } from "@/lib/api-client";
 
+type CmsTabId = "hero" | "featured_score" | "featured_scores_home" | "stats" | "categories" | "featured_composers" | "blog" | "metadata" | "legals";
+
+interface CmsTabConfig {
+  id: CmsTabId;
+  label: string;
+  badge?: string;
+  icon: string;
+  iconColor: string;
+  group: "home" | "catalog_legal";
+}
+
+const CMS_TABS_CONFIG: CmsTabConfig[] = [
+  { id: "hero", label: "Hero: Textos & Botones", icon: "title", iconColor: "text-[#0071BC]", group: "home" },
+  { id: "featured_score", label: "Audio Hero (Card Derecha)", badge: "Hero Audio", icon: "music_note", iconColor: "text-[#FBB03B]", group: "home" },
+  { id: "featured_scores_home", label: "Partituras Destacadas", badge: "Home (Máx 6)", icon: "library_music", iconColor: "text-[#0071BC]", group: "home" },
+  { id: "stats", label: "Estadísticas", badge: "BD", icon: "analytics", iconColor: "text-[#0071BC]", group: "home" },
+  { id: "categories", label: "Categorías Principales", badge: "Home", icon: "grid_view", iconColor: "text-[#0071BC]", group: "home" },
+  { id: "featured_composers", label: "Compositores Destacados", badge: "Home", icon: "groups", iconColor: "text-[#0071BC]", group: "home" },
+  { id: "blog", label: "Bitácora & Blog", badge: "Noticias", icon: "article", iconColor: "text-[#0071BC]", group: "home" },
+  { id: "metadata", label: "Géneros & Dificultades", badge: "Catálogo", icon: "tune", iconColor: "text-[#0071BC]", group: "catalog_legal" },
+  { id: "legals", label: "Páginas Legales & T&C", icon: "gavel", iconColor: "text-[#C1272D]", group: "catalog_legal" },
+];
+
 export default function AdminCMSPage() {
-  const [activeTab, setActiveTab] = useState<
-    "hero" | "featured_score" | "stats" | "categories" | "featured_composers" | "metadata" | "legals"
-  >("hero");
+  const [activeTab, setActiveTab] = useState<CmsTabId>("hero");
+  const [tabGroupFilter, setTabGroupFilter] = useState<"all" | "home" | "catalog_legal">("all");
+  const tabsContainerRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+
+  const checkScrollState = () => {
+    const el = tabsContainerRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 10);
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 15);
+  };
+
+  useEffect(() => {
+    checkScrollState();
+    const handleResize = () => checkScrollState();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [tabGroupFilter]);
+
+  const scrollTabs = (direction: "left" | "right") => {
+    const el = tabsContainerRef.current;
+    if (!el) return;
+    const scrollAmount = direction === "left" ? -280 : 280;
+    el.scrollBy({ left: scrollAmount, behavior: "smooth" });
+    setTimeout(checkScrollState, 300);
+  };
+
+  const handleTabWheel = (e: React.WheelEvent) => {
+    const el = tabsContainerRef.current;
+    if (!el) return;
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      el.scrollLeft += e.deltaY;
+      checkScrollState();
+    }
+  };
+
+  const handleSelectTab = (tabId: CmsTabId) => {
+    setActiveTab(tabId);
+    setTimeout(() => {
+      const activeEl = document.getElementById(`cms-tab-btn-${tabId}`);
+      if (activeEl) {
+        activeEl.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+      }
+      checkScrollState();
+    }, 50);
+  };
+
+  const handleGroupFilterChange = (filter: "all" | "home" | "catalog_legal") => {
+    setTabGroupFilter(filter);
+    if (filter === "home" && (activeTab === "metadata" || activeTab === "legals")) {
+      handleSelectTab("hero");
+    } else if (filter === "catalog_legal" && (activeTab !== "metadata" && activeTab !== "legals")) {
+      handleSelectTab("metadata");
+    }
+  };
+
   const [isSaved, setIsSaved] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  useEffect(() => {
+    if (!feedback) return;
+    const timer = setTimeout(() => {
+      setFeedback(null);
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [feedback]);
+
+  // Estado del Límite de Descargas por Licencia (CMS)
+  const [cmsMaxDownloads, setCmsMaxDownloads] = useState<number>(5);
+  const [isSavingCmsDownloads, setIsSavingCmsDownloads] = useState(false);
+  const [cmsApplyToExisting, setCmsApplyToExisting] = useState(true);
+
+  useEffect(() => {
+    getAdminDownloadSettings()
+      .then((res) => {
+        if (res && res.maxDownloads) setCmsMaxDownloads(res.maxDownloads);
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSaveCmsDownloadLimit = async () => {
+    setIsSavingCmsDownloads(true);
+    try {
+      const res = await updateAdminDownloadSettings(cmsMaxDownloads, cmsApplyToExisting);
+      setFeedback({
+        type: "success",
+        message: res.message || `Límite de descargas actualizado a ${cmsMaxDownloads} descargas por licencia en BD.`,
+      });
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 3000);
+    } catch (err: any) {
+      setFeedback({
+        type: "error",
+        message: err.message || "Error al actualizar límite de descargas.",
+      });
+    } finally {
+      setIsSavingCmsDownloads(false);
+    }
+  };
 
   // Estado del Hero Principal
   const [heroTitle, setHeroTitle] = useState("La tradición del piano colombiano y latinoamericano en tus manos.");
@@ -234,6 +356,13 @@ export default function AdminCMSPage() {
   const [editingComposerIconTabId, setEditingComposerIconTabId] = useState<string | null>(null);
   const [selectedComposerToAdd, setSelectedComposerToAdd] = useState<{ [tabId: string]: string }>({});
 
+  // Estado de Partituras Destacadas en el Home (Máx 6)
+  const [featuredScoreIds, setFeaturedScoreIds] = useState<string[]>([]);
+  const [featuredScoresList, setFeaturedScoresList] = useState<any[]>([]);
+  const [availableCatalogScores, setAvailableCatalogScores] = useState<any[]>([]);
+  const [isSavingFeaturedScores, setIsSavingFeaturedScores] = useState(false);
+  const [selectedScoreToAdd, setSelectedScoreToAdd] = useState("");
+
   const POPULAR_ICONS = [
     { name: "piano", label: "Piano" },
     { name: "music_note", label: "Partitura" },
@@ -333,12 +462,86 @@ export default function AdminCMSPage() {
         } catch (e: any) {
           console.warn("Fallo cargando compositores destacados de BD:", e.message);
         }
+
+        // Cargar partituras destacadas en el Home desde backend
+        try {
+          const scoresData = await getAdminFeaturedScores();
+          if (scoresData) {
+            setFeaturedScoreIds(scoresData.featured_score_ids || []);
+            setFeaturedScoresList(scoresData.featured_scores || []);
+            setAvailableCatalogScores(scoresData.available_scores || []);
+          }
+        } catch (e: any) {
+          console.warn("Fallo cargando partituras destacadas de BD:", e.message);
+        }
       } catch (err: any) {
         console.warn("Error cargando metadatos o CMS de BD:", err.message);
       }
     }
     loadCMSData();
   }, []);
+
+  const handleAddFeaturedScore = () => {
+    if (!selectedScoreToAdd) return;
+    if (featuredScoreIds.length >= 6) {
+      setFeedback({ type: "error", message: "Solo puedes seleccionar un máximo de 6 partituras destacadas." });
+      return;
+    }
+    if (featuredScoreIds.includes(selectedScoreToAdd)) {
+      setFeedback({ type: "error", message: "Esta partitura ya está agregada a la lista de destacadas." });
+      return;
+    }
+    const scoreObj = availableCatalogScores.find((s) => s.id === selectedScoreToAdd);
+    if (!scoreObj) return;
+
+    setFeaturedScoreIds([...featuredScoreIds, selectedScoreToAdd]);
+    setFeaturedScoresList([...featuredScoresList, scoreObj]);
+    setSelectedScoreToAdd("");
+  };
+
+  const handleRemoveFeaturedScore = (idToRemove: string) => {
+    setFeaturedScoreIds((prev) => prev.filter((id) => id !== idToRemove));
+    setFeaturedScoresList((prev) => prev.filter((s) => s.id !== idToRemove));
+  };
+
+  const handleMoveScore = (index: number, direction: "up" | "down") => {
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= featuredScoresList.length) return;
+
+    const updatedIds = [...featuredScoreIds];
+    const tempId = updatedIds[index];
+    updatedIds[index] = updatedIds[targetIndex];
+    updatedIds[targetIndex] = tempId;
+
+    const updatedList = [...featuredScoresList];
+    const tempItem = updatedList[index];
+    updatedList[index] = updatedList[targetIndex];
+    updatedList[targetIndex] = tempItem;
+
+    setFeaturedScoreIds(updatedIds);
+    setFeaturedScoresList(updatedList);
+  };
+
+  const handleSaveFeaturedScores = async () => {
+    setIsSavingFeaturedScores(true);
+    setFeedback(null);
+    try {
+      await updateAdminFeaturedScores(featuredScoreIds);
+      setFeedback({
+        type: "success",
+        message: featuredScoreIds.length === 0
+          ? "Configuración guardada: No seleccionaste ninguna partitura, por lo que la sección se ocultará automáticamente en el Home."
+          : `¡Excelente! Se han guardado ${featuredScoreIds.length} partituras destacadas para la portada.`
+      });
+    } catch (err: any) {
+      setFeedback({
+        type: "error",
+        message: `Error al guardar partituras destacadas: ${err.message}`
+      });
+    } finally {
+      setIsSavingFeaturedScores(false);
+    }
+  };
 
   const handleAudioFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -665,121 +868,223 @@ export default function AdminCMSPage() {
         </Link>
       </div>
 
-      {/* Feedback Banner Global */}
+      {/* Feedback Pop-up Flotante (Toast Modal en Primer Plano) */}
       {feedback && (
-        <div
-          className={`p-4 rounded-2xl flex items-center justify-between text-xs font-bold font-montserrat shadow-xs ${
-            feedback.type === "success"
-              ? "bg-emerald-50 border border-emerald-200 text-emerald-900"
-              : "bg-rose-50 border border-rose-200 text-rose-900"
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-lg shrink-0">
-              {feedback.type === "success" ? "check_circle" : "error"}
-            </span>
-            <span>{feedback.message}</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setFeedback(null)}
-            className="text-slate-400 hover:text-slate-700 transition"
+        <div className="fixed top-6 right-6 z-[9999] max-w-md w-[calc(100vw-3rem)] animate-in fade-in slide-in-from-top-4 duration-300 font-montserrat shadow-2xl">
+          <div
+            className={`p-4 rounded-2xl flex items-start gap-3.5 border shadow-2xl backdrop-blur-md transition-all ${
+              feedback.type === "success"
+                ? "bg-[#064E3B] border-emerald-400 text-white"
+                : "bg-[#7F1D1D] border-rose-400 text-white"
+            }`}
           >
-            <span className="material-symbols-outlined text-sm">close</span>
-          </button>
+            <div
+              className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-inner ${
+                feedback.type === "success"
+                  ? "bg-emerald-400/20 text-emerald-300"
+                  : "bg-rose-400/20 text-rose-300"
+              }`}
+            >
+              <span className="material-symbols-outlined text-2xl">
+                {feedback.type === "success" ? "check_circle" : "error"}
+              </span>
+            </div>
+
+            <div className="flex-1 min-w-0 pt-0.5">
+              <h4 className="text-xs font-black uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                <span>{feedback.type === "success" ? "Operación Exitosa" : "Aviso del Sistema"}</span>
+              </h4>
+              <p className="text-xs text-white/95 leading-relaxed font-medium">
+                {feedback.message}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setFeedback(null)}
+              className="text-white/60 hover:text-white transition p-1.5 hover:bg-white/10 rounded-xl shrink-0 cursor-pointer"
+              title="Cerrar notificación"
+            >
+              <span className="material-symbols-outlined text-base">close</span>
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Selector de Pestañas CMS */}
-      <div className="flex border-b border-black/5 gap-2 w-full overflow-x-auto overscroll-x-contain scrollbar-none font-montserrat">
-        <button
-          onClick={() => setActiveTab("hero")}
-          className={`flex items-center gap-2 px-5 py-3 font-extrabold text-xs rounded-t-xl transition border-b-2 whitespace-nowrap ${
-            activeTab === "hero"
-              ? "bg-white text-[#111C2D] border-[#FBB03B] shadow-2xs"
-              : "text-[#4C4546] hover:text-[#111C2D] border-transparent hover:bg-white/60"
-          }`}
-        >
-          <span className="material-symbols-outlined text-base text-[#0071BC]">title</span>
-          Hero: Textos & Botones
-        </button>
+      {/* Barra de Navegación y Filtros de Pestañas CMS */}
+      <div className="space-y-3 font-montserrat">
+        
+        {/* Fila 1: Filtros de Grupo + Selector Rápido */}
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-black/5 shadow-2xs">
+          
+          {/* Filtros por Grupo (Píldoras) */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1 hidden sm:inline">
+              Filtrar:
+            </span>
+            <button
+              type="button"
+              onClick={() => handleGroupFilterChange("all")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                tabGroupFilter === "all"
+                  ? "bg-[#111C2D] text-white shadow-xs"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              <span>Todos</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${tabGroupFilter === "all" ? "bg-white/20 text-white" : "bg-black/5 text-slate-500"}`}>
+                {CMS_TABS_CONFIG.length}
+              </span>
+            </button>
 
-        <button
-          type="button"
-          onClick={() => setActiveTab("featured_score")}
-          className={`flex items-center gap-2 px-5 py-3 font-extrabold text-xs rounded-t-xl transition border-b-2 whitespace-nowrap ${
-            activeTab === "featured_score"
-              ? "bg-white text-[#111C2D] border-[#FBB03B] shadow-2xs"
-              : "text-[#4C4546] hover:text-[#111C2D] border-transparent hover:bg-white/60"
-          }`}
-        >
-          <span className="material-symbols-outlined text-base text-[#FBB03B]">music_note</span>
-          Partitura Destacada (Card Hero)
-        </button>
+            <button
+              type="button"
+              onClick={() => handleGroupFilterChange("home")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                tabGroupFilter === "home"
+                  ? "bg-[#0071BC] text-white shadow-xs"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              <span className="material-symbols-outlined text-sm">home</span>
+              <span>Portada (Home)</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${tabGroupFilter === "home" ? "bg-white/20 text-white" : "bg-black/5 text-slate-500"}`}>
+                {CMS_TABS_CONFIG.filter((t) => t.group === "home").length}
+              </span>
+            </button>
 
-        <button
-          type="button"
-          onClick={() => setActiveTab("stats")}
-          className={`flex items-center gap-2 px-5 py-3 font-extrabold text-xs rounded-t-xl transition border-b-2 whitespace-nowrap cursor-pointer ${
-            activeTab === "stats"
-              ? "bg-white text-[#111C2D] border-[#FBB03B] shadow-2xs"
-              : "text-[#4C4546] hover:text-[#111C2D] border-transparent hover:bg-white/60"
-          }`}
-        >
-          <span className="material-symbols-outlined text-base text-[#0071BC]">analytics</span>
-          Tarjetas de Estadísticas (BD)
-        </button>
+            <button
+              type="button"
+              onClick={() => handleGroupFilterChange("catalog_legal")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                tabGroupFilter === "catalog_legal"
+                  ? "bg-[#111C2D] text-white shadow-xs"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              <span className="material-symbols-outlined text-sm">tune</span>
+              <span>Catálogo & Legal</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${tabGroupFilter === "catalog_legal" ? "bg-white/20 text-white" : "bg-black/5 text-slate-500"}`}>
+                {CMS_TABS_CONFIG.filter((t) => t.group === "catalog_legal").length}
+              </span>
+            </button>
+          </div>
 
-        <button
-          type="button"
-          onClick={() => setActiveTab("categories")}
-          className={`flex items-center gap-2 px-5 py-3 font-extrabold text-xs rounded-t-xl transition border-b-2 whitespace-nowrap cursor-pointer ${
-            activeTab === "categories"
-              ? "bg-white text-[#111C2D] border-[#FBB03B] shadow-2xs"
-              : "text-[#4C4546] hover:text-[#111C2D] border-transparent hover:bg-white/60"
-          }`}
-        >
-          <span className="material-symbols-outlined text-base text-[#0071BC]">grid_view</span>
-          Categorías Principales (BD & Home)
-        </button>
+          {/* Selector desplegable directo (Salto Rápido) */}
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <label htmlFor="cms-quick-jump" className="text-[11px] font-bold text-slate-400 whitespace-nowrap">
+              Ir directo a:
+            </label>
+            <div className="relative w-full sm:w-60">
+              <select
+                id="cms-quick-jump"
+                value={activeTab}
+                onChange={(e) => handleSelectTab(e.target.value as CmsTabId)}
+                className="w-full pl-3 pr-8 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-[#111C2D] focus:ring-2 focus:ring-[#0071BC] focus:bg-white transition cursor-pointer appearance-none"
+              >
+                <optgroup label="Portada (Home)">
+                  {CMS_TABS_CONFIG.filter((t) => t.group === "home").map((tab) => (
+                    <option key={tab.id} value={tab.id}>
+                      {tab.label}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Catálogo & Legal">
+                  {CMS_TABS_CONFIG.filter((t) => t.group === "catalog_legal").map((tab) => (
+                    <option key={tab.id} value={tab.id}>
+                      {tab.label}
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+              <span className="material-symbols-outlined absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-base">
+                unfold_more
+              </span>
+            </div>
+          </div>
+        </div>
 
-        <button
-          type="button"
-          onClick={() => setActiveTab("featured_composers")}
-          className={`flex items-center gap-2 px-5 py-3 font-extrabold text-xs rounded-t-xl transition border-b-2 whitespace-nowrap cursor-pointer ${
-            activeTab === "featured_composers"
-              ? "bg-white text-[#111C2D] border-[#FBB03B] shadow-2xs"
-              : "text-[#4C4546] hover:text-[#111C2D] border-transparent hover:bg-white/60"
-          }`}
-        >
-          <span className="material-symbols-outlined text-base text-[#0071BC]">groups</span>
-          Compositores Destacados (Home)
-        </button>
+        {/* Fila 2: Carrusel de Pestañas con Flechas de Scroll y Controles Suaves */}
+        <div className="relative flex items-center gap-1.5 bg-slate-100/60 p-1.5 rounded-2xl border border-black/5">
+          
+          {/* Botón Scroll Izquierda */}
+          <button
+            type="button"
+            onClick={() => scrollTabs("left")}
+            disabled={!canScrollLeft}
+            title="Desplazar a la izquierda"
+            className={`shrink-0 w-8 h-10 flex items-center justify-center rounded-xl bg-white border border-black/5 shadow-2xs transition ${
+              canScrollLeft
+                ? "text-[#111C2D] hover:bg-[#FBB03B] hover:text-[#111C2D] cursor-pointer"
+                : "text-slate-300 cursor-not-allowed opacity-40"
+            }`}
+          >
+            <span className="material-symbols-outlined text-lg">chevron_left</span>
+          </button>
 
-        <button
-          type="button"
-          onClick={() => setActiveTab("metadata")}
-          className={`flex items-center gap-2 px-5 py-3 font-extrabold text-xs rounded-t-xl transition border-b-2 whitespace-nowrap cursor-pointer ${
-            activeTab === "metadata"
-              ? "bg-white text-[#111C2D] border-[#FBB03B] shadow-2xs"
-              : "text-[#4C4546] hover:text-[#111C2D] border-transparent hover:bg-white/60"
-          }`}
-        >
-          <span className="material-symbols-outlined text-base text-[#0071BC]">tune</span>
-          Géneros & Dificultades (BD)
-        </button>
+          {/* Contenedor de Pestañas con Scroll */}
+          <div
+            ref={tabsContainerRef}
+            onScroll={checkScrollState}
+            onWheel={handleTabWheel}
+            className="flex items-center gap-2 overflow-x-auto scroll-smooth py-1 px-1 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent overscroll-x-contain w-full"
+            style={{ scrollbarWidth: "thin" }}
+          >
+            {CMS_TABS_CONFIG.filter(
+              (tab) => tabGroupFilter === "all" || tab.group === tabGroupFilter
+            ).map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  id={`cms-tab-btn-${tab.id}`}
+                  type="button"
+                  onClick={() => handleSelectTab(tab.id)}
+                  className={`flex items-center gap-2 px-4 py-2.5 font-bold text-xs rounded-xl transition-all whitespace-nowrap cursor-pointer shrink-0 border ${
+                    isActive
+                      ? "bg-white text-[#111C2D] border-[#FBB03B] shadow-sm ring-2 ring-[#FBB03B]/20 font-black"
+                      : "bg-white/50 text-slate-600 border-transparent hover:bg-white hover:text-[#111C2D]"
+                  }`}
+                >
+                  <span
+                    className={`material-symbols-outlined text-base ${
+                      isActive ? tab.iconColor : "text-slate-400"
+                    }`}
+                  >
+                    {tab.icon}
+                  </span>
+                  <span>{tab.label}</span>
+                  {tab.badge && (
+                    <span
+                      className={`text-[9px] px-1.5 py-0.5 rounded-md uppercase tracking-wider font-extrabold ${
+                        isActive
+                          ? "bg-[#FBB03B]/20 text-[#B87D00]"
+                          : "bg-black/5 text-slate-500"
+                      }`}
+                    >
+                      {tab.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
 
-        <button
-          onClick={() => setActiveTab("legals")}
-          className={`flex items-center gap-2 px-5 py-3 font-extrabold text-xs rounded-t-xl transition border-b-2 whitespace-nowrap ${
-            activeTab === "legals"
-              ? "bg-white text-[#111C2D] border-[#FBB03B] shadow-2xs"
-              : "text-[#4C4546] hover:text-[#111C2D] border-transparent hover:bg-white/60"
-          }`}
-        >
-          <span className="material-symbols-outlined text-base text-[#C1272D]">gavel</span>
-          Páginas Legales & T&C
-        </button>
+          {/* Botón Scroll Derecha */}
+          <button
+            type="button"
+            onClick={() => scrollTabs("right")}
+            disabled={!canScrollRight}
+            title="Desplazar a la derecha"
+            className={`shrink-0 w-8 h-10 flex items-center justify-center rounded-xl bg-white border border-black/5 shadow-2xs transition ${
+              canScrollRight
+                ? "text-[#111C2D] hover:bg-[#FBB03B] hover:text-[#111C2D] cursor-pointer"
+                : "text-slate-300 cursor-not-allowed opacity-40"
+            }`}
+          >
+            <span className="material-symbols-outlined text-lg">chevron_right</span>
+          </button>
+        </div>
       </div>
 
       {/* Formulario Principal CMS */}
@@ -1386,6 +1691,242 @@ export default function AdminCMSPage() {
                 )}
               </button>
             </div>
+          </div>
+        )}
+
+        {/* ==========================================
+               TAB: PARTITURAS DESTACADAS (PORTADA HOME - MÁX 6)
+               ========================================== */}
+        {activeTab === "featured_scores_home" && (
+          <div className="space-y-8 font-montserrat">
+            
+            {/* Banner Informativo y Regla de Negocio */}
+            <div className="p-6 bg-gradient-to-br from-amber-50/70 via-orange-50/40 to-white border border-[#FBB03B]/30 rounded-3xl shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-[#FBB03B] text-[#111C2D] flex items-center justify-center shadow-md shrink-0">
+                    <span className="material-symbols-outlined text-2xl">library_music</span>
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-black text-[#111C2D]">
+                      Gestor de Partituras Destacadas en Portada
+                    </h2>
+                    <p className="text-xs text-slate-600 mt-0.5">
+                      Selecciona hasta un máximo de 6 partituras aprobadas para exhibir en el Home. Puedes reordenarlas o cambiarlas en cualquier momento.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 self-end sm:self-auto">
+                  <div className="text-right">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Cupos Utilizados</span>
+                    <span className="text-xl font-black text-[#111C2D]">
+                      {featuredScoreIds.length} <span className="text-slate-400 text-sm font-semibold">/ 6</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Indicador de regla de sección oculta */}
+              <div className={`p-3.5 rounded-2xl border flex items-center gap-3 text-xs ${
+                featuredScoreIds.length === 0
+                  ? "bg-rose-50 border-rose-200 text-rose-800"
+                  : "bg-emerald-50 border-emerald-200 text-emerald-800"
+              }`}>
+                <span className="material-symbols-outlined text-lg shrink-0">
+                  {featuredScoreIds.length === 0 ? "visibility_off" : "visibility"}
+                </span>
+                <div>
+                  {featuredScoreIds.length === 0 ? (
+                    <span>
+                      <strong>Sección Oculta en el Home:</strong> Al no tener ninguna partitura seleccionada (0/6), la sección <em>&ldquo;Partituras Destacadas&rdquo;</em> <strong>no se mostrará a los visitantes</strong> en la página de inicio.
+                    </span>
+                  ) : (
+                    <span>
+                      <strong>Sección Activa en el Home:</strong> Se mostrarán <strong>{featuredScoreIds.length}</strong> partituras en la cuadrícula de la portada en el orden indicado abajo.
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Selector para Agregar Partitura */}
+            <div className="bg-white p-6 rounded-2xl border border-black/5 shadow-sm space-y-4">
+              <h3 className="text-sm font-bold text-[#111C2D] flex items-center gap-2">
+                <span className="material-symbols-outlined text-[#0071BC] text-lg">add_circle</span>
+                Agregar Partitura del Catálogo Aprobado
+              </h3>
+
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="relative flex-1">
+                  <select
+                    value={selectedScoreToAdd}
+                    onChange={(e) => setSelectedScoreToAdd(e.target.value)}
+                    disabled={featuredScoreIds.length >= 6}
+                    className="w-full pl-4 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-[#111C2D] focus:ring-2 focus:ring-[#0071BC] focus:bg-white transition cursor-pointer appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="">
+                      {featuredScoreIds.length >= 6
+                        ? "Límite máximo alcanzado (6/6 partituras)"
+                        : "-- Selecciona una obra para agregar --"}
+                    </option>
+                    {availableCatalogScores
+                      .filter((s) => !featuredScoreIds.includes(s.id))
+                      .map((score) => (
+                        <option key={score.id} value={score.id}>
+                          {score.title} — {score.composer_name} ({score.genre || "PIANO SOLO"} · ${Number(score.price_cop || 0).toLocaleString('es-CO')} COP)
+                        </option>
+                      ))}
+                  </select>
+                  <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-lg">
+                    arrow_drop_down
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleAddFeaturedScore}
+                  disabled={!selectedScoreToAdd || featuredScoreIds.length >= 6}
+                  className="px-6 py-3 rounded-xl bg-[#0071BC] hover:bg-[#005a96] text-white text-xs font-bold transition shadow-xs flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shrink-0"
+                >
+                  <span className="material-symbols-outlined text-base">add</span>
+                  <span>Agregar a Destacadas</span>
+                </button>
+              </div>
+
+              {availableCatalogScores.length === 0 && (
+                <p className="text-xs text-slate-400 italic">
+                  No hay partituras aprobadas disponibles en el catálogo en este momento.
+                </p>
+              )}
+            </div>
+
+            {/* Lista Ordenada de Partituras Seleccionadas */}
+            <div className="bg-white p-6 rounded-2xl border border-black/5 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-black/5 pb-3">
+                <h3 className="text-sm font-bold text-[#111C2D] flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[#FBB03B] text-lg">format_list_numbered</span>
+                  Partituras Seleccionadas ({featuredScoresList.length} / 6)
+                </h3>
+                {featuredScoresList.length > 0 && (
+                  <span className="text-[11px] font-medium text-slate-400">
+                    El orden de esta lista corresponde al orden en el Home
+                  </span>
+                )}
+              </div>
+
+              {featuredScoresList.length === 0 ? (
+                <div className="text-center py-12 px-4 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50 space-y-3">
+                  <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 mx-auto flex items-center justify-center">
+                    <span className="material-symbols-outlined text-2xl">music_off</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-700">No hay partituras destacadas seleccionadas</p>
+                    <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                      Utiliza el selector de arriba para elegir hasta 6 obras. Si guardas con la lista vacía, la sección de partituras se ocultará en el Home.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {featuredScoresList.map((score, index) => (
+                    <div
+                      key={score.id}
+                      className="p-4 rounded-xl border border-slate-200 bg-white hover:border-[#0071BC]/40 shadow-2xs transition flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                    >
+                      <div className="flex items-center gap-3">
+                        {/* Número de posición */}
+                        <div className="w-8 h-8 rounded-lg bg-[#111C2D] text-white flex items-center justify-center text-xs font-black shrink-0">
+                          #{index + 1}
+                        </div>
+
+                        {/* Icono */}
+                        <div className="w-10 h-10 rounded-xl bg-[#F0F3FF] text-[#0071BC] flex items-center justify-center shrink-0">
+                          <span className="material-symbols-outlined text-xl">music_note</span>
+                        </div>
+
+                        {/* Información de la obra */}
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="text-sm font-black text-[#111C2D]">{score.title}</h4>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                              {score.genre || "PIANO SOLO"}
+                            </span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                              {score.difficulty || "INTERMEDIO"}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 font-medium mt-0.5">
+                            {score.composer_name || score.composer?.name || "Compositor"} ·{" "}
+                            <span className="font-semibold text-slate-700">
+                              ${Number(score.price_cop || 0).toLocaleString('es-CO')} COP (~${score.price_usd || 0} USD)
+                            </span>
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Controles de orden y eliminación */}
+                      <div className="flex items-center gap-1.5 self-end sm:self-auto shrink-0">
+                        {/* Subir */}
+                        <button
+                          type="button"
+                          onClick={() => handleMoveScore(index, "up")}
+                          disabled={index === 0}
+                          title="Mover arriba"
+                          className="w-8 h-8 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition"
+                        >
+                          <span className="material-symbols-outlined text-base">arrow_upward</span>
+                        </button>
+
+                        {/* Bajar */}
+                        <button
+                          type="button"
+                          onClick={() => handleMoveScore(index, "down")}
+                          disabled={index === featuredScoresList.length - 1}
+                          title="Mover abajo"
+                          className="w-8 h-8 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition"
+                        >
+                          <span className="material-symbols-outlined text-base">arrow_downward</span>
+                        </button>
+
+                        {/* Quitar */}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveFeaturedScore(score.id)}
+                          title="Quitar de destacadas"
+                          className="w-8 h-8 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 flex items-center justify-center cursor-pointer transition ml-1"
+                        >
+                          <span className="material-symbols-outlined text-base">delete</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Botón de Guardado Persistente */}
+            <div className="flex justify-end pt-4">
+              <button
+                type="button"
+                onClick={handleSaveFeaturedScores}
+                disabled={isSavingFeaturedScores}
+                className="px-8 py-3.5 rounded-xl bg-[#111C2D] hover:bg-[#FBB03B] hover:text-[#111C2D] text-white text-xs font-black transition-all shadow-md flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+              >
+                {isSavingFeaturedScores ? (
+                  <>
+                    <span className="material-symbols-outlined animate-spin text-base">refresh</span>
+                    <span>Guardando en Base de Datos...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-base">save</span>
+                    <span>Guardar Partituras Destacadas</span>
+                  </>
+                )}
+              </button>
+            </div>
+
           </div>
         )}
 
@@ -2598,6 +3139,46 @@ export default function AdminCMSPage() {
         )}
 
         {/* ==========================================
+               TAB: BITÁCORA PIANÍSTICA & BLOG
+               ========================================== */}
+        {activeTab === "blog" && (
+          <div className="space-y-6">
+            <div className="bg-white p-8 rounded-3xl border border-black/5 shadow-xs flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#0071BC] font-montserrat">
+                  <span className="material-symbols-outlined text-base">article</span>
+                  <span>Módulo Especializado de Difusión</span>
+                </div>
+                <h2 className="text-2xl font-black font-montserrat text-[#111C2D]">
+                  Gestión de Bitácora Pianística & Artículos
+                </h2>
+                <p className="text-xs sm:text-sm text-[#4C4546] max-w-2xl leading-relaxed">
+                  Para mantener las pestañas del CMS ligeras y ordenadas, el blog cuenta con un panel dedicado con redacción en texto enriquecido, subida de imágenes a la nube, asignación de categorías dinámicas y activación/desactivación instantánea.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                <Link
+                  href="/admin/blog"
+                  className="px-6 py-3.5 bg-[#FBB03B] hover:bg-[#e09b2d] text-[#111C2D] font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition font-montserrat flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-base">open_in_new</span>
+                  <span>Abrir Gestor del Blog</span>
+                </Link>
+                <Link
+                  href="/blog"
+                  target="_blank"
+                  className="px-4 py-3.5 bg-white border border-black/10 hover:bg-[#F0F3FF] text-[#111C2D] font-bold text-xs rounded-xl shadow-xs transition font-montserrat flex items-center justify-center gap-1.5"
+                >
+                  <span className="material-symbols-outlined text-base text-[#0071BC]">visibility</span>
+                  <span>Ver Bitácora Pública</span>
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ==========================================
                TAB 4: PÁGINAS LEGALES Y T&C
                ========================================== */}
         {activeTab === "legals" && (
@@ -2631,6 +3212,68 @@ export default function AdminCMSPage() {
                 >
                   <span className="material-symbols-outlined text-base">edit_note</span> Editar Documento
                 </button>
+              </div>
+
+              {/* CARD CMS: LÍMITE DE DESCARGAS POR LICENCIA */}
+              <div className="bg-white p-6 rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] space-y-4">
+                <div className="flex items-center gap-3 pb-3 border-b border-black/5">
+                  <div className="w-10 h-10 rounded-xl bg-[#F0F3FF] text-[#0071BC] flex items-center justify-center border border-[#0071BC]/20 shrink-0">
+                    <span className="material-symbols-outlined text-xl">download_done</span>
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold font-montserrat text-[#111C2D]">Límite Máximo de Descargas por Licencia</h3>
+                    <p className="text-xs text-[#4C4546]">Configura cuántas veces puede descargar un comprador su partitura con estampa legal (por defecto 5).</p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 pt-1">
+                  <div className="relative max-w-xs">
+                    <input
+                      type="number"
+                      min="1"
+                      max="50"
+                      step="1"
+                      value={cmsMaxDownloads}
+                      onChange={(e) => setCmsMaxDownloads(parseInt(e.target.value, 10) || 5)}
+                      className="w-full pl-4 pr-24 py-2.5 bg-[#F0F3FF] border border-black/10 rounded-xl text-sm font-mono font-bold text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-[#4C4546]">
+                      Descargas
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="cmsApplyExistingCheckbox"
+                      checked={cmsApplyToExisting}
+                      onChange={(e) => setCmsApplyToExisting(e.target.checked)}
+                      className="w-4 h-4 rounded text-[#0071BC] focus:ring-[#0071BC] cursor-pointer"
+                    />
+                    <label htmlFor="cmsApplyExistingCheckbox" className="text-xs text-[#4C4546] cursor-pointer">
+                      Aplicar a compras anteriores
+                    </label>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={isSavingCmsDownloads}
+                    onClick={handleSaveCmsDownloadLimit}
+                    className="sm:ml-auto px-6 py-2.5 bg-[#0071BC] hover:bg-[#005a96] text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition font-montserrat flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {isSavingCmsDownloads ? (
+                      <>
+                        <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                        <span>Guardando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-base text-[#FBB03B]">save</span>
+                        <span>Guardar Límite en BD</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
 
             </div>

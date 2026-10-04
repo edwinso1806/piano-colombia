@@ -24,6 +24,84 @@ export default function MisDescargasPage() {
   const [categoryFilter, setCategoryFilter] = useState("todas");
   const [scoresList, setScoresList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [downloadingToken, setDownloadingToken] = useState<string | null>(null);
+  const [downloadFeedback, setDownloadFeedback] = useState<{ token: string; type: "success" | "error"; message: string } | null>(null);
+
+  const handleDownloadPdf = async (score: any) => {
+    if (score.downloadsLeft <= 0) {
+      alert(`Has alcanzado el límite máximo de ${score.downloadsTotal} descargas permitidas para esta licencia digital.`);
+      return;
+    }
+
+    setDownloadingToken(score.token);
+    setDownloadFeedback(null);
+
+    try {
+      // Descargar a través del proxy seguro de descargas de Next.js
+      const res = await fetch(`/api/downloads/${score.token}`, {
+        method: "GET",
+      });
+
+      if (res.status === 403) {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.message || `Has alcanzado el límite máximo de descargas (${score.downloadsTotal}) permitidas para esta licencia.`);
+        setScoresList((prev) =>
+          prev.map((s) => (s.id === score.id ? { ...s, downloadsLeft: 0, progressPercent: 0 } : s))
+        );
+        return;
+      }
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || `Error al procesar la descarga (HTTP ${res.status})`);
+      }
+
+      // Convertir a blob para forzar descarga segura en el navegador
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const tempLink = document.createElement("a");
+      tempLink.href = blobUrl;
+      const safeTitle = (score.title || "Partitura")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9_-]/g, "_");
+      tempLink.download = `PianoColombia_${safeTitle}_Estampada.pdf`;
+      document.body.appendChild(tempLink);
+      tempLink.click();
+      document.body.removeChild(tempLink);
+      window.URL.revokeObjectURL(blobUrl);
+
+      // Obtener conteo restante desde encabezados de respuesta
+      const remainingHeader = res.headers.get("X-Downloads-Remaining");
+      const nextRemaining =
+        remainingHeader !== null ? parseInt(remainingHeader, 10) : Math.max(0, score.downloadsLeft - 1);
+
+      setScoresList((prev) =>
+        prev.map((s) => {
+          if (s.id === score.id) {
+            const safeLeft = isNaN(nextRemaining) ? Math.max(0, s.downloadsLeft - 1) : nextRemaining;
+            return {
+              ...s,
+              downloadsLeft: safeLeft,
+              progressPercent: (safeLeft / s.downloadsTotal) * 100,
+            };
+          }
+          return s;
+        })
+      );
+
+      setDownloadFeedback({
+        token: score.token,
+        type: "success",
+        message: `¡Partitura descargada con éxito! Te quedan ${nextRemaining} descargas disponibles.`,
+      });
+    } catch (err: any) {
+      console.error("Error al descargar:", err);
+      alert(err.message || "Error al generar tu partitura con estampa legal. Por favor intenta de nuevo.");
+    } finally {
+      setDownloadingToken(null);
+    }
+  };
 
   // Sincronizar pestaña con query params y permitir navegación directa
   const handleTabChange = (tab: "descargas" | "pedidos" | "colecciones") => {
@@ -453,16 +531,42 @@ export default function MisDescargasPage() {
                             Audio Referencia
                           </button>
 
-                          <a
-                            href={`http://localhost:9000/store/downloads/${score.token}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-5 py-3 rounded-xl bg-[#FBB03B] hover:bg-[#e09b2e] text-[#111C2D] font-extrabold text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition font-montserrat flex items-center justify-center gap-2"
-                          >
-                            <span className="material-symbols-outlined text-lg">download</span>
-                            Descargar PDF Firmado
-                          </a>
+                          {score.downloadsLeft > 0 ? (
+                            <button
+                              onClick={() => handleDownloadPdf(score)}
+                              disabled={downloadingToken === score.token}
+                              className="px-5 py-3 rounded-xl bg-[#FBB03B] hover:bg-[#e09b2e] text-[#111C2D] font-extrabold text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition font-montserrat flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                            >
+                              {downloadingToken === score.token ? (
+                                <>
+                                  <span className="w-4 h-4 border-2 border-[#111C2D] border-t-transparent rounded-full animate-spin"></span>
+                                  <span>Estampando Licencia...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="material-symbols-outlined text-lg">download</span>
+                                  <span>Descargar PDF Firmado</span>
+                                </>
+                              )}
+                            </button>
+                          ) : (
+                            <button
+                              disabled
+                              title="Has alcanzado el límite máximo de descargas para esta compra"
+                              className="px-5 py-3 rounded-xl bg-slate-100 text-slate-400 font-extrabold text-xs uppercase tracking-wider font-montserrat flex items-center justify-center gap-2 cursor-not-allowed border border-slate-200"
+                            >
+                              <span className="material-symbols-outlined text-lg text-slate-400">lock</span>
+                              <span>Descargas Agotadas (0/{score.downloadsTotal})</span>
+                            </button>
+                          )}
                         </div>
+
+                        {downloadFeedback && downloadFeedback.token === score.token && (
+                          <div className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200 flex items-center gap-1.5 mt-2 self-stretch lg:self-end">
+                            <span className="material-symbols-outlined text-sm">check_circle</span>
+                            <span>{downloadFeedback.message}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </article>
@@ -596,7 +700,7 @@ export default function MisDescargasPage() {
                           </td>
                           <td className="py-4 px-6 text-right">
                             <a
-                              href={`http://localhost:9000/store/downloads/${score.token}`}
+                              href={`/api/downloads/${score.token}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="px-3 py-1.5 bg-[#F0F3FF] hover:bg-slate-200/60 text-[#0071BC] rounded-xl font-extrabold text-xs transition font-montserrat inline-flex items-center gap-1 border border-black/5"

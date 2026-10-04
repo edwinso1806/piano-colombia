@@ -45,6 +45,14 @@ export const ADMIN_ROUTES: AdminRouteConfig[] = [
     allowedRoles: ["admin", "super_admin", "editor"],
   },
   {
+    href: "/admin/blog",
+    label: "Blog & Noticias",
+    icon: "article",
+    badge: "Bitácora",
+    badgeColor: "bg-blue-100 text-blue-800",
+    allowedRoles: ["admin", "super_admin", "editor"],
+  },
+  {
     href: "/admin/pagos",
     label: "Dispersión & Pagos",
     icon: "payments",

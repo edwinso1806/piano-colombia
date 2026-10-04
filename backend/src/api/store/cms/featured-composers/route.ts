@@ -12,6 +12,8 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
       all_composers: result.all_composers,
       active_tabs_count: result.active_tabs_count,
       total_composers: result.total_composers,
+      total_registered_composers: result.total_registered_composers,
+      recent_composers: result.recent_composers,
     })
   } catch (error: any) {
     console.error("[store/cms/featured-composers] Error:", error.message)

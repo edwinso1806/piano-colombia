@@ -10,7 +10,7 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
     if (email) filters.buyer_email = email
 
     const [downloads, count] = await downloadModuleService.listAndCountCustomerDownloads(filters, {
-      order: { createdAt: "DESC" },
+      order: { created_at: "DESC" },
     })
 
     return res.status(200).json({

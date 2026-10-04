@@ -2,21 +2,30 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { getAdminDashboardStats, updateGeneralCommission } from "@/lib/api-client";
+import { getAdminDashboardStats, updateGeneralCommission, getAdminDownloadSettings, updateAdminDownloadSettings } from "@/lib/api-client";
 
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [commissionInput, setCommissionInput] = useState<number>(20);
   const [isUpdatingCommission, setIsUpdatingCommission] = useState(false);
+  const [maxDownloadsInput, setMaxDownloadsInput] = useState<number>(5);
+  const [isUpdatingDownloads, setIsUpdatingDownloads] = useState(false);
+  const [applyToExisting, setApplyToExisting] = useState(true);
   const [notification, setNotification] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   const fetchStats = async () => {
     setLoading(true);
-    const data = await getAdminDashboardStats();
+    const [data, downloadSettings] = await Promise.all([
+      getAdminDashboardStats(),
+      getAdminDownloadSettings().catch(() => ({ maxDownloads: 5 })),
+    ]);
     if (data && data.success) {
       setStats(data);
       setCommissionInput(data.defaultCommission || 20);
+    }
+    if (downloadSettings && downloadSettings.maxDownloads) {
+      setMaxDownloadsInput(downloadSettings.maxDownloads);
     }
     setLoading(false);
   };
@@ -46,12 +55,34 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const handleSaveDownloadsLimit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsUpdatingDownloads(true);
+    setNotification(null);
+    try {
+      const res = await updateAdminDownloadSettings(maxDownloadsInput, applyToExisting);
+      setNotification({
+        type: "success",
+        message: res.message || `Límite de descargas actualizado a ${maxDownloadsInput} descargas por compra.`,
+      });
+      fetchStats();
+    } catch (err: any) {
+      setNotification({
+        type: "error",
+        message: err.message || "Error al actualizar el límite de descargas.",
+      });
+    } finally {
+      setIsUpdatingDownloads(false);
+    }
+  };
+
   const pendingComposersCount = stats?.composers?.pendingCount ?? 0;
   const pendingScoresCount = stats?.scores?.pendingCount ?? 0;
   const defaultCommission = stats?.defaultCommission ?? 20;
   const totalSalesCop = stats?.financials?.totalSalesCop ?? 0;
   const totalCommissionCop = stats?.financials?.totalCommissionCop ?? 0;
   const transactionsCount = stats?.financials?.transactionsCount ?? 0;
+  const recentTransactions = stats?.financials?.recentTransactions ?? [];
 
   const firstPendingComposer = stats?.composers?.pendingList?.[0];
   const firstPendingScore = stats?.scores?.pendingList?.[0];
@@ -229,75 +260,257 @@ export default function AdminDashboardPage() {
 
       </div>
 
-      {/* SECCIÓN ADMINISTRABLE: GESTIÓN DEL PORCENTAJE DE COMISIÓN DE PLATAFORMA */}
+      {/* SECCIÓN: ÚLTIMAS VENTAS Y TRANSACCIONES WOMPI EN TIEMPO REAL */}
       <div className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] p-6 sm:p-8 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-black/5">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-amber-50 text-[#FBB03B] flex items-center justify-center border border-amber-200">
-              <span className="material-symbols-outlined text-2xl">percent</span>
+            <div className="w-12 h-12 rounded-2xl bg-[#F0F3FF] text-[#0071BC] flex items-center justify-center border border-[#0071BC]/20 shrink-0">
+              <span className="material-symbols-outlined text-2xl">receipt_long</span>
             </div>
             <div>
-              <h2 className="text-lg font-black font-montserrat text-[#111C2D]">
-                Gestión de Comisiones de Plataforma
-              </h2>
-              <p className="text-xs text-[#4C4546] font-medium">
-                Configura el porcentaje general de retención por venta o personaliza acuerdos individuales por compositor.
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-black font-montserrat text-[#111C2D]">
+                  Últimas Ventas y Transacciones Wompi
+                </h2>
+                <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-black text-[10px] font-montserrat">
+                  En Vivo ({transactionsCount})
+                </span>
+              </div>
+              <p className="text-xs text-[#4C4546] font-medium mt-0.5">
+                Registro en tiempo real de transacciones autorizadas por Wompi, licencias nominativas emitidas y liquidación de comisiones.
               </p>
             </div>
           </div>
 
-          <Link
-            href="/admin/compositores"
-            className="px-4 py-2 bg-[#F0F3FF] hover:bg-[#0071BC] text-[#0071BC] hover:text-white text-xs font-bold rounded-xl transition font-montserrat inline-flex items-center gap-1.5 self-start sm:self-auto"
+          <button
+            type="button"
+            onClick={fetchStats}
+            className="px-3.5 py-2 bg-[#F0F3FF] hover:bg-[#0071BC] text-[#0071BC] hover:text-white text-xs font-bold rounded-xl transition font-montserrat inline-flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
           >
-            <span className="material-symbols-outlined text-sm">tune</span>
-            Configurar por Compositor
-          </Link>
+            <span className="material-symbols-outlined text-sm">refresh</span>
+            Actualizar Ventas
+          </button>
         </div>
 
-        <form onSubmit={handleSaveGeneralCommission} className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-          <div className="flex-1 w-full sm:w-auto">
-            <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">
-              Comisión General de Plataforma (%)
-            </label>
-            <div className="relative max-w-xs">
-              <input
-                type="number"
-                min="0"
-                max="100"
-                step="0.5"
-                required
-                value={commissionInput}
-                onChange={(e) => setCommissionInput(parseFloat(e.target.value) || 0)}
-                className="w-full pl-4 pr-12 py-3 bg-[#F0F3FF] border border-black/10 rounded-xl text-base font-mono font-bold text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
-              />
-              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-[#4C4546]">
-                %
-              </span>
-            </div>
-            <p className="text-[11px] text-[#4C4546] mt-1.5">
-              Este valor se aplica a todos los compositores que no cuenten con una tasa preferencial pactada.
-            </p>
-          </div>
+        {recentTransactions && recentTransactions.length > 0 ? (
+          <div className="overflow-x-auto -mx-6 sm:mx-0">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-black/5 text-[#4C4546] uppercase font-montserrat text-[10px] tracking-wider bg-[#F8FAFF]">
+                  <th className="py-3 px-4 rounded-l-xl">Fecha / Hora</th>
+                  <th className="py-3 px-4">Referencia Wompi</th>
+                  <th className="py-3 px-4">Comprador</th>
+                  <th className="py-3 px-4">Partitura / Compositor</th>
+                  <th className="py-3 px-4 text-right">Monto Bruto</th>
+                  <th className="py-3 px-4 text-right">Comisión PC ({defaultCommission}%)</th>
+                  <th className="py-3 px-4 text-center rounded-r-xl">Estado</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-black/5">
+                {recentTransactions.map((tx: any) => {
+                  const txDate = tx.created_at
+                    ? new Date(tx.created_at).toLocaleString("es-CO", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
+                    : "Reciente";
+                  const grossAmount = Number(tx.amount_cop) || 40000;
+                  const commission = Math.round(grossAmount * (defaultCommission / 100));
 
-          <button
-            type="submit"
-            disabled={isUpdatingCommission}
-            className="mt-2 sm:mt-5 px-6 py-3.5 bg-[#111C2D] hover:bg-[#1a2b45] text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition font-montserrat flex items-center gap-2 disabled:opacity-50"
-          >
-            {isUpdatingCommission ? (
-              <>
-                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                Guardando en BD...
-              </>
-            ) : (
-              <>
-                <span className="material-symbols-outlined text-base text-[#FBB03B]">save</span>
-                Actualizar Comisión General
-              </>
-            )}
-          </button>
-        </form>
+                  return (
+                    <tr key={tx.id} className="hover:bg-[#F0F3FF]/40 transition-colors">
+                      <td className="py-3.5 px-4 font-mono text-[11px] text-[#4C4546] whitespace-nowrap">
+                        {txDate}
+                      </td>
+                      <td className="py-3.5 px-4 font-mono text-[11px] font-bold text-[#111C2D] whitespace-nowrap">
+                        <span className="px-2 py-0.5 bg-[#F0F3FF] rounded border border-black/5">
+                          {tx.order_id || tx.wompi_transaction_id || "WMP-TRX"}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <div className="font-bold text-[#111C2D]">{tx.buyer_name || "Comprador"}</div>
+                        <div className="text-[11px] text-[#4C4546] font-mono">{tx.buyer_email}</div>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <div className="font-bold text-[#0071BC]">{tx.score_title || "Partitura Urtext"}</div>
+                        <div className="text-[11px] text-[#4C4546]">{tx.composer_name || "Compositor"}</div>
+                      </td>
+                      <td className="py-3.5 px-4 text-right font-black font-montserrat text-[#111C2D] whitespace-nowrap">
+                        ${grossAmount.toLocaleString("es-CO")} COP
+                      </td>
+                      <td className="py-3.5 px-4 text-right font-bold font-montserrat text-emerald-700 whitespace-nowrap">
+                        +${commission.toLocaleString("es-CO")} COP
+                      </td>
+                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-black text-[10px] font-montserrat">
+                          <span className="material-symbols-outlined text-xs">verified</span>
+                          Aprobada
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="text-center py-8 text-[#4C4546] text-xs">
+            Aún no hay transacciones de compra registradas.
+          </div>
+        )}
+      </div>
+
+      {/* SECCIÓN ADMINISTRABLE: CONFIGURACIONES GLOBALES DE PLATAFORMA (COMISIÓN Y LÍMITE DE DESCARGAS) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* CARD 1: COMISIÓN DE PLATAFORMA */}
+        <div className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] p-6 sm:p-8 space-y-6 flex flex-col justify-between">
+          <div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-black/5">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-amber-50 text-[#FBB03B] flex items-center justify-center border border-amber-200 shrink-0">
+                  <span className="material-symbols-outlined text-2xl">percent</span>
+                </div>
+                <div>
+                  <h2 className="text-base font-black font-montserrat text-[#111C2D]">
+                    Comisión de Plataforma
+                  </h2>
+                  <p className="text-xs text-[#4C4546] font-medium">
+                    Porcentaje de retención por venta de partituras.
+                  </p>
+                </div>
+              </div>
+
+              <Link
+                href="/admin/compositores"
+                className="px-3.5 py-1.5 bg-[#F0F3FF] hover:bg-[#0071BC] text-[#0071BC] hover:text-white text-[11px] font-bold rounded-xl transition font-montserrat inline-flex items-center gap-1 self-start sm:self-auto shrink-0"
+              >
+                <span className="material-symbols-outlined text-sm">tune</span>
+                Por Compositor
+              </Link>
+            </div>
+
+            <form onSubmit={handleSaveGeneralCommission} className="mt-5 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">
+                  Tasa General de Comisión (%)
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.5"
+                    required
+                    value={commissionInput}
+                    onChange={(e) => setCommissionInput(parseFloat(e.target.value) || 0)}
+                    className="w-full pl-4 pr-12 py-3 bg-[#F0F3FF] border border-black/10 rounded-xl text-base font-mono font-bold text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-[#4C4546]">
+                    %
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#4C4546] mt-1.5">
+                  Aplica a compositores sin acuerdo preferencial pactado.
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isUpdatingCommission}
+                className="w-full px-5 py-3 bg-[#111C2D] hover:bg-[#1a2b45] text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition font-montserrat flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+              >
+                {isUpdatingCommission ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    Guardando en BD...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-base text-[#FBB03B]">save</span>
+                    Guardar Comisión ({commissionInput}%)
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+
+        {/* CARD 2: LÍMITE DE DESCARGAS POR LICENCIA */}
+        <div className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] p-6 sm:p-8 space-y-6 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-3 pb-4 border-b border-black/5">
+              <div className="w-12 h-12 rounded-2xl bg-[#F0F3FF] text-[#0071BC] flex items-center justify-center border border-[#0071BC]/20 shrink-0">
+                <span className="material-symbols-outlined text-2xl">download_done</span>
+              </div>
+              <div>
+                <h2 className="text-base font-black font-montserrat text-[#111C2D]">
+                  Límite de Descargas por Licencia
+                </h2>
+                <p className="text-xs text-[#4C4546] font-medium">
+                  Número máximo de descargas autorizadas antes de bloquear el acceso.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveDownloadsLimit} className="mt-5 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">
+                  Máximo de Descargas Permitidas por Compra
+                </label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="1"
+                    max="50"
+                    step="1"
+                    required
+                    value={maxDownloadsInput}
+                    onChange={(e) => setMaxDownloadsInput(parseInt(e.target.value, 10) || 5)}
+                    className="w-full pl-4 pr-24 py-3 bg-[#F0F3FF] border border-black/10 rounded-xl text-base font-mono font-bold text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-[#4C4546]">
+                    Descargas
+                  </span>
+                </div>
+                <div className="mt-2.5 flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="applyToExistingCheckbox"
+                    checked={applyToExisting}
+                    onChange={(e) => setApplyToExisting(e.target.checked)}
+                    className="w-4 h-4 rounded text-[#0071BC] focus:ring-[#0071BC] cursor-pointer"
+                  />
+                  <label htmlFor="applyToExistingCheckbox" className="text-[11px] text-[#4C4546] font-medium cursor-pointer">
+                    Actualizar también licencias de clientes ya emitidas en el sistema
+                  </label>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isUpdatingDownloads}
+                className="w-full px-5 py-3 bg-[#0071BC] hover:bg-[#005a96] text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition font-montserrat flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
+              >
+                {isUpdatingDownloads ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    Actualizando Límite...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-base text-[#FBB03B]">save</span>
+                    Guardar Límite ({maxDownloadsInput} descargas)
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+
       </div>
 
       {/* Accesos Rápidos Módulos Administrativos */}

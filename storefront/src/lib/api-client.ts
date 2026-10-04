@@ -941,13 +941,52 @@ export async function updateScoreApi(slugOrId: string, scoreData: Record<string,
 
 export async function getStoreFeaturedComposers() {
   try {
-    const res = await fetch(`${MEDUSA_URL}/store/cms/featured-composers`, {
-      headers: defaultHeaders,
-      cache: "no-store",
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    return data
+    const [featuredRes, allComposersRes] = await Promise.allSettled([
+      fetch(`${MEDUSA_URL}/store/cms/featured-composers`, {
+        headers: defaultHeaders,
+        cache: "no-store",
+      }).then((r) => (r.ok ? r.json() : null)),
+      fetch(`${MEDUSA_URL}/store/composers`, {
+        headers: defaultHeaders,
+        cache: "no-store",
+      }).then((r) => (r.ok ? r.json() : null)),
+    ])
+
+    const featuredData = featuredRes.status === "fulfilled" ? featuredRes.value : null
+    const composersData = allComposersRes.status === "fulfilled" ? allComposersRes.value : null
+
+    const allApprovedComposers = composersData?.composers || []
+    const totalCount =
+      featuredData?.total_registered_composers ||
+      composersData?.count ||
+      allApprovedComposers.length ||
+      featuredData?.total_composers ||
+      0
+
+    // Si el backend ya devolvió recent_composers, los usamos; de lo contrario los calculamos del directorio
+    let recent = featuredData?.recent_composers || []
+    if (!recent || recent.length === 0) {
+      recent = [...allApprovedComposers]
+        .sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+        .slice(0, 4)
+        .map((c: any) => ({
+          id: c.id,
+          name: c.artistic_name || `${c.first_name || ""} ${c.last_name || ""}`.trim(),
+          slug: c.slug || c.id,
+          era: c.era || null,
+          photo_url: c.photo_url || null,
+        }))
+    }
+
+    return {
+      success: true,
+      tabs: featuredData?.tabs || [],
+      all_composers: featuredData?.all_composers || [],
+      active_tabs_count: featuredData?.active_tabs_count || 0,
+      total_composers: featuredData?.total_composers || 0,
+      total_registered_composers: totalCount,
+      recent_composers: recent,
+    }
   } catch (err) {
     console.warn("[Medusa API] Fallback local para compositores destacados del home:", err)
     return null
@@ -985,6 +1024,347 @@ export async function updateAdminFeaturedComposers(tabs: any[]) {
   if (!res.ok) throw new Error(data.message || "Error al guardar compositores destacados CMS")
   return data
 }
+
+// ----------------------------------------------------------------------
+// 8. CMS Partituras Destacadas en Portada (Home & Admin)
+// ----------------------------------------------------------------------
+
+export async function getStoreFeaturedScores() {
+  try {
+    const res = await fetch(`${MEDUSA_URL}/store/cms/featured-scores`, {
+      headers: defaultHeaders,
+      cache: "no-store",
+    })
+    if (res.ok) {
+      const data = await res.json()
+      return data.scores || []
+    }
+  } catch (err) {
+    console.warn("[Medusa API] Endpoint /store/cms/featured-scores no disponible, probando fallback:", err)
+  }
+
+  // Fallback: consultar /store/scores filtrando las que tengan is_featured = true
+  try {
+    const fallbackRes = await fetch(`${MEDUSA_URL}/store/scores`, {
+      headers: defaultHeaders,
+      cache: "no-store",
+    })
+    if (!fallbackRes.ok) return []
+    const fallbackData = await fallbackRes.json()
+    const all = fallbackData.scores || []
+    return all.filter((s: any) => s.is_featured === true).slice(0, 6)
+  } catch (e) {
+    console.warn("[Medusa API] Fallback a partituras destacadas:", e)
+    return []
+  }
+}
+
+export async function getAdminFeaturedScores() {
+  try {
+    const res = await fetch(`${MEDUSA_URL}/admin/cms/featured-scores`, {
+      headers: defaultHeaders,
+      cache: "no-store",
+    })
+    if (res.ok) {
+      return await res.json()
+    }
+  } catch (err) {
+    console.warn("[Medusa Admin] Error consultando /admin/cms/featured-scores:", err)
+  }
+
+  // Fallback para admin: consultar /store/scores
+  try {
+    const res = await fetch(`${MEDUSA_URL}/store/scores`, {
+      headers: defaultHeaders,
+      cache: "no-store",
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    const all = data.scores || []
+    const featured = all.filter((s: any) => s.is_featured === true).slice(0, 6)
+    return {
+      success: true,
+      featured_scores: featured,
+      featured_score_ids: featured.map((s: any) => s.id),
+      count: featured.length,
+      max_allowed: 6,
+      available_scores: all,
+      total_available: all.length,
+    }
+  } catch (e) {
+    return {
+      success: true,
+      featured_scores: [],
+      featured_score_ids: [],
+      count: 0,
+      max_allowed: 6,
+      available_scores: [],
+      total_available: 0,
+    }
+  }
+}
+
+export async function updateAdminFeaturedScores(scoreIds: string[]) {
+  const res = await fetch(`${MEDUSA_URL}/admin/cms/featured-scores`, {
+    method: "POST",
+    headers: defaultHeaders,
+    body: JSON.stringify({ score_ids: scoreIds }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.message || "Error al guardar partituras destacadas CMS")
+  return data
+}
+
+// ----------------------------------------------------------------------
+// 9. Blog & Bitácora Pianística (Store & Admin CMS)
+// ----------------------------------------------------------------------
+
+export async function getStoreBlogPosts(params?: { category?: string; limit?: number }) {
+  try {
+    const url = new URL(`${MEDUSA_URL}/store/blog`)
+    if (params?.category && params.category !== "Todos" && params.category !== "all") {
+      url.searchParams.append("category", params.category)
+    }
+    if (params?.limit) {
+      url.searchParams.append("limit", params.limit.toString())
+    }
+
+    const res = await fetch(url.toString(), {
+      headers: defaultHeaders,
+      cache: "no-store",
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    return data
+  } catch (err) {
+    console.warn("[Medusa API] Fallback para artículos de blog:", err)
+    return { posts: [], count: 0, categories: [] }
+  }
+}
+
+export async function getStoreBlogPost(slug: string) {
+  try {
+    const res = await fetch(`${MEDUSA_URL}/store/blog/${encodeURIComponent(slug)}`, {
+      headers: defaultHeaders,
+      cache: "no-store",
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    return data.post || null
+  } catch (err) {
+    console.warn("[Medusa API] Fallback para artículo slug:", err)
+    return null
+  }
+}
+
+export async function getAdminBlogPosts() {
+  try {
+    const res = await fetch(`${MEDUSA_URL}/admin/blog`, {
+      headers: defaultHeaders,
+      cache: "no-store",
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return await res.json()
+  } catch (err) {
+    console.warn("[Medusa API] Error al obtener artículos de admin:", err)
+    return { success: false, posts: [], total: 0, categories: [] }
+  }
+}
+
+export async function createAdminBlogPost(postData: any) {
+  const res = await fetch(`${MEDUSA_URL}/admin/blog`, {
+    method: "POST",
+    headers: defaultHeaders,
+    body: JSON.stringify(postData),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.message || "Error al crear el artículo")
+  return data
+}
+
+export async function updateAdminBlogPost(id: string, postData: any) {
+  const res = await fetch(`${MEDUSA_URL}/admin/blog/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    headers: defaultHeaders,
+    body: JSON.stringify(postData),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.message || "Error al actualizar el artículo")
+  return data
+}
+
+export async function toggleAdminBlogPost(id: string, isActive: boolean) {
+  const res = await fetch(`${MEDUSA_URL}/admin/blog/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: defaultHeaders,
+    body: JSON.stringify({ is_active: isActive }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.message || "Error al cambiar estado del artículo")
+  return data
+}
+
+export async function deleteAdminBlogPost(id: string) {
+  const res = await fetch(`${MEDUSA_URL}/admin/blog/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: defaultHeaders,
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.message || "Error al eliminar el artículo")
+  return data
+}
+
+export async function createAdminBlogCategory(name: string) {
+  const res = await fetch(`${MEDUSA_URL}/admin/blog/categories`, {
+    method: "POST",
+    headers: defaultHeaders,
+    body: JSON.stringify({ name }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.message || "Error al crear categoría")
+  return data
+}
+
+export async function deleteAdminBlogCategory(id: string) {
+  const res = await fetch(`${MEDUSA_URL}/admin/blog/categories?id=${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: defaultHeaders,
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.message || "Error al eliminar categoría")
+  return data
+}
+
+// ----------------------------------------------------------------------
+// 10. Pasarela de Pagos Wompi Oficial
+// ----------------------------------------------------------------------
+
+export async function createWompiSession(payload: {
+  amount_in_cents: number
+  currency: string
+  customer_email: string
+  customer_name: string
+  customer_phone?: string
+  customer_legal_id?: string
+  customer_legal_id_type?: string
+  score_slug?: string
+  score_id?: string
+  items?: any[]
+}) {
+  const res = await fetch(`${MEDUSA_URL}/store/wompi/session`, {
+    method: "POST",
+    headers: defaultHeaders,
+    body: JSON.stringify(payload),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.message || "Error al inicializar sesión Wompi")
+  return data
+}
+
+export async function tokenizeCardWithWompi(cardData: {
+  number: string
+  cvc: string
+  exp_month: string
+  exp_year: string
+  card_holder: string
+}) {
+  const publicKey = process.env.NEXT_PUBLIC_WOMPI_PUBLIC_KEY || "pub_test_OCj8NNP9cXNcYhdNvJbP4BoT5MAHttzo"
+  const wompiBase = publicKey.startsWith("pub_prod_")
+    ? "https://production.wompi.co/v1"
+    : "https://sandbox.wompi.co/v1"
+
+  const res = await fetch(`${wompiBase}/tokens/cards`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${publicKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      number: cardData.number.replace(/\s+/g, ""),
+      cvc: cardData.cvc.trim(),
+      exp_month: cardData.exp_month.padStart(2, "0"),
+      exp_year: cardData.exp_year.length === 4 ? cardData.exp_year.slice(-2) : cardData.exp_year,
+      card_holder: cardData.card_holder.trim(),
+    }),
+  })
+
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok || data?.status !== "CREATED" || !data?.data?.id) {
+    const errorMsg = data?.error?.messages
+      ? Object.values(data.error.messages).flat().join(". ")
+      : data?.error?.reason || data?.message || "Invalid card details. Please check your card number, date, and CVC."
+    throw new Error(errorMsg)
+  }
+  return data.data
+}
+
+export async function chargeWompiCardDirectly(payload: {
+  card_token: string
+  amount_in_cents: number
+  currency: string
+  customer_email: string
+  customer_name: string
+  customer_phone?: string
+  customer_legal_id?: string
+  customer_legal_id_type?: string
+  score_slug?: string
+  score_id?: string
+}) {
+  const res = await fetch(`${MEDUSA_URL}/store/wompi/charge`, {
+    method: "POST",
+    headers: defaultHeaders,
+    body: JSON.stringify(payload),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok || !data.success) {
+    throw new Error(data.message || "Failed to process card payment with Wompi.")
+  }
+  return data
+}
+
+export async function confirmWompiTransaction(payload: any) {
+  const res = await fetch(`${MEDUSA_URL}/webhooks/wompi`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.message || "Error al confirmar transacción Wompi")
+  return data
+}
+
+// ----------------------------------------------------------------------
+// 15. Límite de Descargas por Licencia (CMS / Admin)
+// ----------------------------------------------------------------------
+
+export async function getAdminDownloadSettings(): Promise<{ maxDownloads: number }> {
+  try {
+    const res = await fetch(`${MEDUSA_URL}/admin/settings/downloads`, {
+      cache: "no-store",
+    })
+    if (!res.ok) return { maxDownloads: 5 }
+    const data = await res.json()
+    return { maxDownloads: data.maxDownloads || 5 }
+  } catch {
+    return { maxDownloads: 5 }
+  }
+}
+
+export async function updateAdminDownloadSettings(maxDownloads: number, updateExisting = false) {
+  const res = await fetch(`${MEDUSA_URL}/admin/settings/downloads`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ maxDownloads, updateExisting }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok || !data.success) {
+    throw new Error(data.message || "Error al actualizar límite de descargas")
+  }
+  return data
+}
+
+
+
 
 
 

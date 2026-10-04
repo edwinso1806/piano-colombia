@@ -27,6 +27,14 @@ export default defineMiddlewares({
       middlewares: [customCorsMiddleware],
     },
     {
+      matcher: "/downloads*",
+      middlewares: [customCorsMiddleware],
+    },
+    {
+      matcher: "/store/downloads*",
+      middlewares: [customCorsMiddleware],
+    },
+    {
       matcher: "/store/media*",
       middlewares: [customCorsMiddleware],
     },
@@ -60,7 +68,23 @@ export default defineMiddlewares({
       middlewares: [customCorsMiddleware],
     },
     {
+      matcher: "/store/blog*",
+      middlewares: [customCorsMiddleware],
+    },
+    {
+      matcher: "/admin/blog*",
+      middlewares: [customCorsMiddleware],
+    },
+    {
       matcher: "/store/auth*",
+      middlewares: [customCorsMiddleware],
+    },
+    {
+      matcher: "/store/wompi*",
+      middlewares: [customCorsMiddleware],
+    },
+    {
+      matcher: "/webhooks/wompi*",
       middlewares: [customCorsMiddleware],
     },
   ],

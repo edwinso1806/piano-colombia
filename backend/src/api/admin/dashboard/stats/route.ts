@@ -60,30 +60,47 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
       FROM score;
     `)
 
-    // 6. Resumen de Ventas / Pagos si existen
+    // 6. Resumen de Ventas y Transacciones Reales (customer_download)
     let totalSalesCop = 0
     let totalCommissionCop = 0
     let transactionsCount = 0
+    let recentTransactions: any[] = []
 
     try {
-      const payoutItemsRes = await client.query(`
+      const salesRes = await client.query(`
         SELECT 
-          COALESCE(SUM(amount_gross_cop), 0) as total_gross,
-          COALESCE(SUM(commission_pc_cop), 0) as total_commission,
-          COUNT(*) as count
-        FROM payout_item;
+          COALESCE(SUM(COALESCE(s.price_cop, 40000)), 0) as total_sales,
+          COUNT(cd.id) as count
+        FROM customer_download cd
+        LEFT JOIN score s ON cd.score_id = s.id;
       `)
-      if (payoutItemsRes.rows.length > 0) {
-        totalSalesCop = Number(payoutItemsRes.rows[0].total_gross) || 0
-        totalCommissionCop = Number(payoutItemsRes.rows[0].total_commission) || 0
-        transactionsCount = Number(payoutItemsRes.rows[0].count) || 0
+      if (salesRes.rows.length > 0) {
+        totalSalesCop = Number(salesRes.rows[0].total_sales) || 0
+        transactionsCount = Number(salesRes.rows[0].count) || 0
+        totalCommissionCop = Math.round(totalSalesCop * (defaultCommission / 100))
       }
-    } catch (err) {
-      console.warn("Tabla payout_item no disponible:", err)
-    }
 
-    // Si aún no hay ventas procesadas en payout_item, los valores permanecen en 0
-    // (Módulo de transacciones / ventas real)
+      const recentRes = await client.query(`
+        SELECT 
+          cd.id,
+          cd.order_id,
+          cd.score_title,
+          cd.composer_name,
+          cd.buyer_name,
+          cd.buyer_email,
+          cd.created_at,
+          cd.wompi_transaction_id,
+          cd.download_token,
+          COALESCE(s.price_cop, 40000) as amount_cop
+        FROM customer_download cd
+        LEFT JOIN score s ON cd.score_id = s.id
+        ORDER BY cd.created_at DESC
+        LIMIT 10;
+      `)
+      recentTransactions = recentRes.rows
+    } catch (err) {
+      console.warn("Error consultando ventas de customer_download:", err)
+    }
 
     return res.status(200).json({
       success: true,
@@ -107,6 +124,7 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
         totalCommissionCop,
         commissionFeePercentage: defaultCommission,
         transactionsCount,
+        recentTransactions,
       }
     })
   } catch (error: any) {

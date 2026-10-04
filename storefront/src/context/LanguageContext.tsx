@@ -566,19 +566,18 @@ const LanguageContext = createContext<LanguageContextType>({
 })
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  const [language, setLanguageState] = useState<Language>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem("piano_colombia_lang") as Language
-        if (stored === "es" || stored === "en") {
-          return stored
-        }
-      } catch {
-        // Fallback a español si localStorage no está accesible
+  const [language, setLanguageState] = useState<Language>("es")
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("piano_colombia_lang") as Language
+      if (stored === "es" || stored === "en") {
+        setLanguageState(stored)
       }
+    } catch {
+      // Fallback a español si localStorage no está accesible
     }
-    return "es"
-  })
+  }, [])
 
   const setLanguage = (lang: Language) => {
     setLanguageState(lang)
