@@ -30,6 +30,7 @@ function CustomerLoginForm() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
   const [agreeTerms, setAgreeTerms] = useState(true);
 
   // OTP Verification States (Registro)
@@ -272,6 +273,7 @@ function CustomerLoginForm() {
           fullName,
           email,
           password,
+          phone: phone.trim() || undefined,
         });
 
         setRegisterStep("otp");
@@ -286,8 +288,11 @@ function CustomerLoginForm() {
         // Login estándar contra PostgreSQL
         const res = await loginCustomerApi(email, password);
         loginCustomer({
+          id: res.customer?.id,
           email: res.customer.email,
           fullName: res.customer.fullName,
+          phone: res.customer.phone || undefined,
+          taxId: res.customer.taxId || undefined,
         });
         setNotification({
           type: "success",
@@ -330,8 +335,11 @@ function CustomerLoginForm() {
       });
 
       loginCustomer({
+        id: res.customer?.id,
         email: res.customer.email,
         fullName: res.customer.fullName,
+        phone: res.customer.phone || phone.trim() || undefined,
+        taxId: res.customer.taxId || undefined,
       });
 
       setNotification({
@@ -485,8 +493,11 @@ function CustomerLoginForm() {
             });
 
             loginCustomer({
+              id: res.customer?.id,
               email: res.customer.email,
               fullName: res.customer.fullName,
+              phone: res.customer.phone || undefined,
+              taxId: res.customer.taxId || undefined,
             });
 
             setNotification({
@@ -995,24 +1006,45 @@ function CustomerLoginForm() {
                   <form onSubmit={handleSubmit} className="space-y-4">
                     
                     {mode === "register" && (
-                      <div>
-                        <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">
-                          Nombre Completo *
-                        </label>
-                        <div className="relative">
-                          <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[#4C4546] text-lg">
-                            person
-                          </span>
-                          <input
-                            type="text"
-                            required
-                            value={fullName}
-                            onChange={(e) => setFullName(e.target.value)}
-                            placeholder="Ej: Juan Pérez"
-                            className="w-full pl-10 pr-4 py-3 bg-[#F0F3FF] border border-black/5 rounded-xl text-xs text-[#111C2D] placeholder-[#4C4546]/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
-                          />
+                      <>
+                        <div>
+                          <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">
+                            Nombre Completo *
+                          </label>
+                          <div className="relative">
+                            <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[#4C4546] text-lg">
+                              person
+                            </span>
+                            <input
+                              type="text"
+                              required
+                              value={fullName}
+                              onChange={(e) => setFullName(e.target.value)}
+                              placeholder="Ej: Juan Pérez"
+                              className="w-full pl-10 pr-4 py-3 bg-[#F0F3FF] border border-black/5 rounded-xl text-xs text-[#111C2D] placeholder-[#4C4546]/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                            />
+                          </div>
                         </div>
-                      </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat flex items-center justify-between">
+                            <span>Teléfono Móvil Celular</span>
+                            <span className="text-[10px] text-[#0071BC] font-semibold">Para SMS y Checkout</span>
+                          </label>
+                          <div className="relative">
+                            <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[#4C4546] text-lg">
+                              phone
+                            </span>
+                            <input
+                              type="tel"
+                              value={phone}
+                              onChange={(e) => setPhone(e.target.value)}
+                              placeholder="+57 310 123 4567"
+                              className="w-full pl-10 pr-4 py-3 bg-[#F0F3FF] border border-black/5 rounded-xl text-xs text-[#111C2D] placeholder-[#4C4546]/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                            />
+                          </div>
+                        </div>
+                      </>
                     )}
 
                     <div>

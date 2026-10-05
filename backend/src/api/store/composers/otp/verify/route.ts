@@ -76,6 +76,8 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       email: normalizedEmail,
       phone: data.phone || null,
       region: data.region || null,
+      password_hash: password_hash || null,
+      salt: salt || null,
       status: "PENDING_APPROVAL",
     })
 

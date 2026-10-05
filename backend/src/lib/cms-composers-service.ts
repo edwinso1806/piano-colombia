@@ -32,6 +32,7 @@ export interface FeaturedTabOutput {
   id: string
   name: string
   icon: string
+  composer_ids?: string[]
   composers: EnrichedComposer[]
   count: number
 }

@@ -3,8 +3,11 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 
 export interface CustomerUser {
+  id?: string;
   email: string;
   fullName: string;
+  phone?: string;
+  taxId?: string;
 }
 
 export interface ComposerUser {
@@ -21,6 +24,8 @@ export interface ComposerUser {
   bio_es?: string;
   bio_en?: string;
   rejection_reason?: string;
+  bankAccount?: any;
+  bank_account?: any;
 }
 
 export interface AdminUser {

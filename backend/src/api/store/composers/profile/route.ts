@@ -258,7 +258,7 @@ export async function PUT(req: MedusaRequest, res: MedusaResponse) {
           sendEmail({
             to: recipient.email,
             subject: `🚨 [Piano Colombia] Modificación de Perfil de Compositor - ${artisticName} (Intento #${currentAttempts})`,
-            html: generateComposerProfileUpdatedAdminNotificationHTML({
+            html: (generateComposerProfileUpdatedAdminNotificationHTML as any)({
               adminName: recipient.name,
               composerName: composerFullName,
               artisticName,

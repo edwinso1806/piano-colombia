@@ -53,17 +53,30 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const addToCart = (score: Score, licenseType: "personal" | "institutional" = "personal") => {
     setCart((prev) => {
       const existing = prev.find((item) => item.score.id === score.id);
-      if (existing) {
-        return prev.map((item) =>
-          item.score.id === score.id ? { ...item, quantity: item.quantity + 1 } : item
-        );
+      const nextCart = existing
+        ? prev.map((item) =>
+            item.score.id === score.id ? { ...item, quantity: item.quantity + 1 } : item
+          )
+        : [...prev, { score, quantity: 1, licenseType }];
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("piano_colombia_cart", JSON.stringify(nextCart));
+        } catch (err) {}
       }
-      return [...prev, { score, quantity: 1, licenseType }];
+      return nextCart;
     });
   };
 
   const removeFromCart = (scoreId: string) => {
-    setCart((prev) => prev.filter((item) => item.score.id !== scoreId));
+    setCart((prev) => {
+      const nextCart = prev.filter((item) => item.score.id !== scoreId);
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("piano_colombia_cart", JSON.stringify(nextCart));
+        } catch (err) {}
+      }
+      return nextCart;
+    });
   };
 
   const updateQuantity = (scoreId: string, quantity: number) => {
@@ -71,13 +84,29 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       removeFromCart(scoreId);
       return;
     }
-    setCart((prev) =>
-      prev.map((item) => (item.score.id === scoreId ? { ...item, quantity } : item))
-    );
+    setCart((prev) => {
+      const nextCart = prev.map((item) =>
+        item.score.id === scoreId ? { ...item, quantity } : item
+      );
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("piano_colombia_cart", JSON.stringify(nextCart));
+        } catch (err) {}
+      }
+      return nextCart;
+    });
   };
 
   const clearCart = () => {
     setCart([]);
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.removeItem("piano_colombia_cart");
+        localStorage.setItem("piano_colombia_cart", "[]");
+      } catch (err) {
+        console.warn("Error limpiando carrito en localStorage:", err);
+      }
+    }
   };
 
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);

@@ -4,11 +4,46 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
-import { getComposerProfileApi, updateComposerProfileApi } from "@/lib/api-client";
+import {
+  getComposerProfileApi,
+  updateComposerProfileApi,
+  getComposerPayoutsApi,
+} from "@/lib/api-client";
+
+interface SaleItem {
+  id: string;
+  orderId: string;
+  scoreTitle: string;
+  buyerName: string;
+  buyerEmail: string;
+  wompiTransactionId: string;
+  createdAt: string;
+  grossPriceCOP: number;
+  platformFeeCOP: number;
+  netRoyaltyCOP: number;
+  status: string;
+  payoutStatus?: "PAID" | "PENDING";
+  payoutBatch?: string | null;
+  payoutExecutedAt?: string | null;
+}
+
+interface PayoutRecord {
+  id: string;
+  batchNumber: string;
+  amountNetCOP: number;
+  amountGrossCOP: number;
+  commissionPcCop: number;
+  wompiTransferId: string;
+  status: string;
+  executedAt: string;
+  executedBy: string;
+}
 
 export default function CompositorPagosPage() {
   const { composer } = useAuth();
   const { t, language } = useLanguage();
+
+  const isEn = language === "en";
 
   const [bankName, setBankName] = useState("Bancolombia");
   const [accountType, setAccountType] = useState("AHORROS");
@@ -19,27 +54,74 @@ export default function CompositorPagosPage() {
 
   const [isEditingAccount, setIsEditingAccount] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingPayouts, setIsLoadingPayouts] = useState(true);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
-  // Cargar datos bancarios reales de la base de datos PostgreSQL
+  // Datos financieros reales
+  const [summary, setSummary] = useState({
+    totalSalesCount: 0,
+    totalGrossSalesCOP: 0,
+    totalNetRoyaltiesCOP: 0,
+    lifetimeDisbursedCOP: 0,
+    pendingBalanceCOP: 0,
+  });
+  const [commissionPercentage, setCommissionPercentage] = useState(15);
+  const [salesHistory, setSalesHistory] = useState<SaleItem[]>([]);
+  const [payoutHistory, setPayoutHistory] = useState<PayoutRecord[]>([]);
+  const [activeTab, setActiveTab] = useState<"pending_sales" | "disbursements">("pending_sales");
+
+  const formatCOP = (val: number) => {
+    return new Intl.NumberFormat("es-CO", {
+      style: "currency",
+      currency: "COP",
+      maximumFractionDigits: 0,
+    }).format(val || 0);
+  };
+
+  // Cargar datos bancarios y resumen financiero real
   useEffect(() => {
-    async function loadBankData() {
+    async function loadData() {
       if (!composer?.id && !composer?.email) return;
+      setIsLoadingPayouts(true);
+
       try {
-        const data = await getComposerProfileApi(composer.id || composer.email);
-        if (data?.bank_account) {
-          setBankName(data.bank_account.bank_name || "Bancolombia");
-          setAccountType(data.bank_account.account_type || "AHORROS");
-          setAccountNumber(data.bank_account.account_number || "");
-          setHolderName(data.bank_account.holder_name || "");
-          setDocumentType(data.bank_account.document_type || "CC");
-          setDocumentNumber(data.bank_account.document_number || "");
+        const composerIdOrEmail = composer.id || composer.email;
+
+        // 1. Perfil y cuenta bancaria
+        const profile = await getComposerProfileApi(composerIdOrEmail);
+        if (profile?.bank_account) {
+          setBankName(profile.bank_account.bank_name || "Bancolombia");
+          setAccountType(profile.bank_account.account_type || "AHORROS");
+          setAccountNumber(profile.bank_account.account_number || "");
+          setHolderName(profile.bank_account.holder_name || "");
+          setDocumentType(profile.bank_account.document_type || "CC");
+          setDocumentNumber(profile.bank_account.document_number || "");
+        }
+
+        // 2. Resumen financiero real de ventas y regalías
+        const payoutsData = await getComposerPayoutsApi(composerIdOrEmail);
+        if (payoutsData && payoutsData.success) {
+          if (payoutsData.summary) {
+            setSummary(payoutsData.summary);
+          }
+          if (payoutsData.composer?.commissionPercentage !== undefined) {
+            setCommissionPercentage(payoutsData.composer.commissionPercentage);
+          }
+          if (payoutsData.salesHistory) {
+            setSalesHistory(payoutsData.salesHistory);
+          }
+          if (payoutsData.payoutHistory) {
+            setPayoutHistory(payoutsData.payoutHistory);
+          }
         }
       } catch (err) {
-        console.warn("Error cargando cuenta bancaria del compositor:", err);
+        console.warn("Error cargando finanzas del compositor:", err);
+      } finally {
+        setIsLoadingPayouts(false);
       }
     }
-    loadBankData();
+
+    loadData();
   }, [composer?.id, composer?.email]);
 
   const handleSaveAccount = async () => {
@@ -78,6 +160,8 @@ export default function CompositorPagosPage() {
     }
   };
 
+  const composerParticipationPercentage = 100 - commissionPercentage;
+
   return (
     <div className="space-y-8 font-inter text-[#111C2D]">
       {/* Encabezado Principal */}
@@ -91,10 +175,9 @@ export default function CompositorPagosPage() {
             {t("payouts.title", "Historial de Regalías & Cuenta Wompi")}
           </h1>
           <p className="text-xs md:text-sm text-[#4C4546] font-medium max-w-2xl leading-relaxed">
-            {t(
-              "payouts.subtitle",
-              "Consulte las dispersiones automáticas por concepto de ventas de partituras (80% neto para el autor / 20% comisión de la plataforma) transferidas directamente a tu banco o cuenta Wompi."
-            )}
+            {isEn
+              ? `Check your net royalties from digital score sales (${composerParticipationPercentage}% net for you / ${commissionPercentage}% platform fee) transferred via Wompi disbursement.`
+              : `Consulta las regalías generadas por las ventas de tus partituras (${composerParticipationPercentage}% neto para ti / ${commissionPercentage}% comisión de la plataforma) transferidas vía dispersión Wompi.`}
           </p>
         </div>
 
@@ -149,7 +232,9 @@ export default function CompositorPagosPage() {
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
             <div>
-              <label className="block font-bold text-[#111C2D] mb-1 font-montserrat">{t("profile.bank_name", "Entidad Bancaria *")}</label>
+              <label className="block font-bold text-[#111C2D] mb-1 font-montserrat">
+                {t("profile.bank_name", "Entidad Bancaria *")}
+              </label>
               <select
                 value={bankName}
                 onChange={(e) => setBankName(e.target.value)}
@@ -165,7 +250,9 @@ export default function CompositorPagosPage() {
               </select>
             </div>
             <div>
-              <label className="block font-bold text-[#111C2D] mb-1 font-montserrat">{t("profile.account_type", "Tipo de Cuenta *")}</label>
+              <label className="block font-bold text-[#111C2D] mb-1 font-montserrat">
+                {t("profile.account_type", "Tipo de Cuenta *")}
+              </label>
               <select
                 value={accountType}
                 onChange={(e) => setAccountType(e.target.value)}
@@ -173,37 +260,57 @@ export default function CompositorPagosPage() {
               >
                 <option value="AHORROS">{t("profile.account_type_savings", "Cuenta de Ahorros")}</option>
                 <option value="CORRIENTE">{t("profile.account_type_checking", "Cuenta Corriente")}</option>
+                <option value="NEQUI">Nequi</option>
+                <option value="DAVIPLATA">Daviplata</option>
               </select>
             </div>
             <div>
-              <label className="block font-bold text-[#111C2D] mb-1 font-montserrat">{t("profile.account_number", "Número de Cuenta *")}</label>
+              <label className="block font-bold text-[#111C2D] mb-1 font-montserrat">
+                {t("profile.account_number", "Número de Cuenta o Celular *")}
+              </label>
               <input
                 type="text"
                 value={accountNumber}
                 onChange={(e) => setAccountNumber(e.target.value)}
-                placeholder="10312813181"
+                placeholder="Ej: 3156123283"
                 className="w-full bg-[#F0F3FF] border border-black/5 rounded-xl px-3 py-2.5 text-xs text-[#111C2D] font-mono outline-none"
               />
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs pt-1">
             <div>
-              <label className="block font-bold text-[#111C2D] mb-1 font-montserrat">{t("profile.document_number", "Documento de Identificación *")}</label>
-              <input
-                type="text"
-                value={documentNumber}
-                onChange={(e) => setDocumentNumber(e.target.value)}
-                placeholder="CC 1020304050"
-                className="w-full bg-[#F0F3FF] border border-black/5 rounded-xl px-3 py-2.5 text-xs text-[#111C2D] font-mono outline-none"
-              />
+              <label className="block font-bold text-[#111C2D] mb-1 font-montserrat">
+                {t("profile.document_number", "Documento de Identificación *")}
+              </label>
+              <div className="flex gap-2">
+                <select
+                  value={documentType}
+                  onChange={(e) => setDocumentType(e.target.value)}
+                  className="w-24 bg-[#F0F3FF] border border-black/5 rounded-xl px-2.5 py-2.5 text-xs font-semibold text-[#111C2D] outline-none"
+                >
+                  <option value="CC">CC</option>
+                  <option value="CE">CE</option>
+                  <option value="NIT">NIT</option>
+                  <option value="PP">PP</option>
+                </select>
+                <input
+                  type="text"
+                  value={documentNumber}
+                  onChange={(e) => setDocumentNumber(e.target.value)}
+                  placeholder="Número de documento"
+                  className="flex-1 bg-[#F0F3FF] border border-black/5 rounded-xl px-3 py-2.5 text-xs text-[#111C2D] font-mono outline-none"
+                />
+              </div>
             </div>
             <div>
-              <label className="block font-bold text-[#111C2D] mb-1 font-montserrat">{t("profile.holder_name", "Titular de la Cuenta *")}</label>
+              <label className="block font-bold text-[#111C2D] mb-1 font-montserrat">
+                {t("profile.holder_name", "Titular de la Cuenta *")}
+              </label>
               <input
                 type="text"
                 value={holderName}
                 onChange={(e) => setHolderName(e.target.value)}
-                placeholder="Nombre completo"
+                placeholder="Nombre del titular"
                 className="w-full bg-[#F0F3FF] border border-black/5 rounded-xl px-3 py-2.5 text-xs text-[#111C2D] outline-none"
               />
             </div>
@@ -212,7 +319,7 @@ export default function CompositorPagosPage() {
             <p className="text-[11px] text-[#4C4546]">
               {t(
                 "payouts.disbursement_notice",
-                "Las dispersiones se transfieren automáticamente cada 15 días mediante la pasarela de Wompi."
+                "Las dispersiones se transfieren automáticamente en cada ciclo de corte quincenal de Piano Colombia."
               )}
             </p>
             <button
@@ -226,7 +333,7 @@ export default function CompositorPagosPage() {
         </div>
       )}
 
-      {/* Grid KPI Cards Resumen Financiero */}
+      {/* Grid KPI Cards Resumen Financiero Real */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-2xl border border-black/5 shadow-xs space-y-2 relative overflow-hidden group">
           <div className="absolute top-0 left-0 right-0 h-1 bg-[#0071BC]"></div>
@@ -234,7 +341,7 @@ export default function CompositorPagosPage() {
             {t("payouts.lifetime_disbursed", "Total Dispersado Histórico")}
           </span>
           <div className="text-2xl sm:text-3xl font-black font-montserrat text-[#111C2D]">
-            $0 <span className="text-xs font-bold text-[#4C4546]">COP</span>
+            {formatCOP(summary.lifetimeDisbursedCOP)}
           </div>
           <p className="text-[11px] text-[#4C4546]">
             {t("payouts.lifetime_desc", "Regalías netas transferidas a tu cuenta")}
@@ -247,10 +354,12 @@ export default function CompositorPagosPage() {
             {t("payouts.pending_balance", "Saldo Pendiente por Liquidar")}
           </span>
           <div className="text-2xl sm:text-3xl font-black font-montserrat text-[#0071BC]">
-            $0 <span className="text-xs font-bold text-[#4C4546]">COP</span>
+            {formatCOP(summary.pendingBalanceCOP)}
           </div>
           <p className="text-[11px] text-[#4C4546]">
-            {t("payouts.pending_desc", "Será dispersado en el próximo ciclo de corte")}
+            {summary.totalSalesCount > 0
+              ? `${summary.totalSalesCount} ${summary.totalSalesCount === 1 ? "partitura vendida" : "partituras vendidas"} pendientes de pago`
+              : t("payouts.pending_desc", "Será dispersado en el próximo ciclo de corte")}
           </p>
         </div>
 
@@ -260,34 +369,237 @@ export default function CompositorPagosPage() {
             {t("payouts.share_rate", "Porcentaje de Participación")}
           </span>
           <div className="text-2xl sm:text-3xl font-black font-montserrat text-emerald-700">
-            80% <span className="text-xs font-bold text-[#4C4546]">{t("payouts.net_per_score", "Neto por obra")}</span>
+            {composerParticipationPercentage}%{" "}
+            <span className="text-xs font-bold text-[#4C4546]">{t("payouts.net_per_score", "Neto por obra")}</span>
           </div>
           <p className="text-[11px] text-[#4C4546]">
-            {t("payouts.platform_fee", "20% retención administrativa Piano Colombia")}
+            {commissionPercentage}% {t("payouts.platform_fee", "retención administrativa Piano Colombia")}
           </p>
         </div>
       </div>
 
-      {/* Historial de Liquidaciones */}
+      {/* Selector de Pestañas: Ventas Pendientes vs Historial de Dispersiones */}
       <div className="bg-white rounded-2xl border border-black/5 shadow-xs overflow-hidden">
-        <div className="p-6 border-b border-black/5 flex items-center justify-between">
-          <h2 className="text-base font-bold font-montserrat text-[#111C2D]">
-            {t("payouts.records_title", "Registro de Liquidaciones")}
-          </h2>
-          <span className="text-xs font-bold text-[#0071BC] bg-[#F0F3FF] px-3 py-1 rounded-full font-mono">
-            {t("payouts.active_period", "Período Activo")}
+        <div className="p-4 sm:p-6 border-b border-black/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex bg-[#F0F3FF] p-1 rounded-xl text-xs font-bold font-montserrat">
+            <button
+              onClick={() => setActiveTab("pending_sales")}
+              className={`px-4 py-2 rounded-lg transition cursor-pointer ${
+                activeTab === "pending_sales"
+                  ? "bg-white text-[#111C2D] shadow-2xs font-extrabold"
+                  : "text-[#4C4546] hover:text-[#111C2D]"
+              }`}
+            >
+              🛒 {isEn ? "Sales & Royalties Details" : "Ventas de Partituras & Regalías"} ({salesHistory.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("disbursements")}
+              className={`px-4 py-2 rounded-lg transition cursor-pointer ${
+                activeTab === "disbursements"
+                  ? "bg-white text-[#111C2D] shadow-2xs font-extrabold"
+                  : "text-[#4C4546] hover:text-[#111C2D]"
+              }`}
+            >
+              🏦 {isEn ? "Disbursement Transfers" : "Dispersiones Recibidas"} ({payoutHistory.length})
+            </button>
+          </div>
+
+          <span className="text-xs font-bold text-[#0071BC] bg-[#F0F3FF] px-3 py-1 rounded-full font-mono self-start sm:self-auto">
+            {t("payouts.active_period", "Período Activo Octubre 2026")}
           </span>
         </div>
-        <div className="p-12 text-center text-xs text-[#4C4546] space-y-2">
-          <span className="material-symbols-outlined text-4xl text-[#0071BC]/40 block mx-auto">receipt_long</span>
-          <p className="font-semibold font-montserrat">{t("payouts.no_payouts", "Sin liquidaciones registradas en este período.")}</p>
-          <p className="text-[11px] text-[#4C4546]">
-            {t(
-              "payouts.empty_desc",
-              "A medida que tus partituras aprobadas sean adquiridas en la tienda, las ventas se reflejarán aquí automáticamente."
+
+        {/* Tab 1: Ventas de Partituras Reales */}
+        {activeTab === "pending_sales" && (
+          <div>
+            {isLoadingPayouts ? (
+              <div className="p-12 text-center text-xs text-[#4C4546]">
+                <span className="w-6 h-6 border-2 border-[#0071BC] border-t-transparent rounded-full animate-spin inline-block mb-2"></span>
+                <p>Cargando ventas y liquidación de regalías...</p>
+              </div>
+            ) : salesHistory.length === 0 ? (
+              <div className="p-12 text-center text-xs text-[#4C4546] space-y-2">
+                <span className="material-symbols-outlined text-4xl text-[#0071BC]/40 block mx-auto">receipt_long</span>
+                <p className="font-semibold font-montserrat">
+                  {t("payouts.no_payouts", "Sin ventas registradas en este período.")}
+                </p>
+                <p className="text-[11px] text-[#4C4546]">
+                  {t(
+                    "payouts.empty_desc",
+                    "A medida que tus partituras aprobadas sean adquiridas en la tienda, las ventas se reflejarán aquí automáticamente."
+                  )}
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#F0F3FF] text-[10px] font-extrabold font-montserrat uppercase tracking-wider text-[#4C4546] border-b border-black/5">
+                    <tr>
+                      <th className="py-3.5 px-4 sm:px-6">Fecha</th>
+                      <th className="py-3.5 px-4">Partitura Vendida</th>
+                      <th className="py-3.5 px-4">Comprador</th>
+                      <th className="py-3.5 px-4">Ref. Pedido</th>
+                      <th className="py-3.5 px-4 text-right">Venta Bruta</th>
+                      <th className="py-3.5 px-4 text-right">Comisión PC ({commissionPercentage}%)</th>
+                      <th className="py-3.5 px-4 sm:px-6 text-right font-black text-[#0071BC]">
+                        Tu Regalía ({composerParticipationPercentage}%)
+                      </th>
+                      <th className="py-3.5 px-4 text-center">Estado de Pago</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-black/5 font-medium">
+                    {salesHistory.map((sale) => (
+                      <tr key={sale.id} className="hover:bg-slate-50 transition">
+                        <td className="py-3.5 px-4 sm:px-6 whitespace-nowrap text-[#4C4546]">
+                          {new Date(sale.createdAt).toLocaleDateString("es-CO", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </td>
+                        <td className="py-3.5 px-4 font-bold text-[#111C2D]">
+                          {sale.scoreTitle}
+                        </td>
+                        <td className="py-3.5 px-4 text-[#4C4546]">
+                          <span className="font-semibold text-[#111C2D] block">{sale.buyerName}</span>
+                          <span className="text-[10px] font-mono text-slate-500">{sale.buyerEmail}</span>
+                        </td>
+                        <td className="py-3.5 px-4 font-mono text-[11px] text-[#0071BC]">
+                          {sale.orderId}
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-mono text-[#111C2D]">
+                          {formatCOP(sale.grossPriceCOP)}
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-mono text-rose-700">
+                          -{formatCOP(sale.platformFeeCOP)}
+                        </td>
+                        <td className="py-3.5 px-4 sm:px-6 text-right font-mono font-bold text-emerald-700">
+                          +{formatCOP(sale.netRoyaltyCOP)}
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          {sale.payoutStatus === "PAID" ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-montserrat font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                              <span className="material-symbols-outlined text-xs">done_all</span>
+                              <span>Liquidado ({sale.payoutBatch || "Transferido"})</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-montserrat font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                              <span>Pendiente de Giro</span>
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="bg-[#F9F9FF] font-montserrat font-bold text-xs border-t border-black/10 divide-y divide-black/5">
+                    <tr>
+                      <td colSpan={4} className="py-3 px-4 sm:px-6 text-right uppercase tracking-wider text-[#4C4546]">
+                        Total Ventas Acumuladas:
+                      </td>
+                      <td className="py-3 px-4 text-right font-mono text-[#111C2D]">
+                        {formatCOP(summary.totalGrossSalesCOP)}
+                      </td>
+                      <td className="py-3 px-4 text-right font-mono text-rose-700">
+                        -{formatCOP(summary.totalGrossSalesCOP - summary.totalNetRoyaltiesCOP)}
+                      </td>
+                      <td className="py-3 px-4 sm:px-6 text-right font-mono text-emerald-800 text-sm font-black">
+                        {formatCOP(summary.totalNetRoyaltiesCOP)}
+                      </td>
+                      <td></td>
+                    </tr>
+                    {summary.lifetimeDisbursedCOP > 0 && (
+                      <tr className="text-emerald-800">
+                        <td colSpan={6} className="py-2.5 px-4 sm:px-6 text-right uppercase tracking-wider text-xs">
+                          Total Ya Transferido a Tu Cuenta:
+                        </td>
+                        <td className="py-2.5 px-4 sm:px-6 text-right font-mono font-black">
+                          {formatCOP(summary.lifetimeDisbursedCOP)}
+                        </td>
+                        <td></td>
+                      </tr>
+                    )}
+                    <tr className="bg-amber-50/60 text-[#111C2D]">
+                      <td colSpan={6} className="py-3 px-4 sm:px-6 text-right uppercase tracking-wider text-xs font-black text-amber-900">
+                        Saldo Neto Pendiente por Dispersar:
+                      </td>
+                      <td className="py-3 px-4 sm:px-6 text-right font-mono font-black text-amber-900 text-sm">
+                        {formatCOP(summary.pendingBalanceCOP)}
+                      </td>
+                      <td className="text-center text-[10px] text-amber-800 font-bold">
+                        {summary.pendingBalanceCOP > 0 ? "Próximo Lote Wompi" : "Al día"}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
             )}
-          </p>
-        </div>
+          </div>
+        )}
+
+        {/* Tab 2: Historial de Giros / Dispersiones Realizadas */}
+        {activeTab === "disbursements" && (
+          <div>
+            {payoutHistory.length === 0 ? (
+              <div className="p-12 text-center text-xs text-[#4C4546] space-y-2">
+                <span className="material-symbols-outlined text-4xl text-[#0071BC]/40 block mx-auto">account_balance</span>
+                <p className="font-semibold font-montserrat">
+                  {isEn ? "No disbursements executed yet." : "Aún no se han ejecutado giros de dispersión."}
+                </p>
+                <p className="text-[11px] text-[#4C4546]">
+                  {isEn
+                    ? "When platform admin executes the bi-weekly payout batch, bank transfer confirmations will be listed here."
+                    : "Cuando administración procese el lote de liquidación quincenal, los comprobantes de transferencia Wompi aparecerán aquí."}
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-[#F0F3FF] text-[10px] font-extrabold font-montserrat uppercase tracking-wider text-[#4C4546] border-b border-black/5">
+                    <tr>
+                      <th className="py-3.5 px-4 sm:px-6">Lote #</th>
+                      <th className="py-3.5 px-4">Fecha de Giro</th>
+                      <th className="py-3.5 px-4">Ref. Wompi Transfer</th>
+                      <th className="py-3.5 px-4">Ejecutado Por</th>
+                      <th className="py-3.5 px-4 text-center">Estado</th>
+                      <th className="py-3.5 px-4 sm:px-6 text-right font-black">Monto Transferido</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-black/5 font-medium">
+                    {payoutHistory.map((p) => (
+                      <tr key={p.id} className="hover:bg-slate-50 transition">
+                        <td className="py-3.5 px-4 sm:px-6 font-mono font-bold text-[#111C2D]">
+                          {p.batchNumber}
+                        </td>
+                        <td className="py-3.5 px-4 whitespace-nowrap text-[#4C4546]">
+                          {new Date(p.executedAt).toLocaleDateString("es-CO", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </td>
+                        <td className="py-3.5 px-4 font-mono text-[11px] text-[#0071BC]">
+                          {p.wompiTransferId}
+                        </td>
+                        <td className="py-3.5 px-4 text-[#4C4546]">
+                          {p.executedBy}
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase font-montserrat">
+                            {p.status}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 sm:px-6 text-right font-mono font-bold text-emerald-700 text-sm">
+                          {formatCOP(p.amountNetCOP)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -19,7 +19,7 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
       take: 1,
     })
 
-    const rawHero = heros && heros.length > 0 ? heros[0] : null
+    const rawHero: any = heros && heros.length > 0 ? heros[0] : null
 
     const hero = {
       hero_title: rawHero?.title_part1 || rawHero?.hero_title || "La tradición del piano colombiano y latinoamericano en tus manos.",

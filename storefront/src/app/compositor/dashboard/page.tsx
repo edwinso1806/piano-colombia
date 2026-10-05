@@ -9,6 +9,7 @@ import {
   getComposerScoresApi,
   updateScoreApi,
   uploadFileApi,
+  getComposerPayoutsApi,
 } from "@/lib/api-client";
 import { generateScoreBlurredPreviews } from "@/lib/pdf-preview-generator";
 import {
@@ -27,6 +28,16 @@ function CompositorDashboardContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const [scores, setScores] = useState<any[]>([]);
   const [loadingScores, setLoadingScores] = useState(true);
+
+  // Datos financieros reales de ventas y regalías
+  const [financialSummary, setFinancialSummary] = useState({
+    totalSalesCount: 0,
+    totalGrossSalesCOP: 0,
+    totalNetRoyaltiesCOP: 0,
+    lifetimeDisbursedCOP: 0,
+    pendingBalanceCOP: 0,
+  });
+  const [commissionPercentage, setCommissionPercentage] = useState(15);
 
   // Exchange rate (TRM)
   const [usdRate, setUsdRate] = useState<number>(3900);
@@ -204,25 +215,37 @@ function CompositorDashboardContent() {
     }
   }, [searchParams]);
 
-  // Cargar partituras reales del compositor desde PostgreSQL
+  // Cargar partituras reales y finanzas reales del compositor desde PostgreSQL
   useEffect(() => {
-    async function loadScores() {
-      if (!composer?.id) {
+    async function loadData() {
+      if (!composer?.id && !composer?.email) {
         setLoadingScores(false);
         return;
       }
       try {
         setLoadingScores(true);
-        const data = await getComposerScoresApi(composer.id);
-        setScores(data || []);
+        const composerIdOrEmail = composer.id || composer.email;
+        const [scoresData, payoutsData] = await Promise.all([
+          composer.id ? getComposerScoresApi(composer.id) : Promise.resolve([]),
+          getComposerPayoutsApi(composerIdOrEmail),
+        ]);
+        setScores(scoresData || []);
+        if (payoutsData && payoutsData.success) {
+          if (payoutsData.summary) {
+            setFinancialSummary(payoutsData.summary);
+          }
+          if (payoutsData.composer?.commissionPercentage !== undefined) {
+            setCommissionPercentage(payoutsData.composer.commissionPercentage);
+          }
+        }
       } catch (err) {
-        console.warn("Error cargando partituras del compositor:", err);
+        console.warn("Error cargando datos del panel del compositor:", err);
       } finally {
         setLoadingScores(false);
       }
     }
-    loadScores();
-  }, [composer?.id]);
+    loadData();
+  }, [composer?.id, composer?.email]);
 
   const activeName =
     composer?.artistic_name ||
@@ -253,9 +276,9 @@ function CompositorDashboardContent() {
 
   // Métricas reales calculadas desde la base de datos
   const totalApproved = publishedScores.length;
-  const totalSales = 0; // Ventas reales registradas en órdenes (0 para cuentas nuevas)
-  const grossAmount = publishedScores.reduce((acc, s) => acc + (Number(s.price_cop) || 45000), 0) * totalSales;
-  const netRoyalties = Math.round(grossAmount * 0.8);
+  const totalSales = financialSummary.totalSalesCount;
+  const netRoyalties = financialSummary.pendingBalanceCOP;
+  const composerParticipationPercentage = 100 - commissionPercentage;
 
   return (
     <div className="space-y-8 text-[#111C2D]">
@@ -307,7 +330,10 @@ function CompositorDashboardContent() {
               <div className="flex items-center gap-4 mt-2 text-xs text-[#4C4546] font-medium">
                 <span className="flex items-center gap-1">
                   <span className="material-symbols-outlined text-sm text-[#0071BC]">schedule</span>
-                  {t("dashboard.last_payout", "Última liquidación")}: {new Date().toLocaleDateString(language === "en" ? "en-US" : "es-CO", { month: "short", day: "numeric", year: "numeric" })}
+                  {t("dashboard.last_payout", "Última liquidación")}:{" "}
+                  {financialSummary.lifetimeDisbursedCOP > 0
+                    ? `$${financialSummary.lifetimeDisbursedCOP.toLocaleString(language === "en" ? "en-US" : "es-CO")} COP`
+                    : t("dashboard.no_payouts_yet", "Sin dispersiones aún")}
                 </span>
                 <span>•</span>
                 <span className="flex items-center gap-1 font-bold text-[#111C2D]">
@@ -414,7 +440,7 @@ function CompositorDashboardContent() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
                   <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#4C4546] font-montserrat">
-                    {t("dashboard.royalties_balance", "Saldo de Regalías (80%)")}
+                    {t("dashboard.royalties_balance", `Saldo de Regalías (${composerParticipationPercentage}%)`)}
                   </span>
                 </div>
                 <div className="w-10 h-10 rounded-xl bg-[#F0F3FF] flex items-center justify-center text-[#0071BC] group-hover:bg-[#0071BC] group-hover:text-white transition-colors">

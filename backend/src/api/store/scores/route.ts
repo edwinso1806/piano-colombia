@@ -129,7 +129,7 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       tonality: tonality || "Mi menor",
       status: "IN_REVIEW" as any,
       is_featured: false,
-      preview_images: Array.isArray(preview_images) ? preview_images : [],
+      preview_images: (Array.isArray(preview_images) ? preview_images : []) as any,
       preview_pdf_url: preview_pdf_url || `/preview-scores/${slug}.pdf`,
       original_pdf_url: original_pdf_url || `/master-scores/${slug}-master.pdf`,
     })

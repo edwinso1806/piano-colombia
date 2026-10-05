@@ -494,6 +494,42 @@ export async function registerCustomerApi(payload: {
   }
 }
 
+export async function getCustomerProfileApi(email: string) {
+  try {
+    const res = await fetch(`${MEDUSA_URL}/store/auth/customer?email=${encodeURIComponent(email)}`, {
+      headers: defaultHeaders,
+      cache: "no-store",
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) return null
+    return data.customer || null
+  } catch (err) {
+    console.error("Error al consultar perfil del cliente:", err)
+    return null
+  }
+}
+
+export async function updateCustomerProfileApi(payload: {
+  email: string
+  phone?: string
+  taxId?: string
+  fullName?: string
+}) {
+  try {
+    const res = await fetch(`${MEDUSA_URL}/store/auth/customer`, {
+      method: "PUT",
+      headers: defaultHeaders,
+      body: JSON.stringify(payload),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) return null
+    return data.customer || null
+  } catch (err) {
+    console.error("Error al actualizar perfil del cliente:", err)
+    return null
+  }
+}
+
 export async function loginComposerApi(email: string, password: string) {
   try {
     const res = await fetch(`${MEDUSA_URL}/store/auth/composer/login`, {
@@ -644,6 +680,40 @@ export async function updateComposerProfileApi(payload: any) {
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(data.message || "Error al guardar perfil de compositor")
+  return data
+}
+
+export async function getComposerPayoutsApi(idOrEmail: string) {
+  const queryParam = idOrEmail.includes("@")
+    ? `email=${encodeURIComponent(idOrEmail)}`
+    : `id=${encodeURIComponent(idOrEmail)}`
+  const res = await fetch(`${MEDUSA_URL}/store/composers/payouts?${queryParam}`, {
+    headers: defaultHeaders,
+    cache: "no-store",
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.message || "Error al consultar liquidaciones del compositor")
+  return data
+}
+
+export async function getAdminPayoutsApi() {
+  const res = await fetch(`${MEDUSA_URL}/admin/payouts`, {
+    headers: defaultHeaders,
+    cache: "no-store",
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.message || "Error al consultar liquidaciones de pagos de administración")
+  return data
+}
+
+export async function executeAdminDispersionApi(items: any[], executedBy?: string) {
+  const res = await fetch(`${MEDUSA_URL}/admin/payouts/execute`, {
+    method: "POST",
+    headers: defaultHeaders,
+    body: JSON.stringify({ items, executedBy }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.message || "Error al ejecutar dispersión de fondos masiva")
   return data
 }
 

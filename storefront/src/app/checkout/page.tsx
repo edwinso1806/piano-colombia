@@ -12,29 +12,41 @@ import {
   createWompiSession,
   tokenizeCardWithWompi,
   chargeWompiCardDirectly,
+  getCustomerProfileApi,
+  updateCustomerProfileApi,
+  confirmWompiTransaction,
 } from "@/lib/api-client";
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { cart, totalCOP, totalUSD } = useCart();
-  const { customer } = useAuth();
+  const { cart, totalCOP, totalUSD, clearCart } = useCart();
+  const { customer, composer, loginCustomer } = useAuth();
   const { language } = useLanguage();
 
   const isEn = language === "en";
 
+  // Usuario autenticado (puede ser comprador cliente o compositor activo)
+  const activeUser = customer || (composer ? {
+    id: composer.id,
+    fullName: composer.artistic_name || `${composer.first_name || ""} ${composer.last_name || ""}`.trim(),
+    email: composer.email,
+    phone: composer.phone || "",
+    taxId: (composer as any)?.bankAccount?.document_number || (composer as any)?.bank_account?.document_number || "",
+  } : null);
+
   // Datos del Comprador
-  const [customerName, setCustomerName] = useState(customer?.fullName || "");
-  const [customerEmail, setCustomerEmail] = useState(customer?.email || "");
-  const [customerPhone, setCustomerPhone] = useState((customer as any)?.phone || "");
+  const [customerName, setCustomerName] = useState(activeUser?.fullName || "");
+  const [customerEmail, setCustomerEmail] = useState(activeUser?.email || "");
+  const [customerPhone, setCustomerPhone] = useState(activeUser?.phone || "");
   const [customerLegalIdType, setCustomerLegalIdType] = useState<"CC" | "CE" | "PP" | "NIT">("CC");
-  const [customerLegalId, setCustomerLegalId] = useState((customer as any)?.taxId || "");
+  const [customerLegalId, setCustomerLegalId] = useState(activeUser?.taxId || "");
 
   // Datos de Tarjeta (Wompi Tokenizer Nativo 100% bilingüe)
   const [cardNumber, setCardNumber] = useState("");
   const [cardExpMonth, setCardExpMonth] = useState("");
   const [cardExpYear, setCardExpYear] = useState("");
   const [cardCvc, setCardCvc] = useState("");
-  const [cardHolder, setCardHolder] = useState(customer?.fullName || "");
+  const [cardHolder, setCardHolder] = useState(activeUser?.fullName || "");
 
   // Pasarela Wompi
   const [wompiMethod, setWompiMethod] = useState<"CARD" | "PSE" | "NEQUI" | "BANCOLOMBIA">("CARD");
@@ -63,15 +75,33 @@ export default function CheckoutPage() {
     }
   }, []);
 
-  // Sincronizar datos si el usuario inicia sesión
+  // Sincronizar datos si el usuario inicia sesión o si cambian sus datos
   useEffect(() => {
-    if (customer) {
-      if (!customerName && customer.fullName) setCustomerName(customer.fullName);
-      if (!customerEmail && customer.email) setCustomerEmail(customer.email);
-      if (!customerPhone && (customer as any).phone) setCustomerPhone((customer as any).phone);
-      if (!customerLegalId && (customer as any).taxId) setCustomerLegalId((customer as any).taxId);
+    if (activeUser) {
+      if (activeUser.fullName) setCustomerName((prev: string) => prev || activeUser.fullName || "");
+      if (activeUser.email) setCustomerEmail((prev: string) => prev || activeUser.email || "");
+      if (activeUser.phone) setCustomerPhone((prev: string) => prev || activeUser.phone || "");
+      if (activeUser.taxId) setCustomerLegalId((prev: string) => prev || activeUser.taxId || "");
+
+      // Si es un cliente y en localStorage no tiene aún el celular o cédula guardados, consultamos a la BD
+      if (customer && customer.email && (!customer.phone || !customer.taxId)) {
+        getCustomerProfileApi(customer.email).then((profile) => {
+          if (profile) {
+            if (profile.phone) setCustomerPhone((prev: string) => prev || profile.phone || "");
+            if (profile.taxId) setCustomerLegalId((prev: string) => prev || profile.taxId || "");
+
+            // Actualizar la sesión en localStorage para próximas visitas
+            loginCustomer({
+              ...customer,
+              id: profile.id || customer.id,
+              phone: profile.phone || customer.phone,
+              taxId: profile.taxId || customer.taxId,
+            });
+          }
+        });
+      }
     }
-  }, [customer]);
+  }, [customer, composer]);
 
   const defaultScore = {
     id: "01M1SB1H7EG434CVNPB4G60C4N",
@@ -88,7 +118,7 @@ export default function CheckoutPage() {
 
   // Validar datos antes del pago
   const validateForm = () => {
-    if (!customer) {
+    if (!activeUser) {
       showToast(
         isEn
           ? "You must sign in to an active customer account to complete your purchase."
@@ -147,6 +177,20 @@ export default function CheckoutPage() {
   // 1. Pago Directo con Tarjeta Tokenizada (Wompi Tokenizer - 100% Nativo y en Inglés)
   const handleDirectCardPayment = async () => {
     if (!validateForm()) return;
+
+    // Persistir teléfono y cédula en el perfil de cliente para futuros checkouts
+    if (customer && customer.email && (customerPhone.trim() || customerLegalId.trim())) {
+      updateCustomerProfileApi({
+        email: customer.email,
+        phone: customerPhone.trim(),
+        taxId: customerLegalId.trim(),
+      });
+      loginCustomer({
+        ...customer,
+        phone: customerPhone.trim(),
+        taxId: customerLegalId.trim(),
+      });
+    }
 
     const cleanCard = cardNumber.replace(/\s+/g, "");
     if (cleanCard.length < 15) {
@@ -211,6 +255,7 @@ export default function CheckoutPage() {
       if (chargeResult.success) {
         setLastReference(chargeResult.reference);
         setDownloadToken(chargeResult.download_token);
+        clearCart();
         setIsSuccess(true);
         showToast(
           isEn ? "Payment approved! Your official Urtext score is ready." : "¡Pago aprobado con éxito! Tu partitura oficial está lista.",
@@ -233,6 +278,21 @@ export default function CheckoutPage() {
   // 2. Abrir Pasarela Oficial Wompi con Widget
   const handleOpenWompiWidget = async () => {
     if (!validateForm()) return;
+
+    // Persistir teléfono y cédula en el perfil de cliente para futuros checkouts
+    if (customer && customer.email && (customerPhone.trim() || customerLegalId.trim())) {
+      updateCustomerProfileApi({
+        email: customer.email,
+        phone: customerPhone.trim(),
+        taxId: customerLegalId.trim(),
+      });
+      loginCustomer({
+        ...customer,
+        phone: customerPhone.trim(),
+        taxId: customerLegalId.trim(),
+      });
+    }
+
     setIsProcessing(true);
 
     try {
@@ -347,6 +407,7 @@ export default function CheckoutPage() {
     if (res.download_token) {
       setDownloadToken(res.download_token);
     }
+    clearCart();
     setIsSuccess(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };

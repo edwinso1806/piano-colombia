@@ -25,7 +25,7 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
     // Enviar correo de felicitación y confirmación al compositor
     try {
       if (existingScore.composer_id) {
-        const composer = await composerModuleService.retrieveComposer(existingScore.composer_id).catch(() => null)
+        const composer: any = await composerModuleService.retrieveComposer(existingScore.composer_id).catch(() => null)
         if (composer && composer.email) {
           const html = generateScoreApprovedHTML({
             composerName: composer.full_name || composer.artistic_name || "Estimado Compositor",

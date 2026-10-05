@@ -83,11 +83,21 @@ export default function CarritoPage() {
           <div className="flex items-center gap-3">
             {cart.length > 0 && (
               <button
-                onClick={clearCart}
-                className="text-xs font-montserrat font-bold text-[#C1272D] hover:underline flex items-center gap-1 cursor-pointer"
+                type="button"
+                onClick={() => {
+                  const confirmMsg =
+                    language === "en"
+                      ? "¿Are you sure you want to empty your shopping cart?"
+                      : "¿Estás seguro de que deseas vaciar todos los elementos de tu carrito?";
+                  if (window.confirm(confirmMsg)) {
+                    clearCart();
+                  }
+                }}
+                className="text-xs font-montserrat font-bold text-[#C1272D] hover:text-[#931D21] bg-red-50 hover:bg-red-100/80 border border-red-200 px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
+                title={t("cart.clear_btn", "Vaciar Carrito")}
               >
-                <span className="material-symbols-outlined text-sm">delete_sweep</span>
-                {t("cart.clear_btn", "Vaciar Carrito")}
+                <span className="material-symbols-outlined text-base">delete_sweep</span>
+                <span>{t("cart.clear_btn", "Vaciar Carrito")}</span>
               </button>
             )}
           </div>

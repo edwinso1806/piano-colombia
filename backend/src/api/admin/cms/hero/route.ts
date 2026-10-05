@@ -52,7 +52,7 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
       })
     }
 
-    const h = heros[0]
+    const h: any = heros[0]
     return res.status(200).json({
       hero: {
         ...h,
