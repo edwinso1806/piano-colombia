@@ -1,6 +1,11 @@
+"use client";
+
 import Link from "next/link";
+import { useLanguage } from "@/context/LanguageContext";
 
 export default function Footer() {
+  const { t } = useLanguage();
+
   return (
     <footer className="border-t border-black/5 bg-white py-12 px-4 sm:px-6 w-full max-w-full overflow-hidden">
       <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
@@ -19,39 +24,45 @@ export default function Footer() {
                 PIANO COLOMBIA
               </span>
               <span className="text-[9px] font-extrabold text-[#4C4546] uppercase tracking-wider font-montserrat mt-0.5">
-                Archivo & Partituras
+                {t("auth.brand_sub", "Archivo & Partituras")}
               </span>
             </div>
           </Link>
           <p className="text-xs text-[#4C4546] leading-relaxed font-medium">
-            El portal definitivo para la difusión, comercialización y preservación de las partituras colombianas para piano.
+            {t("footer.brand_desc", "El portal definitivo para la difusión, comercialización y preservación de las partituras colombianas para piano.")}
           </p>
         </div>
 
         {/* Columna 2: Navegación */}
         <div>
-          <h4 className="text-xs font-bold font-montserrat uppercase tracking-wider text-[#111C2D] mb-4">Navegación</h4>
+          <h4 className="text-xs font-bold font-montserrat uppercase tracking-wider text-[#111C2D] mb-4">
+            {t("footer.nav_title", "Navegación")}
+          </h4>
           <ul className="space-y-2 text-xs text-[#4C4546] font-medium">
-            <li><Link href="/" className="hover:text-[#0071BC] transition">Inicio</Link></li>
-            <li><Link href="/tienda" className="hover:text-[#0071BC] transition">Tienda de Partituras</Link></li>
-            <li><Link href="/compositores" className="hover:text-[#0071BC] transition">Directorio de Compositores</Link></li>
-            <li><Link href="/blog" className="hover:text-[#0071BC] transition">Blog / Noticias</Link></li>
+            <li><Link href="/" className="hover:text-[#0071BC] transition">{t("nav.home", "Inicio")}</Link></li>
+            <li><Link href="/tienda" className="hover:text-[#0071BC] transition">{t("nav.catalog", "Tienda de Partituras")}</Link></li>
+            <li><Link href="/compositores" className="hover:text-[#0071BC] transition">{t("nav.composers", "Directorio de Compositores")}</Link></li>
+            <li><Link href="/blog" className="hover:text-[#0071BC] transition">{t("nav.blog", "Blog / Noticias")}</Link></li>
           </ul>
         </div>
 
         {/* Columna 3: Portal Compositores */}
         <div>
-          <h4 className="text-xs font-bold font-montserrat uppercase tracking-wider text-[#111C2D] mb-4">Compositores</h4>
+          <h4 className="text-xs font-bold font-montserrat uppercase tracking-wider text-[#111C2D] mb-4">
+            {t("footer.composers_title", "Compositores")}
+          </h4>
           <ul className="space-y-2 text-xs text-[#4C4546] font-medium">
-            <li><Link href="/compositor/registro" className="hover:text-[#0071BC] transition">Registrarme como Compositor</Link></li>
-            <li><Link href="/compositor/login" className="hover:text-[#0071BC] transition">Iniciar Sesión Portal</Link></li>
-            <li><a href="#" className="hover:text-[#0071BC] transition">Términos y Condiciones</a></li>
+            <li><Link href="/compositor/registro" className="hover:text-[#0071BC] transition">{t("footer.composer_register", "Registrarme como Compositor")}</Link></li>
+            <li><Link href="/compositor/login" className="hover:text-[#0071BC] transition">{t("footer.composer_login", "Iniciar Sesión Portal")}</Link></li>
+            <li><a href="#" className="hover:text-[#0071BC] transition">{t("footer.terms", "Términos y Condiciones")}</a></li>
           </ul>
         </div>
 
         {/* Columna 4: Contacto & Redes */}
         <div>
-          <h4 className="text-xs font-bold font-montserrat uppercase tracking-wider text-[#111C2D] mb-4">Contacto</h4>
+          <h4 className="text-xs font-bold font-montserrat uppercase tracking-wider text-[#111C2D] mb-4">
+            {t("footer.contact_title", "Contacto")}
+          </h4>
           <p className="text-xs text-[#4C4546] leading-relaxed mb-3 font-medium">
             soporte@pianocolombia.com
           </p>
@@ -63,8 +74,8 @@ export default function Footer() {
       </div>
 
       <div className="max-w-7xl mx-auto pt-6 border-t border-black/5 flex flex-col md:flex-row justify-between items-center text-xs text-[#4C4546] font-medium">
-        <p>© 2026 Piano Colombia. Todos los derechos reservados.</p>
-        <p className="mt-2 md:mt-0">Desarrollado con Next.js 16 & Medusa.js 2.x</p>
+        <p>{t("footer.rights", "© 2026 Piano Colombia. Todos los derechos reservados.")}</p>
+        <p className="mt-2 md:mt-0">{t("footer.tech", "Desarrollado con Next.js 16 & Medusa.js 2.x")}</p>
       </div>
     </footer>
   );

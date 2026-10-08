@@ -16,6 +16,7 @@ import {
   updateCustomerProfileApi,
   confirmWompiTransaction,
 } from "@/lib/api-client";
+import { localizeAuthMessage } from "@/lib/localize-messages";
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -57,7 +58,7 @@ export default function CheckoutPage() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
 
   const showToast = (message: string, type: "success" | "error" | "info" = "error") => {
-    setToast({ message, type });
+    setToast({ message: localizeAuthMessage(message, isEn), type });
     setTimeout(() => setToast(null), 6000);
   };
 
@@ -372,10 +373,11 @@ export default function CheckoutPage() {
     try {
       await handleFinishPayment(ref, `TRX-${Date.now().toString().slice(-8)}`);
     } catch (err: any) {
-      showToast(err.message || "Error procesando pago de prueba", "error");
+      showToast(err.message || (isEn ? "Error processing test payment" : "Error procesando pago de prueba"), "error");
     } finally {
       setIsProcessing(false);
     }
+
   };
 
   // Completar transacción, estampar marca de agua y mostrar pantalla de éxito
@@ -435,7 +437,7 @@ export default function CheckoutPage() {
           >
             {toast.type === "success" ? "check_circle" : toast.type === "error" ? "error" : "info"}
           </span>
-          <span>{toast.message}</span>
+          <span>{localizeAuthMessage(toast.message, isEn)}</span>
           <button onClick={() => setToast(null)} className="ml-2 text-white/60 hover:text-white transition">
             <span className="material-symbols-outlined text-sm">close</span>
           </button>

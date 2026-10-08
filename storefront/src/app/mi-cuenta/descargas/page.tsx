@@ -2,13 +2,18 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
+
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { useAuth } from "@/context/AuthContext";
 import { useSavedScores } from "@/context/SavedScoresContext";
+import { useLanguage } from "@/context/LanguageContext";
 
 export default function MisDescargasPage() {
   const { customer, logoutCustomer, isLoaded } = useAuth();
+  const { t, language } = useLanguage();
+  const isEn = language === "en";
+
   const {
     savedScores,
     collections,
@@ -18,6 +23,7 @@ export default function MisDescargasPage() {
     deleteCollection,
     moveScoreToCollection,
   } = useSavedScores();
+
 
   const [activeTab, setActiveTab] = useState<"descargas" | "pedidos" | "colecciones">("descargas");
   const [searchFilter, setSearchFilter] = useState("");
@@ -29,7 +35,11 @@ export default function MisDescargasPage() {
 
   const handleDownloadPdf = async (score: any) => {
     if (score.downloadsLeft <= 0) {
-      alert(`Has alcanzado el límite máximo de ${score.downloadsTotal} descargas permitidas para esta licencia digital.`);
+      alert(
+        isEn
+          ? `You have reached the maximum limit of ${score.downloadsTotal} downloads permitted for this digital license.`
+          : `Has alcanzado el límite máximo de ${score.downloadsTotal} descargas permitidas para esta licencia digital.`
+      );
       return;
     }
 
@@ -44,7 +54,12 @@ export default function MisDescargasPage() {
 
       if (res.status === 403) {
         const errData = await res.json().catch(() => ({}));
-        alert(errData.message || `Has alcanzado el límite máximo de descargas (${score.downloadsTotal}) permitidas para esta licencia.`);
+        alert(
+          errData.message ||
+            (isEn
+              ? `You have reached the maximum limit of downloads (${score.downloadsTotal}) permitted for this license.`
+              : `Has alcanzado el límite máximo de descargas (${score.downloadsTotal}) permitidas para esta licencia.`)
+        );
         setScoresList((prev) =>
           prev.map((s) => (s.id === score.id ? { ...s, downloadsLeft: 0, progressPercent: 0 } : s))
         );
@@ -53,7 +68,12 @@ export default function MisDescargasPage() {
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.message || `Error al procesar la descarga (HTTP ${res.status})`);
+        throw new Error(
+          errData.message ||
+            (isEn
+              ? `Error processing download (HTTP ${res.status})`
+              : `Error al procesar la descarga (HTTP ${res.status})`)
+        );
       }
 
       // Convertir a blob para forzar descarga segura en el navegador
@@ -93,11 +113,18 @@ export default function MisDescargasPage() {
       setDownloadFeedback({
         token: score.token,
         type: "success",
-        message: `¡Partitura descargada con éxito! Te quedan ${nextRemaining} descargas disponibles.`,
+        message: isEn
+          ? `Sheet music downloaded successfully! You have ${nextRemaining} downloads remaining.`
+          : `¡Partitura descargada con éxito! Te quedan ${nextRemaining} descargas disponibles.`,
       });
     } catch (err: any) {
       console.error("Error al descargar:", err);
-      alert(err.message || "Error al generar tu partitura con estampa legal. Por favor intenta de nuevo.");
+      alert(
+        err.message ||
+          (isEn
+            ? "Error generating your legally stamped score. Please try again."
+            : "Error al generar tu partitura con estampa legal. Por favor intenta de nuevo.")
+      );
     } finally {
       setDownloadingToken(null);
     }
@@ -230,7 +257,7 @@ export default function MisDescargasPage() {
         <main className="flex-1 flex items-center justify-center p-12">
           <div className="flex items-center gap-3 text-xs font-bold text-[#111C2D] font-montserrat">
             <span className="w-5 h-5 border-2 border-[#111C2D] border-t-transparent rounded-full animate-spin"></span>
-            <span>Verificando sesión segura...</span>
+            <span>{isEn ? "Verifying secure session..." : "Verificando sesión segura..."}</span>
           </div>
         </main>
         <Footer />
@@ -251,13 +278,15 @@ export default function MisDescargasPage() {
             
             <div className="space-y-2">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#F0F3FF] text-[#0071BC] text-[11px] font-extrabold uppercase tracking-wider font-montserrat">
-                Área Restringida de Clientes
+                {isEn ? "Customer Restricted Area" : "Área Restringida de Clientes"}
               </div>
               <h1 className="text-2xl font-black font-montserrat text-[#111C2D] tracking-tight">
-                Inicia Sesión para Ver tus Partituras
+                {isEn ? "Sign In to Access Your Sheet Music" : "Inicia Sesión para Ver tus Partituras"}
               </h1>
               <p className="text-xs sm:text-sm text-[#4C4546] leading-relaxed font-normal">
-                Debes identificarte con tu cuenta registrada en Piano Colombia para acceder a tus partituras adquiridas, descargar tus copias oficiales estampadas y consultar facturas.
+                {isEn
+                  ? "You must sign in with your registered Piano Colombia account to access your purchased scores, download your official stamped copies, and view invoices."
+                  : "Debes identificarte con tu cuenta registrada en Piano Colombia para acceder a tus partituras adquiridas, descargar tus copias oficiales estampadas y consultar facturas."}
               </p>
             </div>
 
@@ -267,14 +296,14 @@ export default function MisDescargasPage() {
                 className="w-full py-3.5 bg-[#FBB03B] hover:bg-[#e09b2e] text-[#111C2D] font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition font-montserrat flex items-center justify-center gap-2"
               >
                 <span className="material-symbols-outlined text-lg">login</span>
-                Iniciar Sesión / Crear Cuenta
+                {isEn ? "Sign In / Register" : "Iniciar Sesión / Crear Cuenta"}
               </Link>
               <Link
                 href="/"
                 className="w-full py-3 bg-[#F0F3FF] hover:bg-[#111C2D] text-[#111C2D] hover:text-white font-bold text-xs rounded-xl transition font-montserrat flex items-center justify-center gap-1.5"
               >
                 <span className="material-symbols-outlined text-base">arrow_back</span>
-                Volver a la Tienda Principal
+                {isEn ? "Back to Main Store" : "Volver a la Tienda Principal"}
               </Link>
             </div>
           </div>
@@ -297,14 +326,14 @@ export default function MisDescargasPage() {
           {/* Breadcrumbs */}
           <nav aria-label="Breadcrumb" className="py-3 flex items-center justify-between text-xs text-[#4C4546] font-medium">
             <div className="flex items-center space-x-2">
-              <Link href="/" className="hover:text-[#0071BC] transition">Inicio</Link>
+              <Link href="/" className="hover:text-[#0071BC] transition">{t("nav.home", "Inicio")}</Link>
               <span>/</span>
-              <span className="text-[#111C2D] font-bold">Mi Cuenta</span>
+              <span className="text-[#111C2D] font-bold">{t("nav.my_account", "Mi Cuenta")}</span>
               <span>/</span>
               <span aria-current="page" className="text-[#0071BC] font-bold">
-                {activeTab === "descargas" && "Mis Partituras Compradas"}
-                {activeTab === "pedidos" && "Historial de Pedidos & Facturas"}
-                {activeTab === "colecciones" && "Colecciones Guardadas"}
+                {activeTab === "descargas" && (isEn ? "My Purchased Scores" : "Mis Partituras Compradas")}
+                {activeTab === "pedidos" && (isEn ? "Order History & Invoices" : "Historial de Pedidos & Facturas")}
+                {activeTab === "colecciones" && (isEn ? "Saved Collections" : "Colecciones Guardadas")}
               </span>
             </div>
 
@@ -328,7 +357,7 @@ export default function MisDescargasPage() {
               }`}
             >
               <span className="material-symbols-outlined text-base text-[#FBB03B]">description</span>
-              Mis Partituras Compradas
+              {isEn ? "My Purchased Scores" : "Mis Partituras Compradas"}
               <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${
                 activeTab === "descargas" ? "bg-white/20 text-white" : "bg-[#FBB03B]/25 text-[#111C2D]"
               }`}>
@@ -346,7 +375,7 @@ export default function MisDescargasPage() {
               }`}
             >
               <span className="material-symbols-outlined text-base text-[#0071BC]">receipt_long</span>
-              Historial de Pedidos & Facturas
+              {isEn ? "Order History & Invoices" : "Historial de Pedidos & Facturas"}
               <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${
                 activeTab === "pedidos" ? "bg-white/20 text-white" : "bg-[#0071BC]/15 text-[#0071BC]"
               }`}>
@@ -364,7 +393,7 @@ export default function MisDescargasPage() {
               }`}
             >
               <span className={`material-symbols-outlined text-base ${activeTab === "colecciones" ? "text-white" : "text-[#C1272D]"}`}>bookmark</span>
-              Colecciones Guardadas
+              {isEn ? "Saved Collections" : "Colecciones Guardadas"}
               <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${
                 activeTab === "colecciones" ? "bg-white/25 text-white" : "bg-[#C1272D]/15 text-[#C1272D]"
               }`}>
@@ -378,14 +407,15 @@ export default function MisDescargasPage() {
                 logoutCustomer();
                 window.location.href = "/";
               }}
-              className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 border border-red-200 transition font-montserrat whitespace-nowrap"
+              className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 border border-red-200 transition font-montserrat whitespace-nowrap cursor-pointer"
             >
               <span className="material-symbols-outlined text-sm">logout</span>
-              <span>Cerrar Sesión</span>
+              <span>{t("nav.logout", "Cerrar Sesión")}</span>
             </button>
           </div>
         </div>
       </section>
+
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8 md:py-12 space-y-8">
@@ -398,13 +428,15 @@ export default function MisDescargasPage() {
             <div>
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#F0F3FF] border border-[#0071BC]/10 text-[#0071BC] text-[11px] font-extrabold uppercase tracking-wider mb-3 font-montserrat">
                 <span className="w-2 h-2 rounded-full bg-[#0071BC] animate-pulse"></span>
-                Área de Cliente • Licencias Digitales
+                {isEn ? "Customer Area • Digital Licenses" : "Área de Cliente • Licencias Digitales"}
               </div>
               <h1 className="text-3xl sm:text-4xl font-black font-montserrat text-[#111C2D] tracking-tight mb-2">
-                Mis Partituras Compradas
+                {isEn ? "My Purchased Scores" : "Mis Partituras Compradas"}
               </h1>
               <p className="text-sm md:text-base text-[#4C4546] max-w-3xl leading-relaxed font-normal">
-                Gestiona tus licencias adquiridas, descarga tus archivos PDF oficiales con estampado de seguridad antifraude de alta fidelidad y accede a grabaciones de referencia.
+                {isEn
+                  ? "Manage your acquired licenses, download high-fidelity official PDFs with antifraud security stamp, and access reference audio."
+                  : "Gestiona tus licencias adquiridas, descarga tus archivos PDF oficiales con estampado de seguridad antifraude de alta fidelidad y accede a grabaciones de referencia."}
               </p>
 
               {/* Toolbar de Filtros & Búsqueda */}
@@ -416,26 +448,26 @@ export default function MisDescargasPage() {
                       type="search"
                       value={searchFilter}
                       onChange={(e) => setSearchFilter(e.target.value)}
-                      placeholder="Filtrar por obra o compositor..."
+                      placeholder={isEn ? "Filter by piece or composer..." : "Filtrar por obra o compositor..."}
                       className="w-full pl-10 pr-4 py-2.5 text-xs bg-[#F0F3FF] border border-black/5 rounded-xl text-[#111C2D] placeholder-[#4C4546]/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
                     />
                   </div>
 
                   <div className="flex items-center gap-2 text-xs font-semibold">
-                    <span className="text-[#4C4546] hidden sm:inline">Filtrar:</span>
+                    <span className="text-[#4C4546] hidden sm:inline">{isEn ? "Filter:" : "Filtrar:"}</span>
                     <button
                       onClick={() => setCategoryFilter("todas")}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-montserrat font-bold transition ${
+                      className={`px-3.5 py-2 rounded-xl text-xs font-montserrat font-bold transition cursor-pointer ${
                         categoryFilter === "todas"
                           ? "bg-[#111C2D] text-white shadow-2xs"
                           : "bg-[#F0F3FF] text-[#4C4546] hover:text-[#111C2D]"
                       }`}
                     >
-                      Todas ({scoresList.length})
+                      {isEn ? `All (${scoresList.length})` : `Todas (${scoresList.length})`}
                     </button>
                     <button
                       onClick={() => setCategoryFilter("solo")}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-montserrat font-bold transition ${
+                      className={`px-3.5 py-2 rounded-xl text-xs font-montserrat font-bold transition cursor-pointer ${
                         categoryFilter === "solo"
                           ? "bg-[#111C2D] text-white shadow-2xs"
                           : "bg-[#F0F3FF] text-[#4C4546] hover:text-[#111C2D]"
@@ -452,7 +484,9 @@ export default function MisDescargasPage() {
             {loading ? (
               <div className="bg-white rounded-3xl border border-black/5 p-12 text-center space-y-3 shadow-xs">
                 <span className="w-6 h-6 border-2 border-[#111C2D] border-t-transparent rounded-full animate-spin inline-block"></span>
-                <p className="text-xs font-bold text-[#4C4546] font-montserrat">Consultando tus licencias en base de datos...</p>
+                <p className="text-xs font-bold text-[#4C4546] font-montserrat">
+                  {isEn ? "Querying your licenses in database..." : "Consultando tus licencias en base de datos..."}
+                </p>
               </div>
             ) : filteredScores.length > 0 ? (
               <div className="space-y-6">
@@ -478,7 +512,7 @@ export default function MisDescargasPage() {
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200 font-montserrat">
                               <span className="material-symbols-outlined text-xs">verified</span>
-                              {score.license}
+                              {isEn ? "Active License" : score.license}
                             </span>
                             <span className="text-xs font-mono text-[#4C4546]">ISMN: {score.ismn}</span>
                           </div>
@@ -488,33 +522,39 @@ export default function MisDescargasPage() {
                           </h2>
 
                           <div className="flex flex-wrap items-center gap-2 text-xs text-[#4C4546] font-medium">
-                            <span>Compositor: <strong className="text-[#111C2D] font-bold">{score.composer}</strong></span>
+                            <span>{isEn ? "Composer:" : "Compositor:"} <strong className="text-[#111C2D] font-bold">{score.composer}</strong></span>
                             <span>•</span>
                             <span className="px-2 py-0.5 bg-[#F0F3FF] text-[#111C2D] rounded font-bold text-[10px]">{score.category}</span>
                             <span>•</span>
-                            <span className="text-[11px]">{score.format}</span>
+                            <span className="text-[11px]">{isEn ? "Urtext A4 Format" : score.format}</span>
                           </div>
 
                           <div className="pt-2 text-xs text-[#4C4546] flex flex-wrap items-center gap-x-2 gap-y-1 bg-[#F0F3FF]/70 p-2.5 rounded-xl border border-black/5">
                             <span className="font-bold text-[#111C2D] flex items-center gap-1 font-montserrat">
                               <span className="material-symbols-outlined text-sm text-[#0071BC]">shield</span>
-                              Estampa de Seguridad:
+                              {isEn ? "Security Stamp:" : "Estampa de Seguridad:"}
                             </span>
                             <span className="font-mono text-[#111C2D] bg-white px-2 py-0.5 rounded border border-black/5 text-[11px]">
                               {score.userStamp}
                             </span>
                             <span>|</span>
-                            <span className="font-medium text-[#111C2D]">{score.copies}</span>
+                            <span className="font-medium text-[#111C2D]">
+                              {isEn ? "1 Authorized Printed Copy" : score.copies}
+                            </span>
                           </div>
                         </div>
                       </div>
 
                       <div className="w-full lg:w-auto flex flex-col sm:flex-row lg:flex-col items-stretch lg:items-end justify-between gap-4 pt-4 lg:pt-0 border-t lg:border-t-0 border-black/5">
                         <div className="text-left lg:text-right">
-                          <span className="text-xs font-bold text-[#4C4546] block mb-0.5 font-montserrat">Descargas restantes:</span>
+                          <span className="text-xs font-bold text-[#4C4546] block mb-0.5 font-montserrat">
+                            {isEn ? "Remaining downloads:" : "Descargas restantes:"}
+                          </span>
                           <div className="flex items-center lg:justify-end gap-2">
                             <span className="text-sm font-black font-montserrat text-[#0071BC]">
-                              {score.downloadsLeft} de {score.downloadsTotal} permitidas
+                              {isEn
+                                ? `${score.downloadsLeft} of ${score.downloadsTotal} allowed`
+                                : `${score.downloadsLeft} de ${score.downloadsTotal} permitidas`}
                             </span>
                           </div>
                           <div className="w-44 lg:ml-auto h-2 bg-[#F0F3FF] rounded-full mt-1.5 overflow-hidden border border-black/5">
@@ -524,11 +564,11 @@ export default function MisDescargasPage() {
 
                         <div className="flex flex-col sm:flex-row items-stretch gap-2.5">
                           <button
-                            onClick={() => alert(`Reproduciendo audio de referencia de ${score.title}...`)}
-                            className="px-3.5 py-2.5 text-xs font-bold text-[#111C2D] bg-[#F0F3FF] hover:bg-slate-200/60 rounded-xl flex items-center justify-center gap-1.5 transition font-montserrat border border-black/5"
+                            onClick={() => alert(isEn ? `Playing reference audio for ${score.title}...` : `Reproduciendo audio de referencia de ${score.title}...`)}
+                            className="px-3.5 py-2.5 text-xs font-bold text-[#111C2D] bg-[#F0F3FF] hover:bg-slate-200/60 rounded-xl flex items-center justify-center gap-1.5 transition font-montserrat border border-black/5 cursor-pointer"
                           >
                             <span className="material-symbols-outlined text-base text-[#0071BC]">play_circle</span>
-                            Audio Referencia
+                            {isEn ? "Reference Audio" : "Audio Referencia"}
                           </button>
 
                           {score.downloadsLeft > 0 ? (
@@ -540,23 +580,23 @@ export default function MisDescargasPage() {
                               {downloadingToken === score.token ? (
                                 <>
                                   <span className="w-4 h-4 border-2 border-[#111C2D] border-t-transparent rounded-full animate-spin"></span>
-                                  <span>Estampando Licencia...</span>
+                                  <span>{isEn ? "Applying License..." : "Estampando Licencia..."}</span>
                                 </>
                               ) : (
                                 <>
                                   <span className="material-symbols-outlined text-lg">download</span>
-                                  <span>Descargar PDF Firmado</span>
+                                  <span>{isEn ? "Download Stamped PDF" : "Descargar PDF Firmado"}</span>
                                 </>
                               )}
                             </button>
                           ) : (
                             <button
                               disabled
-                              title="Has alcanzado el límite máximo de descargas para esta compra"
+                              title={isEn ? "You have reached the maximum download limit for this purchase" : "Has alcanzado el límite máximo de descargas para esta compra"}
                               className="px-5 py-3 rounded-xl bg-slate-100 text-slate-400 font-extrabold text-xs uppercase tracking-wider font-montserrat flex items-center justify-center gap-2 cursor-not-allowed border border-slate-200"
                             >
                               <span className="material-symbols-outlined text-lg text-slate-400">lock</span>
-                              <span>Descargas Agotadas (0/{score.downloadsTotal})</span>
+                              <span>{isEn ? `Downloads Exhausted (0/${score.downloadsTotal})` : `Descargas Agotadas (0/${score.downloadsTotal})`}</span>
                             </button>
                           )}
                         </div>
@@ -578,9 +618,13 @@ export default function MisDescargasPage() {
                   <span className="material-symbols-outlined text-3xl">library_music</span>
                 </div>
                 <div className="space-y-1">
-                  <h3 className="text-xl font-bold font-montserrat text-[#111C2D]">Aún no tienes partituras compradas</h3>
+                  <h3 className="text-xl font-bold font-montserrat text-[#111C2D]">
+                    {isEn ? "You have no purchased scores yet" : "Aún no tienes partituras compradas"}
+                  </h3>
                   <p className="text-xs sm:text-sm text-[#4C4546] max-w-md mx-auto leading-relaxed">
-                    Explora nuestro catálogo de partituras Urtext y adquiere obras de compositores colombianos con tu licencia legal nominativa.
+                    {isEn
+                      ? "Explore our catalog of Urtext scores and acquire works by Colombian composers with your nominative legal license."
+                      : "Explora nuestro catálogo de partituras Urtext y adquiere obras de compositores colombianos con tu licencia legal nominativa."}
                   </p>
                 </div>
                 <div className="pt-2 flex flex-col items-center gap-3">
@@ -589,21 +633,23 @@ export default function MisDescargasPage() {
                     className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl bg-[#FBB03B] hover:bg-[#e09b2e] text-[#111C2D] font-extrabold text-xs uppercase tracking-wider font-montserrat shadow-md transition"
                   >
                     <span className="material-symbols-outlined text-lg">storefront</span>
-                    Explorar Catálogo de Partituras
+                    {isEn ? "Explore Sheet Music Catalog" : "Explorar Catálogo de Partituras"}
                   </Link>
 
                   {savedScores.length > 0 && (
                     <div className="inline-flex items-center gap-2 px-4 py-2.5 bg-red-50/70 border border-red-200/60 rounded-2xl text-xs text-[#111C2D]">
                       <span className="material-symbols-outlined text-base text-[#C1272D]">bookmark</span>
                       <span>
-                        Tienes <strong className="font-bold text-[#C1272D]">{savedScores.length} partitura{savedScores.length > 1 ? "s" : ""}</strong> guardada{savedScores.length > 1 ? "s" : ""} para comprar más adelante.
+                        {isEn
+                          ? `You have ${savedScores.length} saved score${savedScores.length > 1 ? "s" : ""} to purchase later.`
+                          : `Tienes ${savedScores.length} partitura${savedScores.length > 1 ? "s" : ""} guardada${savedScores.length > 1 ? "s" : ""} para comprar más adelante.`}
                       </span>
                       <button
                         type="button"
                         onClick={() => handleTabChange("colecciones")}
                         className="ml-1 text-xs font-bold text-[#C1272D] hover:underline cursor-pointer"
                       >
-                        Ver mis guardadas ({savedScores.length}) →
+                        {isEn ? `View saved (${savedScores.length}) →` : `Ver mis guardadas (${savedScores.length}) →`}
                       </button>
                     </div>
                   )}
@@ -620,10 +666,12 @@ export default function MisDescargasPage() {
                   </div>
                   <div className="space-y-1">
                     <h3 className="text-base font-bold font-montserrat text-[#111C2D]">
-                      ¿Cómo funciona el estampado de seguridad legal?
+                      {isEn ? "How does legal security stamping work?" : "¿Cómo funciona el estampado de seguridad legal?"}
                     </h3>
                     <p className="text-xs sm:text-sm text-[#4C4546] leading-relaxed">
-                      Tus partituras son generadas en tiempo real y personalizadas con tu nombre completo y correo en el margen inferior de cada página. Este sello digital garantiza la legitimidad jurídica de tu copia ante audiciones y auditorías de derechos de autor.
+                      {isEn
+                        ? "Your scores are generated in real-time and personalized with your full name and email at the bottom margin of each page. This digital watermark certifies the legal authenticity of your copy for auditions, competitions, and copyright audits."
+                        : "Tus partituras son generadas en tiempo real y personalizadas con tu nombre completo y correo en el margen inferior de cada página. Este sello digital garantiza la legitimidad jurídica de tu copia ante audiciones y auditorías de derechos de autor."}
                     </p>
                   </div>
                 </div>
@@ -636,13 +684,14 @@ export default function MisDescargasPage() {
                     className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-black/10 text-[#111C2D] bg-[#F0F3FF] hover:bg-slate-200/60 font-bold text-xs transition shadow-2xs font-montserrat"
                   >
                     <span className="material-symbols-outlined text-base text-emerald-600">chat</span>
-                    Soporte de Descarga
+                    {isEn ? "Download Support" : "Soporte de Descarga"}
                   </a>
                 </div>
               </div>
             </div>
           </div>
         )}
+
 
         {/* ==========================================
                PESTAÑA 2: HISTORIAL DE PEDIDOS & FACTURAS
@@ -652,32 +701,38 @@ export default function MisDescargasPage() {
             <div>
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#F0F3FF] border border-[#0071BC]/10 text-[#0071BC] text-[11px] font-extrabold uppercase tracking-wider mb-3 font-montserrat">
                 <span className="material-symbols-outlined text-xs">receipt_long</span>
-                Facturación & Historial de Compras
+                {isEn ? "Billing & Purchase History" : "Facturación & Historial de Compras"}
               </div>
               <h1 className="text-3xl sm:text-4xl font-black font-montserrat text-[#111C2D] tracking-tight mb-2">
-                Historial de Pedidos & Facturas
+                {isEn ? "Order History & Invoices" : "Historial de Pedidos & Facturas"}
               </h1>
               <p className="text-sm md:text-base text-[#4C4546] max-w-3xl leading-relaxed font-normal">
-                Consulta el desglose de tus transacciones realizadas y comprobantes de pago de la pasarela oficial Wompi.
+                {isEn
+                  ? "View the breakdown of your transactions and official payment receipts processed through Wompi."
+                  : "Consulta el desglose de tus transacciones realizadas y comprobantes de pago de la pasarela oficial Wompi."}
               </p>
             </div>
 
             {scoresList.length > 0 ? (
               <div className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] overflow-hidden">
                 <div className="p-6 border-b border-black/5 flex items-center justify-between">
-                  <h3 className="text-base font-bold font-montserrat text-[#111C2D]">Registro de Compras</h3>
-                  <span className="text-xs text-[#0071BC] font-bold font-montserrat">{scoresList.length} Transacciones</span>
+                  <h3 className="text-base font-bold font-montserrat text-[#111C2D]">
+                    {isEn ? "Purchases Log" : "Registro de Compras"}
+                  </h3>
+                  <span className="text-xs text-[#0071BC] font-bold font-montserrat">
+                    {scoresList.length} {isEn ? "Transactions" : "Transacciones"}
+                  </span>
                 </div>
 
                 <div className="w-full overflow-x-auto overscroll-x-contain">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-[#F0F3FF] text-[#4C4546] font-montserrat text-[11px] font-extrabold uppercase tracking-wider border-b border-black/5">
-                        <th className="py-3 px-6">ID Descarga</th>
-                        <th className="py-3 px-6">Obra Adquirida</th>
-                        <th className="py-3 px-6">Compositor</th>
-                        <th className="py-3 px-6">Estado</th>
-                        <th className="py-3 px-6 text-right">Descarga</th>
+                        <th className="py-3 px-6">{isEn ? "Download ID" : "ID Descarga"}</th>
+                        <th className="py-3 px-6">{isEn ? "Purchased Piece" : "Obra Adquirida"}</th>
+                        <th className="py-3 px-6">{isEn ? "Composer" : "Compositor"}</th>
+                        <th className="py-3 px-6">{isEn ? "Status" : "Estado"}</th>
+                        <th className="py-3 px-6 text-right">{isEn ? "Download" : "Descarga"}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-black/5 text-xs text-[#111C2D]">
@@ -695,7 +750,7 @@ export default function MisDescargasPage() {
                           <td className="py-4 px-6">
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-extrabold font-montserrat border border-emerald-200">
                               <span className="material-symbols-outlined text-xs">check_circle</span>
-                              Aprobado por Wompi
+                              {isEn ? "Approved by Wompi" : "Aprobado por Wompi"}
                             </span>
                           </td>
                           <td className="py-4 px-6 text-right">
@@ -720,8 +775,14 @@ export default function MisDescargasPage() {
                 <div className="w-12 h-12 rounded-xl bg-[#F0F3FF] text-[#0071BC] flex items-center justify-center mx-auto">
                   <span className="material-symbols-outlined text-2xl">receipt_long</span>
                 </div>
-                <h3 className="text-base font-bold font-montserrat text-[#111C2D]">No registras pedidos recientes</h3>
-                <p className="text-xs text-[#4C4546]">Tus transacciones y facturas aparecerán aquí una vez realices compras en la tienda.</p>
+                <h3 className="text-base font-bold font-montserrat text-[#111C2D]">
+                  {isEn ? "No recent orders recorded" : "No registras pedidos recientes"}
+                </h3>
+                <p className="text-xs text-[#4C4546]">
+                  {isEn
+                    ? "Your transactions and receipts will appear here once you make purchases in the store."
+                    : "Tus transacciones y facturas aparecerán aquí una vez realices compras en la tienda."}
+                </p>
               </div>
             )}
           </div>
@@ -736,25 +797,27 @@ export default function MisDescargasPage() {
               <div>
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#F0F3FF] border border-[#C1272D]/10 text-[#C1272D] text-[11px] font-extrabold uppercase tracking-wider mb-3 font-montserrat">
                   <span className="material-symbols-outlined text-xs">bookmark</span>
-                  Listas & Repertorios Guardados
+                  {isEn ? "Saved Lists & Repertoires" : "Listas & Repertorios Guardados"}
                 </div>
                 <h1 className="text-3xl sm:text-4xl font-black font-montserrat text-[#111C2D] tracking-tight mb-2">
-                  Mis Partituras Guardadas
+                  {isEn ? "My Saved Scores" : "Mis Partituras Guardadas"}
                 </h1>
                 <p className="text-sm md:text-base text-[#4C4546] max-w-3xl leading-relaxed font-normal">
-                  Aquí se almacenan tus partituras preferidas guardadas desde la tienda para estudio, recitales o repertorio pedagógico.
+                  {isEn
+                    ? "Your favorite scores saved from the store for study, recital planning, or pedagogical repertoire."
+                    : "Aquí se almacenan tus partituras preferidas guardadas desde la tienda para estudio, recitales o repertorio pedagógico."}
                 </p>
               </div>
 
               <button
                 type="button"
                 onClick={() => setShowCreateModal(!showCreateModal)}
-                className="px-5 py-3 bg-[#FBB03B] hover:bg-[#e09b2e] text-[#111C2D] font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition font-montserrat flex items-center gap-2 shrink-0 self-start sm:self-auto"
+                className="px-5 py-3 bg-[#FBB03B] hover:bg-[#e09b2e] text-[#111C2D] font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition font-montserrat flex items-center gap-2 shrink-0 self-start sm:self-auto cursor-pointer"
               >
                 <span className="material-symbols-outlined text-base">
                   {showCreateModal ? "close" : "create_new_folder"}
                 </span>
-                {showCreateModal ? "Cancelar" : "Nueva Colección"}
+                {showCreateModal ? (isEn ? "Cancel" : "Cancelar") : (isEn ? "New Collection" : "Nueva Colección")}
               </button>
             </div>
 
@@ -763,32 +826,32 @@ export default function MisDescargasPage() {
               <div className="p-6 bg-white rounded-2xl border border-[#0071BC]/20 shadow-md space-y-4 animate-in fade-in duration-200">
                 <div className="flex items-center gap-2 text-sm font-bold text-[#0071BC] font-montserrat border-b border-black/5 pb-2">
                   <span className="material-symbols-outlined text-lg">folder_special</span>
-                  <span>Crear Nueva Carpeta / Colección Temática</span>
+                  <span>{isEn ? "Create New Thematic Folder / Collection" : "Crear Nueva Carpeta / Colección Temática"}</span>
                 </div>
                 <form onSubmit={handleCreateCollection} className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-[#111C2D] mb-1 font-montserrat">
-                        Nombre de la Colección *
+                        {isEn ? "Collection Name *" : "Nombre de la Colección *"}
                       </label>
                       <input
                         type="text"
                         required
                         value={newColName}
                         onChange={(e) => setNewColName(e.target.value)}
-                        placeholder="Ej: Pasillos para Recital de Grado"
+                        placeholder={isEn ? "E.g., Pasillos for Graduation Recital" : "Ej: Pasillos para Recital de Grado"}
                         className="w-full bg-[#F0F3FF] border border-black/5 rounded-xl px-4 py-2.5 text-xs text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
                       />
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-[#111C2D] mb-1 font-montserrat">
-                        Descripción o Notas (Opcional)
+                        {isEn ? "Description or Notes (Optional)" : "Descripción o Notas (Opcional)"}
                       </label>
                       <input
                         type="text"
                         value={newColDesc}
                         onChange={(e) => setNewColDesc(e.target.value)}
-                        placeholder="Ej: Obras andinas de nivel intermedio a avanzado"
+                        placeholder={isEn ? "E.g., Andean works for intermediate to advanced level" : "Ej: Obras andinas de nivel intermedio a avanzado"}
                         className="w-full bg-[#F0F3FF] border border-black/5 rounded-xl px-4 py-2.5 text-xs text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
                       />
                     </div>
@@ -797,15 +860,15 @@ export default function MisDescargasPage() {
                     <button
                       type="button"
                       onClick={() => setShowCreateModal(false)}
-                      className="px-4 py-2 text-xs font-bold text-[#4C4546] hover:bg-slate-100 rounded-xl transition"
+                      className="px-4 py-2 text-xs font-bold text-[#4C4546] hover:bg-slate-100 rounded-xl transition cursor-pointer"
                     >
-                      Cancelar
+                      {isEn ? "Cancel" : "Cancelar"}
                     </button>
                     <button
                       type="submit"
-                      className="px-5 py-2 bg-[#0071BC] hover:bg-[#005996] text-white font-extrabold text-xs font-montserrat rounded-xl shadow-xs transition"
+                      className="px-5 py-2 bg-[#0071BC] hover:bg-[#005996] text-white font-extrabold text-xs font-montserrat rounded-xl shadow-xs transition cursor-pointer"
                     >
-                      Guardar Colección
+                      {isEn ? "Save Collection" : "Guardar Colección"}
                     </button>
                   </div>
                 </form>
@@ -817,13 +880,13 @@ export default function MisDescargasPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={() => setCollectionFilter("todas")}
-                  className={`px-4 py-2 rounded-xl text-xs font-montserrat font-bold transition ${
+                  className={`px-4 py-2 rounded-xl text-xs font-montserrat font-bold transition cursor-pointer ${
                     collectionFilter === "todas"
                       ? "bg-[#111C2D] text-white shadow-2xs"
                       : "bg-white text-[#4C4546] border border-black/5 hover:text-[#111C2D]"
                   }`}
                 >
-                  Todas las Guardadas ({savedScores.length})
+                  {isEn ? `All Saved (${savedScores.length})` : `Todas las Guardadas (${savedScores.length})`}
                 </button>
 
                 {collections.map((col) => {
@@ -839,7 +902,7 @@ export default function MisDescargasPage() {
                     >
                       <button
                         onClick={() => setCollectionFilter(col.id)}
-                        className="px-3.5 py-2 flex items-center gap-1.5"
+                        className="px-3.5 py-2 flex items-center gap-1.5 cursor-pointer"
                       >
                         <span className="material-symbols-outlined text-sm">{col.icon || "folder"}</span>
                         <span>{col.name}</span>
@@ -848,13 +911,16 @@ export default function MisDescargasPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          if (confirm(`¿Deseas eliminar la colección "${col.name}"?`)) {
+                          const confirmMsg = isEn
+                            ? `Do you want to delete the collection "${col.name}"?`
+                            : `¿Deseas eliminar la colección "${col.name}"?`;
+                          if (confirm(confirmMsg)) {
                             deleteCollection(col.id);
                             if (collectionFilter === col.id) setCollectionFilter("todas");
                           }
                         }}
-                        title="Eliminar colección"
-                        className="pr-2.5 pl-1 py-2 text-xs opacity-60 hover:opacity-100 hover:text-red-300 transition"
+                        title={isEn ? "Delete collection" : "Eliminar colección"}
+                        className="pr-2.5 pl-1 py-2 text-xs opacity-60 hover:opacity-100 hover:text-red-300 transition cursor-pointer"
                       >
                         ×
                       </button>
@@ -867,15 +933,18 @@ export default function MisDescargasPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    if (confirm("¿Estás seguro de que deseas eliminar todas las partituras de tu lista de guardadas?")) {
+                    const confirmMsg = isEn
+                      ? "Are you sure you want to remove all scores from your saved list?"
+                      : "¿Estás seguro de que deseas eliminar todas las partituras de tu lista de guardadas?";
+                    if (confirm(confirmMsg)) {
                       clearAllSavedScores();
                     }
                   }}
                   className="px-3.5 py-2 rounded-xl text-xs font-montserrat font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition flex items-center gap-1.5 cursor-pointer shrink-0"
-                  title="Eliminar todas las obras guardadas"
+                  title={isEn ? "Delete all saved scores" : "Eliminar todas las obras guardadas"}
                 >
                   <span className="material-symbols-outlined text-base">delete_sweep</span>
-                  Vaciar todas ({savedScores.length})
+                  {isEn ? `Clear all (${savedScores.length})` : `Vaciar todas (${savedScores.length})`}
                 </button>
               )}
             </div>
@@ -897,7 +966,7 @@ export default function MisDescargasPage() {
                         <button
                           type="button"
                           onClick={() => removeSavedScore(score)}
-                          title="Quitar de guardadas"
+                          title={isEn ? "Remove from saved" : "Quitar de guardadas"}
                           className="w-8 h-8 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center transition border border-red-200/50 cursor-pointer"
                         >
                           <span className="material-symbols-outlined text-base">delete</span>
@@ -910,10 +979,12 @@ export default function MisDescargasPage() {
                             {score.title}
                           </Link>
                         </h2>
-                        <p className="text-xs text-[#4C4546] font-semibold mt-1">Por {score.composer}</p>
+                        <p className="text-xs text-[#4C4546] font-semibold mt-1">
+                          {isEn ? "By" : "Por"} {score.composer}
+                        </p>
                         {score.level && (
                           <span className="inline-block text-[10px] font-bold text-[#4C4546] bg-[#F0F3FF] px-2 py-0.5 rounded mt-2">
-                            Nivel: {score.level}
+                            {isEn ? "Level:" : "Nivel:"} {score.level}
                           </span>
                         )}
                       </div>
@@ -928,14 +999,14 @@ export default function MisDescargasPage() {
                       {collections.length > 0 && (
                         <div className="pt-2 border-t border-black/5">
                           <label className="block text-[10px] font-extrabold text-[#4C4546] uppercase tracking-wider mb-1 font-montserrat">
-                            Carpeta / Colección:
+                            {isEn ? "Folder / Collection:" : "Carpeta / Colección:"}
                           </label>
                           <select
                             value={score.collectionId || ""}
                             onChange={(e) => moveScoreToCollection(score.slug || score.id, e.target.value || undefined)}
                             className="w-full bg-[#F0F3FF] border border-black/10 rounded-lg px-2.5 py-1.5 text-xs text-[#111C2D] font-medium"
                           >
-                            <option value="">Sin carpeta asignada</option>
+                            <option value="">{isEn ? "No folder assigned" : "Sin carpeta asignada"}</option>
                             {collections.map((c) => (
                               <option key={c.id} value={c.id}>
                                 {c.name}
@@ -959,14 +1030,14 @@ export default function MisDescargasPage() {
                           className="px-3 py-2 bg-[#F0F3FF] hover:bg-slate-200/60 text-[#111C2D] font-bold text-xs rounded-xl transition font-montserrat flex items-center gap-1"
                         >
                           <span className="material-symbols-outlined text-sm">visibility</span>
-                          Ver
+                          {isEn ? "View" : "Ver"}
                         </Link>
                         <Link
                           href={`/checkout`}
                           className="px-3.5 py-2 bg-[#FBB03B] hover:bg-[#e09b2e] text-[#111C2D] font-extrabold text-xs uppercase tracking-wider rounded-xl transition font-montserrat shadow-xs flex items-center gap-1"
                         >
                           <span className="material-symbols-outlined text-sm">shopping_cart</span>
-                          Comprar
+                          {isEn ? "Buy" : "Comprar"}
                         </Link>
                       </div>
                     </div>
@@ -981,13 +1052,13 @@ export default function MisDescargasPage() {
                 <div className="space-y-1">
                   <h3 className="text-xl font-bold font-montserrat text-[#111C2D]">
                     {collectionFilter !== "todas"
-                      ? "No hay partituras en esta colección"
-                      : "Aún no tienes partituras guardadas"}
+                      ? (isEn ? "No sheet music in this collection" : "No hay partituras en esta colección")
+                      : (isEn ? "You have no saved scores yet" : "Aún no tienes partituras guardadas")}
                   </h3>
                   <p className="text-xs sm:text-sm text-[#4C4546] max-w-md mx-auto leading-relaxed">
                     {collectionFilter !== "todas"
-                      ? "Asigna partituras a esta carpeta seleccionándola en la tarjeta de cada obra."
-                      : "Explora la tienda y haz clic en el ícono de marcador en cualquier partitura para guardarla en tu perfil de cliente."}
+                      ? (isEn ? "Assign sheet music to this folder by selecting it on the score card." : "Asigna partituras a esta carpeta seleccionándola en la tarjeta de cada obra.")
+                      : (isEn ? "Explore the store and click the bookmark icon on any sheet music to save it to your customer library." : "Explora la tienda y haz clic en el ícono de marcador en cualquier partitura para guardarla en tu perfil de cliente.")}
                   </p>
                 </div>
                 <div className="pt-2">
@@ -996,7 +1067,7 @@ export default function MisDescargasPage() {
                     className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl bg-[#FBB03B] hover:bg-[#e09b2e] text-[#111C2D] font-extrabold text-xs uppercase tracking-wider font-montserrat shadow-md transition"
                   >
                     <span className="material-symbols-outlined text-lg">storefront</span>
-                    Explorar Tienda de Partituras
+                    {isEn ? "Explore Sheet Music Store" : "Explorar Tienda de Partituras"}
                   </Link>
                 </div>
               </div>
@@ -1023,10 +1094,11 @@ export default function MisDescargasPage() {
             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
           </span>
           <span className="material-symbols-outlined text-emerald-600 text-lg group-hover:scale-110 transition-transform">chat</span>
-          <span className="text-xs font-bold hidden md:inline font-montserrat">¿Ayuda con tu cuenta?</span>
+          <span className="text-xs font-bold hidden md:inline font-montserrat">{isEn ? "Account Support?" : "¿Ayuda con tu cuenta?"}</span>
         </a>
       </aside>
 
     </div>
   );
 }
+

@@ -11,11 +11,13 @@ import {
   requestPasswordResetApi,
   confirmPasswordResetApi,
 } from "@/lib/api-client";
+import { localizeAuthMessage } from "@/lib/localize-messages";
 
 export default function CompositorLoginPage() {
   const router = useRouter();
   const { composer, loginComposer, logoutComposer } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const isEn = language === "en";
   const [viewMode, setViewMode] = useState<"login" | "forgot_email" | "forgot_otp">("login");
   
   const [email, setEmail] = useState("");
@@ -102,7 +104,12 @@ export default function CompositorLoginPage() {
       }
     } catch (err: any) {
       console.error("Fallo login de compositor en vivo:", err.message);
-      setErrorMessage(err.message || "Correo o contraseña incorrectos. Por favor verifica tus credenciales.");
+      setErrorMessage(
+        localizeAuthMessage(err.message, isEn) ||
+          (isEn
+            ? "Incorrect email or password. Please verify your credentials."
+            : "Correo o contraseña incorrectos. Por favor verifica tus credenciales.")
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -111,7 +118,9 @@ export default function CompositorLoginPage() {
   const handleRequestForgotOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!forgotEmail || !forgotEmail.includes("@")) {
-      setErrorMessage("Por favor ingresa un correo electrónico válido.");
+      setErrorMessage(
+        isEn ? "Please enter a valid email address." : "Por favor ingresa un correo electrónico válido."
+      );
       return;
     }
 
@@ -132,10 +141,17 @@ export default function CompositorLoginPage() {
       setForgotOtp("");
       setNewPassword("");
       setConfirmNewPassword("");
-      setSuccessMessage(res.message || `Código enviado a ${forgotEmail}. Revisa tu bandeja de entrada o spam.`);
+      setSuccessMessage(
+        isEn
+          ? `6-digit OTP code successfully sent to ${forgotEmail}! (Please also check your Spam folder).`
+          : (res.message || `Código enviado a ${forgotEmail}. Revisa tu bandeja de entrada o spam.`)
+      );
     } catch (err: any) {
       console.error("Error al solicitar código:", err);
-      setErrorMessage(err.message || "Error al solicitar el código de recuperación.");
+      setErrorMessage(
+        localizeAuthMessage(err.message, isEn) ||
+          (isEn ? "Error requesting password reset code." : "Error al solicitar el código de recuperación.")
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -147,17 +163,25 @@ export default function CompositorLoginPage() {
     setSuccessMessage(null);
 
     if (!forgotOtp || forgotOtp.trim().length !== 6) {
-      setErrorMessage("Por favor ingresa el código completo de 6 dígitos.");
+      setErrorMessage(
+        isEn ? "Please enter the complete 6-digit code." : "Por favor ingresa el código completo de 6 dígitos."
+      );
       return;
     }
 
     if (newPassword.length < 6) {
-      setErrorMessage("La contraseña debe tener al menos 6 caracteres por seguridad.");
+      setErrorMessage(
+        isEn
+          ? "The password must be at least 6 characters long for security."
+          : "La contraseña debe tener al menos 6 caracteres por seguridad."
+      );
       return;
     }
 
     if (newPassword !== confirmNewPassword) {
-      setErrorMessage("Las contraseñas no coinciden. Por favor verifica ambos campos.");
+      setErrorMessage(
+        isEn ? "Passwords do not match. Please verify both fields." : "Las contraseñas no coinciden. Por favor verifica ambos campos."
+      );
       return;
     }
 
@@ -171,13 +195,20 @@ export default function CompositorLoginPage() {
         role: "composer",
       });
 
-      setSuccessMessage(res.message || "¡Contraseña actualizada exitosamente! Ya puedes iniciar sesión.");
+      setSuccessMessage(
+        isEn
+          ? "Password successfully reset! You can now log in."
+          : (res.message || "¡Contraseña actualizada exitosamente! Ya puedes iniciar sesión.")
+      );
       setEmail(forgotEmail.trim());
       setPassword("");
       setViewMode("login");
     } catch (err: any) {
       console.error("Error al restablecer contraseña de compositor:", err);
-      setErrorMessage(err.message || "Código incorrecto o expirado. Por favor intenta de nuevo.");
+      setErrorMessage(
+        localizeAuthMessage(err.message, isEn) ||
+          (isEn ? "Incorrect or expired code. Please try again." : "Código incorrecto o expirado. Por favor intenta de nuevo.")
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -197,9 +228,13 @@ export default function CompositorLoginPage() {
       setForgotResendCooldown(60);
       setForgotCanResend(false);
       setForgotOtp("");
-      setSuccessMessage(`Nuevo código enviado a ${forgotEmail}.`);
+      setSuccessMessage(
+        isEn ? `New recovery code sent to ${forgotEmail}.` : `Nuevo código enviado a ${forgotEmail}.`
+      );
     } catch (err: any) {
-      setErrorMessage(err.message || "Error al reenviar el código.");
+      setErrorMessage(
+        localizeAuthMessage(err.message, isEn) || (isEn ? "Error resending code." : "Error al reenviar el código.")
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -285,14 +320,14 @@ export default function CompositorLoginPage() {
             {errorMessage && (
               <div className="mb-6 p-4 rounded-2xl bg-red-50 border border-red-200 text-red-800 text-xs font-medium flex items-center gap-3">
                 <span className="material-symbols-outlined text-base text-red-600 shrink-0">error</span>
-                <span>{errorMessage}</span>
+                <span>{localizeAuthMessage(errorMessage, isEn)}</span>
               </div>
             )}
 
             {successMessage && (
               <div className="mb-6 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center gap-3">
                 <span className="material-symbols-outlined text-base text-emerald-600 shrink-0">check_circle</span>
-                <span>{successMessage}</span>
+                <span>{localizeAuthMessage(successMessage, isEn)}</span>
               </div>
             )}
 

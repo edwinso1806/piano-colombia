@@ -2,16 +2,19 @@ import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { CUSTOMER_MODULE } from "../../../../../modules/customer"
 import { verifyRegistrationOtp } from "../../../../../lib/otp-service"
 import { hashPassword, generateSessionToken } from "../../../../../lib/auth-security"
-import { sendEmail } from "../../../../../lib/resend-mailer"
+import { sendEmail, generateWelcomeEmailHTML, extractLanguage, EMAIL_SUBJECTS } from "../../../../../lib/resend-mailer"
 
 export async function POST(req: MedusaRequest, res: MedusaResponse) {
   try {
     const customerModuleService = req.scope.resolve(CUSTOMER_MODULE)
     const { email, code } = (req.body as any) || {}
+    const lang = extractLanguage(req)
 
     if (!email || !code) {
       return res.status(400).json({
-        message: "Email y código de verificación son obligatorios",
+        message: lang === "en"
+          ? "Email and verification code are required"
+          : "Email y código de verificación son obligatorios",
       })
     }
 
@@ -21,7 +24,9 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
     const verification = verifyRegistrationOtp(normalizedEmail, code)
     if (!verification.valid || !verification.payload) {
       return res.status(400).json({
-        message: verification.error || "Código de verificación incorrecto o expirado",
+        message: lang === "en"
+          ? "Incorrect or expired verification code"
+          : (verification.error || "Código de verificación incorrecto o expirado"),
       })
     }
 
@@ -34,7 +39,9 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
 
     if (existing && existing.length > 0) {
       return res.status(400).json({
-        message: "Ya existe una cuenta registrada con este correo electrónico",
+        message: lang === "en"
+          ? "An account is already registered with this email address"
+          : "Ya existe una cuenta registrada con este correo electrónico",
       })
     }
 
@@ -53,6 +60,7 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       salt,
       phone: phone || null,
       tax_id: taxId || null,
+      preferred_language: lang,
       is_active: true,
     })
 
@@ -62,30 +70,23 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       role: "customer",
     })
 
-    // 4. Enviar correo de bienvenida oficial
+    // 4. Enviar correo de bienvenida oficial bilingüe
     await sendEmail({
       to: normalizedEmail,
-      subject: "¡Bienvenido a Piano Colombia! Tu cuenta ha sido verificada",
-      html: `
-        <div style="font-family: Arial, sans-serif; background: #F9F9FF; padding: 24px; color: #111C2D;">
-          <div style="max-width: 540px; margin: 0 auto; background: #ffffff; padding: 32px; border-radius: 16px; border: 1px solid #e2e8f0;">
-            <h1 style="font-size: 20px; font-weight: 900; margin-top: 0; color: #111C2D;">PIANO COLOMBIA</h1>
-            <p style="font-size: 14px; color: #334155;">Hola <strong>${fullName}</strong>,</p>
-            <p style="font-size: 13px; color: #475569; line-height: 1.6;">Tu correo ha sido verificado con éxito y tu cuenta de cliente en Piano Colombia está activa. Ya puedes explorar el catálogo urtext y comprar partituras con licencias legales emitidas a tu nombre.</p>
-            <div style="margin: 24px 0; text-align: center;">
-              <a href="http://localhost:3000/tienda" style="background: #FBB03B; color: #111C2D; font-weight: bold; padding: 12px 24px; border-radius: 10px; text-decoration: none; font-size: 13px; text-transform: uppercase;">Explorar Catálogo de Partituras</a>
-            </div>
-            <p style="font-size: 11px; color: #94a3b8; text-align: center;">© 2026 Piano Colombia — Archivo Editorial de Partituras</p>
-          </div>
-        </div>
-      `,
+      subject: EMAIL_SUBJECTS.welcomeCustomer[lang],
+      html: generateWelcomeEmailHTML({
+        userName: fullName,
+        lang,
+      }),
     })
 
     console.log(`✅ [OTP VERIFIED] Cuenta creada en PostgreSQL para ${normalizedEmail}`)
 
     return res.status(201).json({
       success: true,
-      message: "¡Cuenta verificada y creada exitosamente!",
+      message: lang === "en"
+        ? "Account verified and created successfully!"
+        : "¡Cuenta verificada y creada exitosamente!",
       token,
       customer: {
         id: newCustomer.id,
@@ -96,9 +97,12 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       },
     })
   } catch (error: any) {
+    const lang = extractLanguage(req)
     console.error("❌ Error verificando OTP de registro:", error)
     return res.status(500).json({
-      message: "Error al verificar código de registro",
+      message: lang === "en"
+        ? "Error verifying registration code"
+        : "Error al verificar código de registro",
       error: error.message,
     })
   }

@@ -3,14 +3,18 @@ import { Client } from "pg"
 export interface BlogPost {
   id: string
   title: string
+  title_en?: string | null
   slug: string
   category: string
+  category_en?: string | null
   author: string
   published_at: string
   read_time: string
   cover_image: string | null
   excerpt: string | null
+  excerpt_en?: string | null
   content: string
+  content_en?: string | null
   is_active: boolean
   created_at: string
   updated_at: string
@@ -19,6 +23,7 @@ export interface BlogPost {
 export interface BlogCategory {
   id: string
   name: string
+  name_en?: string | null
   slug: string
   created_at: string
 }
@@ -28,6 +33,23 @@ function getPgClient() {
     connectionString:
       process.env.DATABASE_URL || "postgres://postgres:Alex%242020@localhost:5432/piano_colombia_db",
   })
+}
+
+let hasEnsuredColumns = false
+async function ensureBlogColumns(client: Client) {
+  if (hasEnsuredColumns) return
+  try {
+    await client.query(`
+      ALTER TABLE blog_post ADD COLUMN IF NOT EXISTS title_en TEXT;
+      ALTER TABLE blog_post ADD COLUMN IF NOT EXISTS excerpt_en TEXT;
+      ALTER TABLE blog_post ADD COLUMN IF NOT EXISTS content_en TEXT;
+      ALTER TABLE blog_post ADD COLUMN IF NOT EXISTS category_en VARCHAR(100);
+      ALTER TABLE blog_category ADD COLUMN IF NOT EXISTS name_en VARCHAR(100);
+    `)
+    hasEnsuredColumns = true
+  } catch (err) {
+    console.warn("Could not ensure blog columns:", err)
+  }
 }
 
 function slugify(text: string): string {
@@ -50,8 +72,9 @@ export async function getBlogCategories(): Promise<BlogCategory[]> {
   const client = getPgClient()
   try {
     await client.connect()
+    await ensureBlogColumns(client)
     const res = await client.query(`
-      SELECT id, name, slug, created_at 
+      SELECT id, name, name_en, slug, created_at 
       FROM blog_category 
       ORDER BY name ASC;
     `)
@@ -61,20 +84,22 @@ export async function getBlogCategories(): Promise<BlogCategory[]> {
   }
 }
 
-export async function createBlogCategory(name: string): Promise<BlogCategory> {
+export async function createBlogCategory(name: string, name_en?: string): Promise<BlogCategory> {
   const client = getPgClient()
   try {
     await client.connect()
+    await ensureBlogColumns(client)
     const cleanName = name.trim()
+    const cleanNameEn = name_en?.trim() || null
     const slug = slugify(cleanName)
     const id = `cat_${slug}_${Date.now().toString().slice(-4)}`
 
     const res = await client.query(`
-      INSERT INTO blog_category (id, name, slug)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
-      RETURNING id, name, slug, created_at;
-    `, [id, cleanName, slug])
+      INSERT INTO blog_category (id, name, name_en, slug)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name, name_en = COALESCE(EXCLUDED.name_en, blog_category.name_en)
+      RETURNING id, name, name_en, slug, created_at;
+    `, [id, cleanName, cleanNameEn, slug])
 
     return res.rows[0]
   } finally {
@@ -104,8 +129,9 @@ export async function getActiveStoreBlogPosts(filters?: {
   const client = getPgClient()
   try {
     await client.connect()
+    await ensureBlogColumns(client)
     let query = `
-      SELECT id, title, slug, category, author, published_at, read_time, cover_image, excerpt, content, is_active, created_at, updated_at
+      SELECT id, title, title_en, slug, category, category_en, author, published_at, read_time, cover_image, excerpt, excerpt_en, content, content_en, is_active, created_at, updated_at
       FROM blog_post
       WHERE is_active = true
     `
@@ -113,7 +139,7 @@ export async function getActiveStoreBlogPosts(filters?: {
 
     if (filters?.category && filters.category !== "all" && filters.category !== "Todos") {
       params.push(filters.category)
-      query += ` AND LOWER(category) = LOWER($${params.length})`
+      query += ` AND (LOWER(category) = LOWER($${params.length}) OR LOWER(category_en) = LOWER($${params.length}))`
     }
 
     query += ` ORDER BY published_at DESC, created_at DESC`
@@ -137,8 +163,9 @@ export async function getBlogPostBySlug(slug: string, requireActive = true): Pro
   const client = getPgClient()
   try {
     await client.connect()
+    await ensureBlogColumns(client)
     let query = `
-      SELECT id, title, slug, category, author, published_at, read_time, cover_image, excerpt, content, is_active, created_at, updated_at
+      SELECT id, title, title_en, slug, category, category_en, author, published_at, read_time, cover_image, excerpt, excerpt_en, content, content_en, is_active, created_at, updated_at
       FROM blog_post
       WHERE slug = $1
     `
@@ -164,14 +191,15 @@ export async function getAllAdminBlogPosts(): Promise<{ posts: BlogPost[]; total
   const client = getPgClient()
   try {
     await client.connect()
+    await ensureBlogColumns(client)
     const postsRes = await client.query(`
-      SELECT id, title, slug, category, author, published_at, read_time, cover_image, excerpt, content, is_active, created_at, updated_at
+      SELECT id, title, title_en, slug, category, category_en, author, published_at, read_time, cover_image, excerpt, excerpt_en, content, content_en, is_active, created_at, updated_at
       FROM blog_post
       ORDER BY published_at DESC, created_at DESC;
     `)
 
     const catsRes = await client.query(`
-      SELECT id, name, slug, created_at FROM blog_category ORDER BY name ASC;
+      SELECT id, name, name_en, slug, created_at FROM blog_category ORDER BY name ASC;
     `)
 
     return {
@@ -186,21 +214,27 @@ export async function getAllAdminBlogPosts(): Promise<{ posts: BlogPost[]; total
 
 export async function createBlogPost(data: {
   title: string
+  title_en?: string | null
   slug?: string
   category: string
+  category_en?: string | null
   author: string
   published_at?: string
   read_time?: string
   cover_image?: string | null
   excerpt?: string | null
+  excerpt_en?: string | null
   content: string
+  content_en?: string | null
   is_active?: boolean
 }): Promise<BlogPost> {
   const client = getPgClient()
   try {
     await client.connect()
+    await ensureBlogColumns(client)
 
     const title = data.title.trim()
+    const title_en = data.title_en?.trim() || null
     let slug = data.slug ? slugify(data.slug) : slugify(title)
     if (!slug) slug = `articulo-${Date.now()}`
 
@@ -212,6 +246,7 @@ export async function createBlogPost(data: {
 
     const id = `post_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
     const category = data.category?.trim() || "Actualidad"
+    const category_en = data.category_en?.trim() || null
     const author = data.author?.trim() || "Equipo Piano Colombia"
     const published_at = data.published_at ? new Date(data.published_at) : new Date()
     
@@ -225,19 +260,21 @@ export async function createBlogPost(data: {
 
     const cover_image = data.cover_image?.trim() || null
     const excerpt = data.excerpt?.trim() || null
+    const excerpt_en = data.excerpt_en?.trim() || null
     const content = data.content || ""
+    const content_en = data.content_en || null
     const is_active = data.is_active !== undefined ? Boolean(data.is_active) : true
 
     const res = await client.query(`
       INSERT INTO blog_post (
-        id, title, slug, category, author, published_at, read_time,
-        cover_image, excerpt, content, is_active, created_at, updated_at
+        id, title, title_en, slug, category, category_en, author, published_at, read_time,
+        cover_image, excerpt, excerpt_en, content, content_en, is_active, created_at, updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW(), NOW())
       RETURNING *;
     `, [
-      id, title, slug, category, author, published_at, read_time,
-      cover_image, excerpt, content, is_active
+      id, title, title_en, slug, category, category_en, author, published_at, read_time,
+      cover_image, excerpt, excerpt_en, content, content_en, is_active
     ])
 
     return res.rows[0]
@@ -250,34 +287,43 @@ export async function updateBlogPost(
   id: string,
   data: Partial<{
     title: string
+    title_en: string | null
     slug: string
     category: string
+    category_en: string | null
     author: string
     published_at: string
     read_time: string
     cover_image: string | null
     excerpt: string | null
+    excerpt_en: string | null
     content: string
+    content_en: string | null
     is_active: boolean
   }>
 ): Promise<BlogPost | null> {
   const client = getPgClient()
   try {
     await client.connect()
+    await ensureBlogColumns(client)
 
     const currentRes = await client.query(`SELECT * FROM blog_post WHERE id = $1;`, [id])
     if (currentRes.rows.length === 0) return null
     const current = currentRes.rows[0]
 
     let title = data.title !== undefined ? data.title.trim() : current.title
+    let title_en = data.title_en !== undefined ? (data.title_en ? data.title_en.trim() : null) : current.title_en
     let slug = data.slug !== undefined ? slugify(data.slug) : current.slug
     let category = data.category !== undefined ? data.category.trim() : current.category
+    let category_en = data.category_en !== undefined ? (data.category_en ? data.category_en.trim() : null) : current.category_en
     let author = data.author !== undefined ? data.author.trim() : current.author
     let published_at = data.published_at !== undefined ? new Date(data.published_at) : current.published_at
     let read_time = data.read_time !== undefined ? data.read_time.trim() : current.read_time
     let cover_image = data.cover_image !== undefined ? data.cover_image : current.cover_image
     let excerpt = data.excerpt !== undefined ? data.excerpt : current.excerpt
+    let excerpt_en = data.excerpt_en !== undefined ? data.excerpt_en : current.excerpt_en
     let content = data.content !== undefined ? data.content : current.content
+    let content_en = data.content_en !== undefined ? data.content_en : current.content_en
     let is_active = data.is_active !== undefined ? Boolean(data.is_active) : current.is_active
 
     // Si cambió el slug, verificar que no colisione con otro
@@ -292,21 +338,25 @@ export async function updateBlogPost(
       UPDATE blog_post
       SET 
         title = $1,
-        slug = $2,
-        category = $3,
-        author = $4,
-        published_at = $5,
-        read_time = $6,
-        cover_image = $7,
-        excerpt = $8,
-        content = $9,
-        is_active = $10,
+        title_en = $2,
+        slug = $3,
+        category = $4,
+        category_en = $5,
+        author = $6,
+        published_at = $7,
+        read_time = $8,
+        cover_image = $9,
+        excerpt = $10,
+        excerpt_en = $11,
+        content = $12,
+        content_en = $13,
+        is_active = $14,
         updated_at = NOW()
-      WHERE id = $11
+      WHERE id = $15
       RETURNING *;
     `, [
-      title, slug, category, author, published_at, read_time,
-      cover_image, excerpt, content, is_active, id
+      title, title_en, slug, category, category_en, author, published_at, read_time,
+      cover_image, excerpt, excerpt_en, content, content_en, is_active, id
     ])
 
     return res.rows[0] || null

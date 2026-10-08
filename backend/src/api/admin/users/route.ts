@@ -1,7 +1,7 @@
 import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { Client } from "pg"
 import crypto from "crypto"
-import { sendEmail, generateNewAdminUserInvitationHTML } from "../../../lib/resend-mailer"
+import { sendEmail, generateNewAdminUserInvitationHTML, extractLanguage, EMAIL_SUBJECTS } from "../../../lib/resend-mailer"
 
 export const AUTHENTICATE = false
 
@@ -307,18 +307,20 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       avatarBg: row.avatar_bg,
     }
 
-    // Enviar notificación de bienvenida / invitación por correo
+    // Enviar notificación de bienvenida / invitación por correo bilingüe
     try {
+      const lang = extractLanguage(req)
       await sendEmail({
         to: normalizedEmail,
-        subject: `🔐 Invitación a la Consola Administrativa - Piano Colombia`,
+        subject: EMAIL_SUBJECTS.adminInvitation[lang],
         html: generateNewAdminUserInvitationHTML({
           userName: name.trim(),
           userEmail: normalizedEmail,
           roleName: meta.roleName,
           permissions: finalPermissions,
-          createdByName: requesting_user_email || "Super Administración PC",
+          createdByName: requesting_user_email || (lang === "en" ? "Super Administration PC" : "Super Administración PC"),
           activationToken,
+          lang,
         }),
       })
     } catch (mailErr) {

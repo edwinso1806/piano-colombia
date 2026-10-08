@@ -1,6 +1,6 @@
 import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { Client } from "pg"
-import { sendEmail } from "../../../../lib/resend-mailer"
+import { sendEmail, generatePasswordResetEmailHTML, extractLanguage, EMAIL_SUBJECTS } from "../../../../lib/resend-mailer"
 
 export const AUTHENTICATE = false
 
@@ -37,11 +37,12 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
   const client = getPgClient()
   try {
     const { email, role, token } = (req.body as any) || {}
+    const lang = extractLanguage(req)
 
     if (!email || !email.includes("@")) {
       return res.status(400).json({
         success: false,
-        message: "Por favor proporciona un correo electrónico válido.",
+        message: lang === "en" ? "Please provide a valid email address." : "Por favor proporciona un correo electrónico válido.",
       })
     }
 
@@ -61,7 +62,9 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
         return res.status(404).json({
           success: false,
           security_alert: true,
-          message: "Alerta de Seguridad: No existe ninguna cuenta administrativa autorizada para el correo proporcionado.",
+          message: lang === "en" 
+            ? "Security Alert: No authorized administrative account exists for the provided email."
+            : "Alerta de Seguridad: No existe ninguna cuenta administrativa autorizada para el correo proporcionado.",
         })
       }
 
@@ -71,7 +74,9 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
         return res.status(403).json({
           success: false,
           security_alert: true,
-          message: "Esta cuenta administrativa se encuentra suspendida o inactiva. No es posible generar códigos OTP.",
+          message: lang === "en"
+            ? "This administrative account is suspended or inactive. Unable to generate OTP codes."
+            : "Esta cuenta administrativa se encuentra suspendida o inactiva. No es posible generar códigos OTP.",
         })
       }
 
@@ -82,14 +87,18 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
           return res.status(403).json({
             success: false,
             security_alert: true,
-            message: "Alerta de Seguridad Crítica: Los parámetros de la URL han sido manipulados o el token no corresponde a esta dirección de correo. Solicitud rechazada.",
+            message: lang === "en"
+              ? "Critical Security Alert: URL parameters were manipulated or the token does not match this email address. Request rejected."
+              : "Alerta de Seguridad Crítica: Los parámetros de la URL han sido manipulados o el token no corresponde a esta dirección de correo. Solicitud rechazada.",
           })
         }
       } else if (adminUser.activation_token) {
         return res.status(403).json({
           success: false,
           security_alert: true,
-          message: "Alerta de Seguridad: Para activar esta cuenta administrativa es obligatorio utilizar el enlace seguro de invitación con su token criptográfico original.",
+          message: lang === "en"
+            ? "Security Alert: To activate this administrative account you must use the original secure invitation link with its cryptographic token."
+            : "Alerta de Seguridad: Para activar esta cuenta administrativa es obligatorio utilizar el enlace seguro de invitación con su token criptográfico original.",
         })
       }
     }
@@ -108,50 +117,16 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
     `, [normalizedEmail, otpCode, expiresAt])
 
     // Plantilla de Correo HTML con el Código OTP
-    const htmlContent = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <title>🔑 Código OTP de Verificación - Piano Colombia</title>
-    </head>
-    <body style="font-family: Arial, sans-serif; background-color: #F9F9FF; margin: 0; padding: 24px; color: #111C2D;">
-      <div style="max-width: 540px; margin: 0 auto; background: #ffffff; border-radius: 20px; border: 1px solid #e2e8f0; padding: 36px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); text-align: center;">
-        
-        <span style="display: inline-block; padding: 4px 14px; background: #EFF6FF; color: #0071BC; border-radius: 20px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;">
-          Seguridad & Verificación OTP
-        </span>
-
-        <h1 style="font-size: 22px; font-weight: 900; margin: 16px 0 6px; color: #111C2D;">PIANO COLOMBIA</h1>
-        <p style="font-size: 13px; color: #475569; margin-bottom: 24px;">Código de activación y asignación de contraseña</p>
-
-        <div style="background: #F0F3FF; border: 2px dashed #0071BC; border-radius: 16px; padding: 24px; margin: 20px 0;">
-          <p style="margin: 0 0 8px; font-size: 11px; font-weight: bold; color: #475569; text-transform: uppercase; letter-spacing: 1px;">
-            Tu Código de Seguridad OTP:
-          </p>
-          <span style="font-family: monospace; font-size: 36px; font-weight: 900; color: #111C2D; letter-spacing: 8px; display: inline-block; background: #ffffff; padding: 10px 24px; border-radius: 12px; border: 1px solid #CBD5E1;">
-            ${otpCode}
-          </span>
-          <p style="margin: 12px 0 0; font-size: 11px; color: #64748B;">
-            ⏱️ Este código expira en <strong>10 minutos</strong>.
-          </p>
-        </div>
-
-        <p style="font-size: 12px; color: #64748B; line-height: 1.5; text-align: left; margin-top: 20px;">
-          Ingresa este código en la pantalla de activación para definir tu contraseña de acceso personal.
-        </p>
-
-        <div style="border-top: 1px solid #f1f5f9; margin-top: 28px; padding-top: 16px; font-size: 10px; color: #94a3b8;">
-          © 2026 Piano Colombia · Notificación de Seguridad
-        </div>
-      </div>
-    </body>
-    </html>
-    `
+    const htmlContent = generatePasswordResetEmailHTML({
+      userName: normalizedEmail.split("@")[0],
+      otpCode,
+      role: role || "admin",
+      lang,
+    })
 
     const mailRes = await sendEmail({
       to: normalizedEmail,
-      subject: `🔑 Código OTP: ${otpCode} - Activación & Seguridad Piano Colombia`,
+      subject: EMAIL_SUBJECTS.passwordReset[lang](otpCode),
       html: htmlContent,
     })
 
@@ -161,13 +136,16 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
 
     return res.status(200).json({
       success: true,
-      message: `¡Código OTP de 6 dígitos enviado exitosamente a ${normalizedEmail}! (Verifica también tu carpeta de Spam).`,
+      message: lang === "en"
+        ? `6-digit OTP code successfully sent to ${normalizedEmail}! (Please also check your Spam folder).`
+        : `¡Código OTP de 6 dígitos enviado exitosamente a ${normalizedEmail}! (Verifica también tu carpeta de Spam).`,
     })
   } catch (error: any) {
+    const lang = extractLanguage(req)
     console.error("❌ Error al generar código OTP:", error)
     return res.status(500).json({
       success: false,
-      message: "Error al generar código de seguridad OTP.",
+      message: lang === "en" ? "Error generating security OTP code." : "Error al generar código de seguridad OTP.",
       error: error.message,
     })
   } finally {

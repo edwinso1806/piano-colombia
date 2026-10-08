@@ -5,6 +5,7 @@ import { CartProvider } from "@/context/CartContext";
 import { AuthProvider } from "@/context/AuthContext";
 import { SavedScoresProvider } from "@/context/SavedScoresContext";
 import { LanguageProvider } from "@/context/LanguageContext";
+import FloatingWhatsAppWidget from "@/components/FloatingWhatsAppWidget";
 
 const montserrat = Montserrat({
   variable: "--font-montserrat",
@@ -43,7 +44,10 @@ export default function RootLayout({
         <LanguageProvider>
           <AuthProvider>
             <SavedScoresProvider>
-              <CartProvider>{children}</CartProvider>
+              <CartProvider>
+                {children}
+                <FloatingWhatsAppWidget />
+              </CartProvider>
             </SavedScoresProvider>
           </AuthProvider>
         </LanguageProvider>

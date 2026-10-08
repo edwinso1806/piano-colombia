@@ -557,7 +557,7 @@ const MEDUSA_URL = process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL || "http://localho
                 {/* Botones de Descarga */}
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-2">
                   <button
-                    onClick={handleDownloadPAB}
+                    onClick={() => handleDownloadPAB()}
                     className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-[#111C2D] font-montserrat font-bold text-xs rounded-xl transition cursor-pointer"
                     title="Plano Bancario para Bancolombia Sucursal Virtual Empresas"
                   >

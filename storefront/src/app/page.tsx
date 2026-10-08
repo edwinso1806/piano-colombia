@@ -8,8 +8,12 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SaveScoreButton from "@/components/SaveScoreButton";
 import { getHeroCms, getCmsCategories, getStoreFeaturedComposers, getStoreFeaturedScores, getStoreBlogPosts } from "@/lib/api-client";
+import { useLanguage } from "@/context/LanguageContext";
+import { translateBlogCategory, formatReadTime } from "@/lib/localize-messages";
 
 function FeaturedComposerCard({ comp }: { comp: any }) {
+  const { t, language } = useLanguage();
+  const isEn = language === "en";
   const [imgError, setImgError] = useState(false);
 
   const photo = comp.photo_url || comp.image_url;
@@ -26,7 +30,9 @@ function FeaturedComposerCard({ comp }: { comp: any }) {
           .toUpperCase()
       : "PC");
 
-  const bio = comp.bio_es || comp.bio || comp.short_bio || "Compositor destacado del catálogo de Piano Colombia.";
+  const bio = isEn
+    ? (comp.bio_en || comp.bio || comp.short_bio || "Featured composer from the Piano Colombia catalog.")
+    : (comp.bio_es || comp.bio || comp.short_bio || "Compositor destacado del catálogo de Piano Colombia.");
   const subtitle = [comp.era || comp.period, comp.region || comp.origin].filter(Boolean).join(" · ") || "Colombia";
 
   return (
@@ -62,13 +68,13 @@ function FeaturedComposerCard({ comp }: { comp: any }) {
       </p>
       <div className="mt-6 pt-3 flex items-center justify-between w-full border-t border-black/5 text-xs">
         <span className="font-bold text-[#0071BC]">
-          {comp.scoreCount || 0} {comp.scoreCount === 1 ? "Partitura" : "Partituras"}
+          {comp.scoreCount || 0} {comp.scoreCount === 1 ? (isEn ? "Score" : "Partitura") : (isEn ? "Scores" : "Partituras")}
         </span>
         <Link
           href={`/compositores/${comp.slug || comp.id}`}
           className="font-bold text-[#111C2D] hover:underline flex items-center font-montserrat"
         >
-          Ver perfil <span className="material-symbols-outlined text-xs ml-0.5">chevron_right</span>
+          {t("home.view_profile", "Ver perfil")} <span className="material-symbols-outlined text-xs ml-0.5">chevron_right</span>
         </Link>
       </div>
     </div>
@@ -76,6 +82,8 @@ function FeaturedComposerCard({ comp }: { comp: any }) {
 }
 
 export default function Home() {
+  const { t, language } = useLanguage();
+  const isEn = language === "en";
   const [isPlayingHero, setIsPlayingHero] = useState(false);
   const [currency, setCurrency] = useState<"COP" | "USD">("COP");
   const [activeComposerFilter, setActiveComposerFilter] = useState("todos");
@@ -347,17 +355,19 @@ export default function Home() {
                     <span className="w-1.5 h-3 bg-[#0071BC] rounded-full"></span>
                     <span className="w-1.5 h-4 bg-[#C1272D] rounded-full"></span>
                   </span>
-                  <span className="font-montserrat text-xs text-[#111C2D] uppercase tracking-wider font-extrabold">Archivo Urtext & Editorial Digital</span>
+                  <span className="font-montserrat text-xs text-[#111C2D] uppercase tracking-wider font-extrabold">
+                    {t("home.badge", "Archivo Urtext & Editorial Digital")}
+                  </span>
                 </div>
 
                 {/* Gran Título Hero */}
                 <h1 className="font-montserrat text-4xl sm:text-5xl lg:text-[56px] font-black text-[#111C2D] leading-[1.08] tracking-tight">
-                  {heroData.hero_title}
+                  {isEn ? (heroData.hero_title_en || t("home.hero_default_title")) : heroData.hero_title}
                 </h1>
 
                 {/* Subtítulo Descriptor */}
                 <p className="font-inter text-base sm:text-lg text-[#4C4546] max-w-xl leading-relaxed">
-                  {heroData.hero_subtitle}
+                  {isEn ? (heroData.hero_subtitle_en || t("home.hero_default_subtitle")) : heroData.hero_subtitle}
                 </p>
 
                 {/* Botones CTA Principales */}
@@ -366,7 +376,7 @@ export default function Home() {
                     href={heroData.btn1_url}
                     className="group flex items-center gap-2 px-7 py-3.5 rounded-xl bg-[#FBB03B] text-[#111C2D] font-montserrat font-extrabold text-sm uppercase tracking-wider shadow-md hover:shadow-xl hover:bg-[#e09b2d] hover:scale-[1.02] active:scale-95 transition-all"
                   >
-                    <span>{heroData.btn1_text}</span>
+                    <span>{isEn ? t("home.cta_explore_scores", "Explorar Partituras") : heroData.btn1_text}</span>
                     <span className="material-symbols-outlined text-lg text-[#111C2D] group-hover:translate-x-1 transition-transform">arrow_forward</span>
                   </Link>
 
@@ -375,14 +385,16 @@ export default function Home() {
                     className="flex items-center gap-2 px-6 py-3.5 rounded-xl bg-white/90 backdrop-blur-md text-[#111C2D] border border-black/10 font-montserrat font-bold text-sm shadow-xs hover:bg-[#F0F3FF] hover:shadow-md transition-all"
                   >
                     <span className="material-symbols-outlined text-[#0071BC]">library_music</span>
-                    <span>{heroData.btn2_text}</span>
+                    <span>{isEn ? t("home.cta_meet_composers", "Conocer Compositores") : heroData.btn2_text}</span>
                   </Link>
                 </div>
 
                 {/* Trust notation badge */}
                 <div className="flex items-center gap-2 pt-2 text-[#4C4546]">
                   <span className="material-symbols-outlined text-[#0071BC] text-lg">verified</span>
-                  <span className="text-xs font-medium">{heroData.footer_notice}</span>
+                  <span className="text-xs font-medium">
+                    {isEn ? t("home.urtext_notice") : heroData.footer_notice}
+                  </span>
                 </div>
               </div>
 
@@ -397,7 +409,7 @@ export default function Home() {
                       <span className="w-3 h-3 rounded-full bg-[#FBB03B]"></span>
                       <span className="w-3 h-3 rounded-full bg-[#0071BC]"></span>
                       <span className="ml-2 text-[10px] font-bold text-[#4C4546] uppercase tracking-widest font-montserrat">
-                        Edición Urtext Certificada
+                        {t("home.certified_urtext", "Edición Urtext Certificada")}
                       </span>
                     </div>
                     <span className="px-2.5 py-1 rounded-full bg-[#F0F3FF] text-[10px] font-bold text-[#0071BC] font-montserrat">{heroData.featured_ismn}</span>
@@ -477,7 +489,9 @@ export default function Home() {
                             <span className="material-symbols-outlined text-xl">{isPlayingHero ? "pause" : "play_arrow"}</span>
                           </button>
                           <div className="flex flex-col min-w-0">
-                            <span className="text-[10px] font-extrabold text-[#0071BC] uppercase tracking-wider font-montserrat">Muestra en Vivo</span>
+                            <span className="text-[10px] font-extrabold text-[#0071BC] uppercase tracking-wider font-montserrat">
+                              {t("home.live_sample", "Muestra en Vivo")}
+                            </span>
                             <span className="text-xs font-bold text-[#111C2D] truncate font-montserrat">{heroData.featured_audio_sample}</span>
                           </div>
                         </div>
@@ -514,13 +528,11 @@ export default function Home() {
                         />
                       ) : (
                         <div className="text-[10px] text-slate-400 italic text-center py-1">
-                          (Sin muestra de audio configurada)
+                          {t("home.no_audio", "(Sin muestra de audio configurada)")}
                         </div>
                       )}
                     </div>
                   </div>
-
-
 
                   {/* Card Footer: Solo botón Ver Partitura */}
                   <div className="mt-5 pt-4 border-t border-black/5 flex items-center justify-end">
@@ -528,32 +540,40 @@ export default function Home() {
                       href={heroData.featured_link_url || "/tienda"}
                       className="px-5 py-2.5 bg-[#111C2D] hover:bg-[#0071BC] text-white rounded-xl text-xs font-bold font-montserrat transition flex items-center gap-2 shadow-sm group"
                     >
-                      <span>Ver Partitura</span>
+                      <span>{t("home.view_score", "Ver Partitura")}</span>
                       <span className="material-symbols-outlined text-sm group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform">north_east</span>
                     </Link>
                   </div>
                 </div>
               </div>
 
-
             </div>
 
             {/* Quick Stats Counter Strip Dinámico de Base de Datos (Bento Pattern) */}
             <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-4 p-4 rounded-2xl bg-white shadow-xs border border-black/5">
-              {statsCards.map((card: any, idx: number) => (
-                <div key={card.id || idx} className="flex flex-col p-4 rounded-xl hover:bg-[#F0F3FF] transition-colors">
-                  <div className="flex items-center gap-1">
-                    <span className={`text-3xl font-black font-montserrat tracking-tight ${idx === 1 ? 'text-[#0071BC]' : 'text-[#111C2D]'}`}>
-                      {card.display_value || card.auto_value || "0"}
-                    </span>
-                    {card.has_bolt && (
-                      <span className="material-symbols-outlined text-[#0071BC] text-xl">bolt</span>
-                    )}
+              {statsCards.map((card: any, idx: number) => {
+                const statTitle = isEn
+                  ? (card.id === 'card_scores' ? t("home.stat_scores_title") : card.id === 'card_composers' ? t("home.stat_composers_title") : card.id === 'card_genres' ? t("home.stat_genres_title") : card.id === 'card_format' ? t("home.stat_download_title") : card.title)
+                  : card.title;
+                const statSub = isEn
+                  ? (card.id === 'card_scores' ? t("home.stat_scores_sub") : card.id === 'card_composers' ? t("home.stat_composers_sub") : card.id === 'card_genres' ? t("home.stat_genres_sub") : card.id === 'card_format' ? t("home.stat_download_sub") : card.subtitle)
+                  : card.subtitle;
+
+                return (
+                  <div key={card.id || idx} className="flex flex-col p-4 rounded-xl hover:bg-[#F0F3FF] transition-colors">
+                    <div className="flex items-center gap-1">
+                      <span className={`text-3xl font-black font-montserrat tracking-tight ${idx === 1 ? 'text-[#0071BC]' : 'text-[#111C2D]'}`}>
+                        {card.display_value || card.auto_value || "0"}
+                      </span>
+                      {card.has_bolt && (
+                        <span className="material-symbols-outlined text-[#0071BC] text-xl">bolt</span>
+                      )}
+                    </div>
+                    <span className="text-xs font-bold text-[#111C2D] font-montserrat mt-1">{statTitle}</span>
+                    <span className="text-[11px] text-[#4C4546] mt-0.5 truncate">{statSub}</span>
                   </div>
-                  <span className="text-xs font-bold text-[#111C2D] font-montserrat mt-1">{card.title}</span>
-                  <span className="text-[11px] text-[#4C4546] mt-0.5 truncate">{card.subtitle}</span>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
           </div>
@@ -569,30 +589,49 @@ export default function Home() {
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <span className="w-2.5 h-2.5 rounded-full bg-[#0071BC]"></span>
-                  <span className="text-xs uppercase tracking-widest text-[#0071BC] font-extrabold font-montserrat">Clasificación Orgánica</span>
+                  <span className="text-xs uppercase tracking-widest text-[#0071BC] font-extrabold font-montserrat">
+                    {t("home.categories_badge", "Clasificación Orgánica")}
+                  </span>
                 </div>
-                <h2 className="text-3xl md:text-4xl font-black font-montserrat text-[#111C2D]">Categorías Principales</h2>
+                <h2 className="text-3xl md:text-4xl font-black font-montserrat text-[#111C2D]">
+                  {t("home.categories_title", "Categorías Principales")}
+                </h2>
                 <p className="text-sm text-[#4C4546] max-w-xl mt-1 leading-relaxed">
-                  Explora la riqueza del repertorio pianístico colombiano según su configuración instrumental y propósito escénico.
+                  {t("home.categories_desc", "Explora la riqueza del repertorio pianístico colombiano según su configuración instrumental y propósito escénico.")}
                 </p>
               </div>
               <div className="hidden sm:flex items-center gap-2 text-xs text-[#4C4546] font-semibold">
-                <span>{categoriesList.length} Formatos Disponibles</span>
+                <span>{categoriesList.length} {t("home.formats_available", "Formatos Disponibles")}</span>
                 <span>•</span>
-                <span>Actualización en Tiempo Real</span>
+                <span>{t("home.realtime_update", "Actualización en Tiempo Real")}</span>
               </div>
             </div>
 
             {/* Responsive Bento Grid de Categorías Dinámicas de BD */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {categoriesList.map((cat, idx) => {
-                // Alternar colores sutiles de badge para mantener estética vibrante
                 const badgeStyle =
                   idx % 3 === 0
                     ? "bg-[#FBB03B]/20 text-[#111C2D]"
                     : idx % 3 === 1
                     ? "bg-[#F0F3FF] text-[#0071BC]"
                     : "bg-[#C1272D]/10 text-[#C1272D]";
+
+                const catTitle = isEn
+                  ? (cat.slug === 'piano-solo' ? 'Piano Solo' : cat.slug === 'piano-a-4-manos' ? 'Piano 4-Hands' : cat.slug === 'piano-y-orquesta' ? 'Piano & Orchestra' : cat.slug === 'musica-de-camara' ? 'Chamber Music' : cat.slug === 'piezas-pedagogicas' ? 'Pedagogical Pieces' : cat.slug === 'piano-y-electronica' ? 'Piano & Electronics' : (cat.title_en || cat.title))
+                  : cat.title;
+
+                const catDesc = isEn
+                  ? (cat.slug === 'piano-solo' ? 'Masterpieces for recital, competition, and individual technical development. Virtuosic pasillos, concert bambucos, and lyrical intermezzos.' : cat.slug === 'piano-a-4-manos' ? 'Concert duets and 4-hand orchestral reductions. Ideal for chamber music studios and collaborative performances.' : cat.slug === 'piano-y-orquesta' ? 'Conducting scores, full layouts, and two-piano reductions of concertos for piano and Colombian symphony orchestra.' : cat.slug === 'musica-de-camara' ? 'Trios with violin and cello, solo sonatas with piano accompaniment, and folk chamber ensembles.' : cat.slug === 'piezas-pedagogicas' ? 'Progressive methodologies, keyboard initiation, and graded repertoire featuring traditional Colombian folk melodies.' : cat.slug === 'piano-y-electronica' ? 'Contemporary avant-garde, works for prepared piano, magnetic tape, live digital processing, and bio-acoustic soundscapes.' : (cat.description_en || cat.description))
+                  : cat.description;
+
+                const catCta = isEn
+                  ? (cat.slug === 'piano-solo' ? t("home.explore_solo") : cat.slug === 'piano-a-4-manos' ? t("home.explore_duets") : cat.slug === 'piano-y-orquesta' ? t("home.explore_orchestral") : cat.slug === 'musica-de-camara' ? t("home.explore_chamber") : cat.slug === 'piezas-pedagogicas' ? t("home.explore_pedagogical") : cat.slug === 'piano-y-electronica' ? t("home.explore_contemporary") : t("home.explore_repertoire"))
+                  : (cat.cta_text || "Explorar repertorio");
+
+                const catDisplayCount = isEn
+                  ? `${cat.count ?? (cat.slug === 'piano-solo' ? 3 : cat.slug === 'piano-a-4-manos' ? 1 : 0)} Pieces`
+                  : (cat.display_count || `${cat.count ?? 0} ${cat.count_unit || "Obras"}`);
 
                 return (
                   <Link
@@ -606,18 +645,18 @@ export default function Home() {
                           <span className="material-symbols-outlined text-3xl">{cat.icon || "piano"}</span>
                         </div>
                         <span className={`px-3 py-1 rounded-full text-xs font-bold font-montserrat ${badgeStyle}`}>
-                          {cat.display_count || `${cat.count ?? 0} ${cat.count_unit || "Obras"}`}
+                          {catDisplayCount}
                         </span>
                       </div>
                       <h3 className="text-xl font-bold font-montserrat text-[#111C2D] group-hover:text-[#0071BC] transition-colors">
-                        {cat.title}
+                        {catTitle}
                       </h3>
                       <p className="text-xs text-[#4C4546] mt-2 leading-relaxed line-clamp-4">
-                        {cat.description}
+                        {catDesc}
                       </p>
                     </div>
                     <div className="mt-6 pt-4 border-t border-black/5 flex items-center justify-between text-xs font-bold text-[#0071BC] font-montserrat group-hover:text-[#111C2D]">
-                      <span>{cat.cta_text || "Explorar repertorio"}</span>
+                      <span>{catCta}</span>
                       <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">east</span>
                     </div>
                   </Link>
@@ -637,11 +676,15 @@ export default function Home() {
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <span className="w-2.5 h-2.5 rounded-full bg-[#FBB03B]"></span>
-                  <span className="text-xs font-extrabold text-[#111C2D] tracking-widest uppercase font-montserrat">Biografías & Archivo Sonoro</span>
+                  <span className="text-xs font-extrabold text-[#111C2D] tracking-widest uppercase font-montserrat">
+                    {t("home.composers_badge", "Biografías & Archivo Sonoro")}
+                  </span>
                 </div>
-                <h2 className="text-3xl md:text-4xl font-black font-montserrat text-[#111C2D]">Compositores Destacados</h2>
+                <h2 className="text-3xl md:text-4xl font-black font-montserrat text-[#111C2D]">
+                  {t("home.composers_directory", "Compositores Destacados")}
+                </h2>
                 <p className="text-sm text-[#4C4546] max-w-xl mt-1 leading-relaxed">
-                  Los creadores y creadoras que forjaron la identidad rítmica, melódica y polifónica del teclado en Colombia.
+                  {t("home.composers_desc", "Los creadores y creadoras que forjaron la identidad rítmica, melódica y polifónica del teclado en Colombia.")}
                 </p>
               </div>
 
@@ -658,7 +701,7 @@ export default function Home() {
                           : "text-[#4C4546] hover:text-[#111C2D]"
                       }`}
                     >
-                      {tab.label}
+                      {tab.id === 'todos' ? t("home.all", "Todos") : tab.label}
                     </button>
                   ))}
                 </div>
@@ -675,7 +718,9 @@ export default function Home() {
             ) : (
               <div className="py-12 text-center text-[#4C4546] bg-[#F0F3FF]/50 rounded-2xl border border-dashed border-black/10">
                 <span className="material-symbols-outlined text-4xl text-[#111C2D]/30 mb-2">person_search</span>
-                <p className="text-sm font-montserrat font-medium">No hay compositores configurados para esta categoría en este momento.</p>
+                <p className="text-sm font-montserrat font-medium">
+                  {t("home.no_composers_category", "No hay compositores configurados para esta categoría en este momento.")}
+                </p>
               </div>
             )}
 
@@ -683,7 +728,7 @@ export default function Home() {
             <div className="mt-10 p-4 rounded-2xl bg-[#F0F3FF] border border-black/5 flex flex-col md:flex-row items-center justify-between gap-4">
               <div className="flex flex-wrap items-center gap-2 justify-center md:justify-start text-xs">
                 <span className="font-bold text-[#111C2D] uppercase tracking-wider font-montserrat mr-1">
-                  Otros autores:
+                  {t("home.other_composers", "Otros autores:")}
                 </span>
                 {featuredComposersData.recent_composers && featuredComposersData.recent_composers.length > 0 ? (
                   featuredComposersData.recent_composers.map((comp: any, idx: number) => {
@@ -726,8 +771,8 @@ export default function Home() {
               >
                 <span>
                   {featuredComposersData.total_registered_composers > 0
-                    ? `Ver los ${featuredComposersData.total_registered_composers} Compositores`
-                    : "Ver todos los Compositores"}
+                    ? (isEn ? `View all ${featuredComposersData.total_registered_composers} Composers` : `Ver los ${featuredComposersData.total_registered_composers} Compositores`)
+                    : t("home.view_all_registered_composers", "Ver todos los Compositores")}
                 </span>
                 <span className="material-symbols-outlined text-base transition-transform group-hover:translate-x-1">
                   arrow_forward
@@ -750,17 +795,23 @@ export default function Home() {
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <span className="w-2.5 h-2.5 rounded-full bg-[#C1272D]"></span>
-                    <span className="text-xs font-extrabold text-[#C1272D] tracking-widest uppercase font-montserrat">Edición Digital Urtext</span>
+                    <span className="text-xs font-extrabold text-[#C1272D] tracking-widest uppercase font-montserrat">
+                      {t("home.scores_badge", "Edición Digital Urtext")}
+                    </span>
                   </div>
-                  <h2 className="text-3xl md:text-4xl font-black font-montserrat text-[#111C2D]">Partituras Destacadas</h2>
+                  <h2 className="text-3xl md:text-4xl font-black font-montserrat text-[#111C2D]">
+                    {t("home.featured_scores", "Partituras Destacadas")}
+                  </h2>
                   <p className="text-sm text-[#4C4546] max-w-xl mt-1 leading-relaxed">
-                    Grabados limpios a 1200 DPI con digitaciones de concierto, comentarios críticos y descarga inmediata en PDF.
+                    {t("home.scores_desc", "Grabados limpios a 1200 DPI con digitaciones de concierto, comentarios críticos y descarga inmediata en PDF.")}
                   </p>
                 </div>
 
                 {/* Currency Toggle Switch */}
                 <div className="flex items-center gap-2 bg-[#F0F3FF] p-1 rounded-xl border border-black/5 self-start md:self-auto">
-                  <span className="text-xs font-bold text-[#4C4546] px-2 font-montserrat">Moneda:</span>
+                  <span className="text-xs font-bold text-[#4C4546] px-2 font-montserrat">
+                    {t("home.currency", "Moneda:")}
+                  </span>
                   <button
                     onClick={() => setCurrency("COP")}
                     className={`px-3 py-1 rounded-lg text-xs font-montserrat font-bold transition-colors cursor-pointer ${
@@ -887,7 +938,9 @@ export default function Home() {
                             {genre}
                           </span>
                           <span className="text-[9px] font-bold px-2 py-0.5 rounded-full shadow-2xs font-montserrat bg-white/95 text-[#4C4546] border border-black/5 backdrop-blur-xs">
-                            {difficulty}
+                            {isEn
+                              ? (difficulty.toLowerCase().includes('inter') ? 'INTERMEDIATE' : difficulty.toLowerCase().includes('avan') ? 'ADVANCED' : difficulty.toLowerCase().includes('virtu') ? 'VIRTUOSO' : 'BEGINNER')
+                              : difficulty}
                           </span>
                         </div>
 
@@ -896,7 +949,7 @@ export default function Home() {
                           <Link
                             href={`/partitura/${scoreSlug}`}
                             className="w-10 h-10 rounded-full bg-[#FBB03B] text-[#111C2D] shadow-md flex items-center justify-center hover:scale-110 active:scale-95 transition-transform"
-                            title="Ver partitura"
+                            title={t("home.view_score", "Ver partitura")}
                           >
                             <span className="material-symbols-outlined text-xl">visibility</span>
                           </Link>
@@ -906,10 +959,10 @@ export default function Home() {
                         <div className="relative z-10 flex items-center justify-between text-[9px] font-bold">
                           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/90 text-slate-700 backdrop-blur-xs shadow-2xs border border-black/5">
                             <span className="material-symbols-outlined text-[12px] text-[#0071BC]">picture_as_pdf</span>
-                            Formato Vectorial
+                            {t("home.vector_format", "Formato Vectorial")}
                           </span>
                           <span className="px-1.5 py-0.5 rounded bg-white/90 text-[#0071BC] backdrop-blur-xs shadow-2xs border border-black/5 font-semibold">
-                            Edición Urtext
+                            {t("home.urtext_edition", "Edición Urtext")}
                           </span>
                         </div>
                       </div>
@@ -922,7 +975,9 @@ export default function Home() {
                           </h3>
                           <p className="text-xs text-[#0071BC] font-semibold mt-0.5 line-clamp-1">{composerName}</p>
                           <p className="text-[11px] text-[#4C4546] mt-1.5 line-clamp-2 leading-relaxed font-normal">
-                            {description || "Edición Urtext digital de alta fidelidad para piano."}
+                            {isEn
+                              ? (score.description_en || score.description || "Digital high-fidelity Urtext edition for piano.")
+                              : (score.description_es || score.description || "Edición Urtext digital de alta fidelidad para piano.")}
                           </p>
                         </div>
 
@@ -941,7 +996,7 @@ export default function Home() {
                             <Link
                               href={`/partitura/${scoreSlug}`}
                               className="w-8 h-8 rounded-lg bg-[#111C2D] text-white hover:bg-[#FBB03B] hover:text-[#111C2D] transition-all shadow-xs flex items-center justify-center cursor-pointer"
-                              title="Ver partitura"
+                              title={t("home.view_score", "Ver partitura")}
                             >
                               <span className="material-symbols-outlined text-[18px]">add_shopping_cart</span>
                             </Link>
@@ -967,11 +1022,15 @@ export default function Home() {
               
               <div className="flex justify-between items-end mb-10">
                 <div>
-                  <span className="text-xs font-extrabold text-[#0071BC] tracking-widest uppercase font-montserrat">Bitácora Pianística</span>
-                  <h2 className="text-3xl font-black font-montserrat mt-1 text-[#111C2D]">Actualidad Musical & Noticias</h2>
+                  <span className="text-xs font-extrabold text-[#0071BC] tracking-widest uppercase font-montserrat">
+                    {t("home.blog_badge", "Bitácora Pianística")}
+                  </span>
+                  <h2 className="text-3xl font-black font-montserrat mt-1 text-[#111C2D]">
+                    {t("home.blog_title", "Actualidad Musical & Noticias")}
+                  </h2>
                 </div>
                 <Link href="/blog" className="text-xs font-bold text-[#0071BC] hover:underline font-montserrat flex items-center gap-1">
-                  <span>Ver todos los artículos</span>
+                  <span>{t("home.view_all_articles", "Ver todos los artículos")}</span>
                   <span className="material-symbols-outlined text-sm">arrow_forward</span>
                 </Link>
               </div>
@@ -982,11 +1041,16 @@ export default function Home() {
                     try {
                       if (!post.published_at) return "";
                       const d = new Date(post.published_at);
-                      return d.toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" });
+                      return d.toLocaleDateString(isEn ? "en-US" : "es-CO", { day: "numeric", month: "short", year: "numeric" });
                     } catch {
                       return post.published_at || "";
                     }
                   })();
+
+                  const title = isEn && post.title_en ? post.title_en : post.title;
+                  const excerpt = isEn && post.excerpt_en ? post.excerpt_en : post.excerpt;
+                  const category = isEn ? (post.category_en || translateBlogCategory(post.category, true)) : post.category;
+                  const readTime = formatReadTime(post.read_time, isEn);
 
                   return (
                     <div key={post.id} className="bg-white rounded-2xl border border-black/5 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group overflow-hidden">
@@ -995,13 +1059,13 @@ export default function Home() {
                         <div className="relative h-44 w-full bg-slate-100 overflow-hidden border-b border-black/5">
                           <img
                             src={post.cover_image}
-                            alt={post.title}
+                            alt={title}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                             loading="lazy"
                           />
                           <div className="absolute top-3 left-3">
                             <span className="px-3 py-1 bg-white/95 backdrop-blur-md text-[#0071BC] rounded-full font-bold text-xs shadow-xs border border-black/5">
-                              {post.category}
+                              {category}
                             </span>
                           </div>
                         </div>
@@ -1011,30 +1075,30 @@ export default function Home() {
                         <div className="space-y-3">
                           {!post.cover_image && (
                             <div className="flex justify-between items-center text-xs">
-                              <span className="px-3 py-1 bg-[#F0F3FF] text-[#0071BC] rounded-full font-bold">{post.category}</span>
+                              <span className="px-3 py-1 bg-[#F0F3FF] text-[#0071BC] rounded-full font-bold">{category}</span>
                               <span className="text-[#4C4546] font-medium">{dateStr}</span>
                             </div>
                           )}
                           {post.cover_image && (
                             <div className="flex justify-between items-center text-xs text-[#4C4546]">
                               <span className="font-medium">{dateStr}</span>
-                              <span className="text-[11px] text-slate-400">{post.read_time || "5 min"}</span>
+                              <span className="text-[11px] text-slate-400">{readTime}</span>
                             </div>
                           )}
                           <h3 className="text-lg font-bold font-montserrat text-[#111C2D] group-hover:text-[#0071BC] transition-colors leading-snug line-clamp-2">
-                            {post.title}
+                            {title}
                           </h3>
-                          {post.excerpt && (
+                          {excerpt && (
                             <p className="text-xs text-[#4C4546] font-normal leading-relaxed line-clamp-2">
-                              {post.excerpt}
+                              {excerpt}
                             </p>
                           )}
                         </div>
 
                         <div className="pt-4 mt-4 border-t border-black/5 flex justify-between items-center">
-                          <span className="text-xs text-[#4C4546] font-medium line-clamp-1">Por {post.author}</span>
+                          <span className="text-xs text-[#4C4546] font-medium line-clamp-1">{t("home.by", "Por")} {post.author}</span>
                           <Link href={`/blog/${post.slug}`} className="text-xs font-bold text-[#0071BC] hover:text-[#111C2D] transition font-montserrat inline-flex items-center gap-1 group-hover:translate-x-0.5">
-                            <span>Leer noticia</span>
+                            <span>{t("home.read_news", "Leer noticia")}</span>
                             <span className="material-symbols-outlined text-xs">arrow_forward</span>
                           </Link>
                         </div>

@@ -4,7 +4,15 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { sendComposerOtpApi, verifyComposerOtpApi } from "@/lib/api-client";
+import { useLanguage } from "@/context/LanguageContext";
+import {
+  sendComposerOtpApi,
+  verifyComposerOtpApi,
+  getCmsLegalsApi,
+  CmsLegalSettings,
+  CmsLegalDocument,
+  DEFAULT_CMS_LEGAL_SETTINGS,
+} from "@/lib/api-client";
 import {
   getCountries,
   getStatesByCountry,
@@ -14,8 +22,63 @@ import {
   CityItem,
   WORLD_COUNTRIES,
 } from "@/lib/location-service";
+import { localizeAuthMessage } from "@/lib/localize-messages";
+
+const COUNTRY_NAME_EN: Record<string, string> = {
+  "Colombia": "Colombia",
+  "Estados Unidos": "United States",
+  "España": "Spain",
+  "México": "Mexico",
+  "Argentina": "Argentina",
+  "Chile": "Chile",
+  "Perú": "Peru",
+  "Ecuador": "Ecuador",
+  "Venezuela": "Venezuela",
+  "Bolivia": "Bolivia",
+  "Uruguay": "Uruguay",
+  "Paraguay": "Paraguay",
+  "Costa Rica": "Costa Rica",
+  "Panamá": "Panama",
+  "República Dominicana": "Dominican Republic",
+  "Guatemala": "Guatemala",
+  "Honduras": "Honduras",
+  "El Salvador": "El Salvador",
+  "Alemania": "Germany",
+  "Francia": "France",
+  "Italia": "Italy",
+  "Reino Unido": "United Kingdom",
+  "Canadá": "Canada",
+  "Brasil": "Brazil",
+  "Japón": "Japan",
+};
+
+function translateBackendError(msg: string, isEn: boolean): string {
+  if (!isEn || !msg) return msg;
+  const base = localizeAuthMessage(msg, isEn);
+  if (base !== msg) return base;
+  const lower = msg.toLowerCase();
+  if (lower.includes("ya existe un perfil") || lower.includes("ya fue registrado previamente como compositor")) {
+    return "A composer profile with this email address is already registered. If you are a client you may use the same email, but you are already registered as a composer.";
+  }
+  if (lower.includes("número de documento") || lower.includes("documento ya fue registrado")) {
+    return "A composer profile with this identification document number is already registered.";
+  }
+  if (lower.includes("inválido o expirado") || lower.includes("código incorrecto") || lower.includes("código de verificación inválido")) {
+    return "Invalid or expired verification code. Please try again.";
+  }
+  if (lower.includes("código de 6 dígitos son obligatorios") || lower.includes("completo de 6 dígitos")) {
+    return "Please enter the complete 6-digit verification code.";
+  }
+  if (lower.includes("nombre y el correo electrónico son obligatorios")) {
+    return "Full name and email address are required.";
+  }
+  return msg;
+}
 
 export default function CompositorRegistroPage() {
+  const { t, language } = useLanguage();
+  const isEn = language === "en";
+
   const [stepMode, setStepMode] = useState<"form" | "otp" | "submitted">("form");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -49,6 +112,18 @@ export default function CompositorRegistroPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [agreePrivacy, setAgreePrivacy] = useState(false);
+
+  // Páginas y Textos Legales Administrables desde el CMS
+  const [cmsLegals, setCmsLegals] = useState<CmsLegalSettings>(DEFAULT_CMS_LEGAL_SETTINGS);
+  const [legalModalDoc, setLegalModalDoc] = useState<CmsLegalDocument | null>(null);
+
+  useEffect(() => {
+    getCmsLegalsApi()
+      .then((data) => {
+        if (data && data.composer_terms) setCmsLegals(data);
+      })
+      .catch(() => {});
+  }, []);
 
   // OTP Verification States
   const [otpCode, setOtpCode] = useState("");
@@ -136,28 +211,111 @@ export default function CompositorRegistroPage() {
     return () => clearInterval(interval);
   }, [stepMode, resendCooldown]);
 
+  // Helper para interpolar la comisión estándar de la plataforma desde el CMS
+  const formatCommissionText = (text: string) => {
+    if (!text) return text;
+    const platformCommission = cmsLegals.default_commission_percentage ?? 20;
+    const authorCommission = cmsLegals.author_percentage ?? (100 - platformCommission);
+    return text
+      .replace(/\{author_percent\}/g, String(authorCommission))
+      .replace(/\{platform_percent\}/g, String(platformCommission))
+      .replace(
+        /\b\d+%\s*neto\s*autor\s*\/\s*\d+%\s*plataforma\b/gi,
+        `${authorCommission}% neto autor / ${platformCommission}% plataforma`
+      )
+      .replace(
+        /\b\d+%\s*net\s*author\s*\/\s*\d+%\s*platform\b/gi,
+        `${authorCommission}% net author / ${platformCommission}% platform`
+      )
+      .replace(/percibirá el \d+% del valor neto/gi, `percibirá el ${authorCommission}% del valor neto`)
+      .replace(/retendrá el \d+% restante/gi, `retendrá el ${platformCommission}% restante`)
+      .replace(/receives \d+% net of the retail price/gi, `receives ${authorCommission}% net of the retail price`)
+      .replace(/retains \d+% covering payment/gi, `retains ${platformCommission}% covering payment`);
+  };
+
+  // Helper para renderizar el texto de las casillas legales administrables
+  const renderLegalCheckboxLabel = (doc: CmsLegalDocument) => {
+    const rawTemplate = isEn ? doc.checkbox_text_en : doc.checkbox_text_es;
+    const rawText = formatCommissionText(rawTemplate);
+    const linkText = isEn ? doc.link_text_en : doc.link_text_es;
+
+    if (rawText.includes("{link}")) {
+      const parts = rawText.split("{link}");
+      return (
+        <span>
+          {parts[0]}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setLegalModalDoc(doc);
+            }}
+            className="text-[#0071BC] font-bold hover:underline font-montserrat inline text-left cursor-pointer"
+          >
+            {linkText}
+          </button>
+          {parts[1]}
+        </span>
+      );
+    }
+
+    return (
+      <span>
+        {rawText}{" "}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setLegalModalDoc(doc);
+          }}
+          className="text-[#0071BC] font-bold hover:underline font-montserrat inline text-left cursor-pointer"
+        >
+          ({linkText})
+        </button>
+      </span>
+    );
+  };
+
   // Paso 1: Validar Formulario & Solicitar Código OTP
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setValidationError(null);
 
     if (password !== confirmPassword) {
-      setValidationError("Las contraseñas no coinciden. Por favor verifica ambos campos.");
+      setValidationError(
+        isEn
+          ? "Passwords do not match. Please verify both fields."
+          : "Las contraseñas no coinciden. Por favor verifica ambos campos."
+      );
       return;
     }
 
     if (password.length < 6) {
-      setValidationError("La contraseña debe tener al menos 6 caracteres por seguridad.");
+      setValidationError(
+        isEn
+          ? "Password must be at least 6 characters long for security."
+          : "La contraseña debe tener al menos 6 caracteres por seguridad."
+      );
       return;
     }
 
     if (!docNumber.trim()) {
-      setValidationError("El número de documento de identidad es obligatorio.");
+      setValidationError(
+        isEn
+          ? "Identity document number is required."
+          : "El número de documento de identidad es obligatorio."
+      );
       return;
     }
 
     if (!phone.trim()) {
-      setValidationError("El teléfono celular de contacto es obligatorio.");
+      setValidationError(
+        isEn
+          ? "Contact mobile phone number is required."
+          : "El teléfono celular de contacto es obligatorio."
+      );
       return;
     }
 
@@ -189,7 +347,11 @@ export default function CompositorRegistroPage() {
         },
       });
 
-      setSuccessInfo(res.message || `Hemos enviado un código de 6 dígitos a ${email}.`);
+      setSuccessInfo(
+        isEn
+          ? `We have sent a 6-digit verification code to ${email}.`
+          : (res.message || `Hemos enviado un código de 6 dígitos a ${email}.`)
+      );
       setStepMode("otp");
       setOtpTimerSeconds(600);
       setResendCooldown(60);
@@ -197,7 +359,12 @@ export default function CompositorRegistroPage() {
       setOtpCode("");
     } catch (err: any) {
       console.error("Error al enviar código para compositor:", err);
-      setValidationError(err.message || "Error al procesar la solicitud de registro.");
+      setValidationError(
+        translateBackendError(
+          err.message || (isEn ? "Error processing registration request." : "Error al procesar la solicitud de registro."),
+          isEn
+        )
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -209,7 +376,11 @@ export default function CompositorRegistroPage() {
     setValidationError(null);
 
     if (!otpCode || otpCode.trim().length !== 6) {
-      setValidationError("Por favor ingresa el código completo de 6 dígitos.");
+      setValidationError(
+        isEn
+          ? "Please enter the complete 6-digit code."
+          : "Por favor ingresa el código completo de 6 dígitos."
+      );
       return;
     }
 
@@ -224,7 +395,12 @@ export default function CompositorRegistroPage() {
       setStepMode("submitted");
     } catch (err: any) {
       console.error("Error al verificar código OTP de compositor:", err);
-      setValidationError(err.message || "Código incorrecto o expirado. Intenta de nuevo.");
+      setValidationError(
+        translateBackendError(
+          err.message || (isEn ? "Incorrect or expired code. Please try again." : "Código incorrecto o expirado. Intenta de nuevo."),
+          isEn
+        )
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -266,9 +442,18 @@ export default function CompositorRegistroPage() {
       setResendCooldown(60);
       setCanResendOtp(false);
       setOtpCode("");
-      setSuccessInfo(`Nuevo código de verificación enviado a ${email}.`);
+      setSuccessInfo(
+        isEn
+          ? `New verification code sent to ${email}.`
+          : `Nuevo código de verificación enviado a ${email}.`
+      );
     } catch (err: any) {
-      setValidationError(err.message || "Error al reenviar el código.");
+      setValidationError(
+        translateBackendError(
+          err.message || (isEn ? "Error resending verification code." : "Error al reenviar el código."),
+          isEn
+        )
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -301,24 +486,41 @@ export default function CompositorRegistroPage() {
 
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-extrabold uppercase tracking-wider font-montserrat">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                Estado: Correo Verificado • Solicitud Registrada en Base de Datos
+                {isEn
+                  ? "Status: Email Verified • Application Registered in Database"
+                  : "Estado: Correo Verificado • Solicitud Registrada en Base de Datos"}
               </div>
 
               <h1 className="text-3xl font-black font-montserrat text-[#111C2D]">
-                ¡Correo Verificado & Solicitud Recibida!
+                {isEn ? "Email Verified & Application Received!" : "¡Correo Verificado & Solicitud Recibida!"}
               </h1>
               
               <p className="text-sm text-[#4C4546] leading-relaxed max-w-lg mx-auto font-normal">
-                Tu correo electrónico <strong>{email}</strong> ha sido verificado con éxito y tu postulación como compositor ha quedado ingresada a la base de datos de <strong>Piano Colombia</strong> para revisión técnica y legal.
+                {isEn ? (
+                  <>Your email <strong>{email}</strong> has been successfully verified, and your composer application has been registered in the <strong>Piano Colombia</strong> database for technical and editorial review.</>
+                ) : (
+                  <>Tu correo electrónico <strong>{email}</strong> ha sido verificado con éxito y tu postulación como compositor ha quedado ingresada a la base de datos de <strong>Piano Colombia</strong> para revisión técnica y legal.</>
+                )}
               </p>
 
               <div className="p-5 bg-[#F0F3FF] rounded-2xl border border-black/5 text-left text-xs space-y-2 max-w-md mx-auto">
                 <p className="font-bold text-[#0071BC] font-montserrat flex items-center gap-1">
-                  <span className="material-symbols-outlined text-base">check_circle</span> Proceso de Aprobación Editorial:
+                  <span className="material-symbols-outlined text-base">check_circle</span>
+                  {isEn ? "Editorial Approval Process:" : "Proceso de Aprobación Editorial:"}
                 </p>
-                <p className="text-[#4C4546]">• Comprobación de identidad (Documento N° <strong className="text-[#111C2D]">{docNumber}</strong>).</p>
-                <p className="text-[#4C4546]">• Tiempo de evaluación estimado: <strong>24 a 48 horas hábiles</strong>.</p>
-                <p className="text-[#4C4546]">• Recibirás tus credenciales activas una vez aprobada tu cuenta.</p>
+                <p className="text-[#4C4546]">
+                  {isEn ? "• Identity verification (ID No. " : "• Comprobación de identidad (Documento N° "}
+                  <strong className="text-[#111C2D]">{docNumber}</strong>).
+                </p>
+                <p className="text-[#4C4546]">
+                  {isEn ? "• Estimated review time: " : "• Tiempo de evaluación estimado: "}
+                  <strong>{isEn ? "24 to 48 business hours" : "24 a 48 horas hábiles"}</strong>.
+                </p>
+                <p className="text-[#4C4546]">
+                  {isEn
+                    ? "• You will receive your active credentials once your account is approved."
+                    : "• Recibirás tus credenciales activas una vez aprobada tu cuenta."}
+                </p>
               </div>
 
               <div className="pt-2 flex flex-col sm:flex-row gap-4 justify-center max-w-md mx-auto">
@@ -326,13 +528,13 @@ export default function CompositorRegistroPage() {
                   href="/"
                   className="w-full py-3.5 bg-[#FBB03B] hover:bg-[#e09b2e] text-[#111C2D] font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition font-montserrat text-center block"
                 >
-                  Volver al Inicio
+                  {isEn ? "Back to Home" : "Volver al Inicio"}
                 </Link>
                 <Link
                   href="/compositor/login"
                   className="w-full py-3.5 bg-white border border-black/10 hover:bg-[#F0F3FF] text-[#111C2D] font-bold text-xs rounded-xl transition font-montserrat text-center block"
                 >
-                  Ir a Iniciar Sesión
+                  {isEn ? "Go to Sign In" : "Ir a Iniciar Sesión"}
                 </Link>
               </div>
             </div>
@@ -347,31 +549,35 @@ export default function CompositorRegistroPage() {
                   <span className="material-symbols-outlined text-3xl">mark_email_read</span>
                 </div>
                 <h1 className="text-2xl font-black font-montserrat text-[#111C2D]">
-                  Verifica tu Correo Electrónico
+                  {isEn ? "Verify Your Email Address" : "Verifica tu Correo Electrónico"}
                 </h1>
                 <p className="text-xs text-[#4C4546] leading-relaxed">
-                  Hemos enviado un código de seguridad de 6 dígitos a <strong className="text-[#111C2D]">{email}</strong>. Ingrésalo a continuación para activar tu perfil de compositor.
+                  {isEn ? (
+                    <>We have sent a 6-digit security code to <strong className="text-[#111C2D]">{email}</strong>. Enter it below to activate your composer profile.</>
+                  ) : (
+                    <>Hemos enviado un código de seguridad de 6 dígitos a <strong className="text-[#111C2D]">{email}</strong>. Ingrésalo a continuación para activar tu perfil de compositor.</>
+                  )}
                 </p>
               </div>
 
               {validationError && (
                 <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-800 flex items-center gap-2.5 text-xs font-medium">
                   <span className="material-symbols-outlined text-lg shrink-0">error</span>
-                  <span>{validationError}</span>
+                  <span>{translateBackendError(validationError, isEn)}</span>
                 </div>
               )}
 
               {successInfo && (
                 <div className="p-3.5 rounded-2xl bg-blue-50 border border-blue-200 text-blue-800 flex items-center gap-2.5 text-xs font-medium">
                   <span className="material-symbols-outlined text-lg shrink-0">info</span>
-                  <span>{successInfo}</span>
+                  <span>{translateBackendError(successInfo, isEn)}</span>
                 </div>
               )}
 
               <form onSubmit={handleVerifyOtpSubmit} className="space-y-5">
                 <div>
                   <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat text-center">
-                    Código de Seguridad (6 dígitos) *
+                    {isEn ? "Security Code (6 digits) *" : "Código de Seguridad (6 dígitos) *"}
                   </label>
                   <input
                     type="text"
@@ -384,7 +590,9 @@ export default function CompositorRegistroPage() {
                     className="w-full text-center text-2xl font-mono font-black tracking-[0.5em] py-3.5 bg-[#F0F3FF] border border-black/10 rounded-2xl text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
                   />
                   <span className="block text-[11px] text-[#4C4546] text-center mt-2 font-mono">
-                    El código expira en: {Math.floor(otpTimerSeconds / 60)}:{(otpTimerSeconds % 60).toString().padStart(2, "0")} minutos
+                    {isEn ? "The code expires in: " : "El código expira en: "}
+                    {Math.floor(otpTimerSeconds / 60)}:{(otpTimerSeconds % 60).toString().padStart(2, "0")}
+                    {isEn ? " minutes" : " minutos"}
                   </span>
                 </div>
 
@@ -396,12 +604,12 @@ export default function CompositorRegistroPage() {
                   {isSubmitting ? (
                     <>
                       <span className="w-4 h-4 border-2 border-[#111C2D] border-t-transparent rounded-full animate-spin"></span>
-                      <span>Verificando Código...</span>
+                      <span>{isEn ? "Verifying Code..." : "Verificando Código..."}</span>
                     </>
                   ) : (
                     <>
                       <span className="material-symbols-outlined text-lg">check_circle</span>
-                      <span>Verificar Correo & Completar Registro</span>
+                      <span>{isEn ? "Verify Email & Complete Registration" : "Verificar Correo & Completar Registro"}</span>
                     </>
                   )}
                 </button>
@@ -416,7 +624,7 @@ export default function CompositorRegistroPage() {
                     className="text-[#0071BC] font-bold hover:underline font-montserrat flex items-center gap-1"
                   >
                     <span className="material-symbols-outlined text-sm">edit</span>
-                    Editar Datos
+                    {isEn ? "Edit Details" : "Editar Datos"}
                   </button>
 
                   <button
@@ -429,7 +637,9 @@ export default function CompositorRegistroPage() {
                         : "text-[#94a3b8] cursor-not-allowed"
                     }`}
                   >
-                    {canResendOtp ? "Reenviar Código" : `Reenviar en (${resendCooldown}s)`}
+                    {canResendOtp
+                      ? (isEn ? "Resend Code" : "Reenviar Código")
+                      : (isEn ? `Resend in (${resendCooldown}s)` : `Reenviar en (${resendCooldown}s)`)}
                   </button>
                 </div>
               </form>
@@ -446,14 +656,16 @@ export default function CompositorRegistroPage() {
               <div className="text-center space-y-2">
                 <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#F0F3FF] border border-[#0071BC]/10 text-[#0071BC] text-[11px] font-extrabold uppercase tracking-wider font-montserrat">
                   <span className="material-symbols-outlined text-xs">music_note</span>
-                  Únete a la Red de Autores & Editorial
+                  {isEn ? "Join the Author & Editorial Network" : "Únete a la Red de Autores & Editorial"}
                 </div>
 
                 <h1 className="text-3xl sm:text-4xl font-black font-montserrat text-[#111C2D] tracking-tight">
-                  Registro de Compositor
+                  {isEn ? "Composer Registration" : "Registro de Compositor"}
                 </h1>
                 <p className="text-xs sm:text-sm text-[#4C4546] max-w-lg mx-auto leading-relaxed font-normal">
-                  Publica y vende tus partituras digitales en formato Urtext con protección legal antifraude, trazabilidad Sayco/DNDA y liquidación del 80% neto de regalías.
+                  {isEn
+                    ? "Publish and sell your digital scores in Urtext format with legal anti-fraud protection, Sayco/DNDA traceability, and 80% net royalty settlement."
+                    : "Publica y vende tus partituras digitales en formato Urtext con protección legal antifraude, trazabilidad Sayco/DNDA y liquidación del 80% neto de regalías."}
                 </p>
               </div>
 
@@ -461,7 +673,7 @@ export default function CompositorRegistroPage() {
               {validationError && (
                 <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-800 flex items-center gap-3 text-xs font-medium">
                   <span className="material-symbols-outlined text-lg shrink-0">error</span>
-                  <span>{validationError}</span>
+                  <span>{translateBackendError(validationError, isEn)}</span>
                 </div>
               )}
 
@@ -472,34 +684,34 @@ export default function CompositorRegistroPage() {
                   <div className="flex items-center gap-2 border-b border-black/5 pb-2">
                     <span className="w-6 h-6 rounded-full bg-[#111C2D] text-white text-xs font-bold flex items-center justify-center font-montserrat">1</span>
                     <h2 className="text-xs font-black uppercase text-[#111C2D] tracking-wider font-montserrat">
-                      Información Personal & Nombre Artístico
+                      {isEn ? "Personal Information & Stage Name" : "Información Personal & Nombre Artístico"}
                     </h2>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">
-                        Nombre Completo Legal *
+                        {isEn ? "Full Legal Name *" : "Nombre Completo Legal *"}
                       </label>
                       <input
                         type="text"
                         required
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
-                        placeholder="Ej: Maestro Adolfo Mejía"
+                        placeholder={isEn ? "e.g.: Maestro Adolfo Mejía" : "Ej: Maestro Adolfo Mejía"}
                         className="w-full bg-[#F0F3FF] border border-black/5 rounded-xl px-4 py-3 text-xs text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
                       />
                     </div>
 
                     <div>
                       <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">
-                        Nombre Artístico / Pseudónimo
+                        {isEn ? "Stage Name / Alias" : "Nombre Artístico / Pseudónimo"}
                       </label>
                       <input
                         type="text"
                         value={stageName}
                         onChange={(e) => setStageName(e.target.value)}
-                        placeholder="Como figurará en las portadas"
+                        placeholder={isEn ? "As it will appear on score covers" : "Como figurará en las portadas"}
                         className="w-full bg-[#F0F3FF] border border-black/5 rounded-xl px-4 py-3 text-xs text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
                       />
                     </div>
@@ -508,7 +720,9 @@ export default function CompositorRegistroPage() {
                   {/* Teléfono de contacto con Indicativo Internacional */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">Indicativo País *</label>
+                      <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">
+                        {isEn ? "Country Dial Code *" : "Indicativo País *"}
+                      </label>
                       <select
                         value={phoneCode}
                         onChange={(e) => setPhoneCode(e.target.value)}
@@ -523,13 +737,15 @@ export default function CompositorRegistroPage() {
                     </div>
 
                     <div className="sm:col-span-2">
-                      <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">Teléfono Celular / Contacto *</label>
+                      <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">
+                        {isEn ? "Mobile / Contact Phone *" : "Teléfono Celular / Contacto *"}
+                      </label>
                       <input
                         type="tel"
                         required
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
-                        placeholder="Ej: 313 752 9693"
+                        placeholder={isEn ? "e.g.: +57 313 752 9693" : "Ej: 313 752 9693"}
                         className="w-full bg-[#F0F3FF] border border-black/5 rounded-xl px-4 py-3 text-xs text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
                       />
                     </div>
@@ -538,7 +754,9 @@ export default function CompositorRegistroPage() {
                   {/* Cascada de Ubicación Mundial */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">País *</label>
+                      <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">
+                        {isEn ? "Country *" : "País *"}
+                      </label>
                       <select
                         value={country}
                         onChange={(e) => setCountry(e.target.value)}
@@ -546,14 +764,16 @@ export default function CompositorRegistroPage() {
                       >
                         {countriesList.map((c) => (
                           <option key={c.code} value={c.name}>
-                            {c.flag} {c.name}
+                            {c.flag} {isEn ? (COUNTRY_NAME_EN[c.name] || c.name) : c.name}
                           </option>
                         ))}
                       </select>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">Departamento / Estado *</label>
+                      <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">
+                        {isEn ? "State / Department *" : "Departamento / Estado *"}
+                      </label>
                       <select
                         value={department}
                         onChange={(e) => setDepartment(e.target.value)}
@@ -568,7 +788,9 @@ export default function CompositorRegistroPage() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">Ciudad / Municipio *</label>
+                      <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">
+                        {isEn ? "City / Municipality *" : "Ciudad / Municipio *"}
+                      </label>
                       <select
                         value={city}
                         onChange={(e) => setCity(e.target.value)}
@@ -589,33 +811,37 @@ export default function CompositorRegistroPage() {
                   <div className="flex items-center gap-2 border-b border-black/5 pb-2">
                     <span className="w-6 h-6 rounded-full bg-[#0071BC] text-white text-xs font-bold flex items-center justify-center font-montserrat">2</span>
                     <h2 className="text-xs font-black uppercase text-[#111C2D] tracking-wider font-montserrat">
-                      Identificación Legal & Regalías
+                      {isEn ? "Legal Identification & Royalties" : "Identificación Legal & Regalías"}
                     </h2>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">Tipo de Documento *</label>
+                      <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">
+                        {isEn ? "Document Type *" : "Tipo de Documento *"}
+                      </label>
                       <select
                         value={docType}
                         onChange={(e) => setDocType(e.target.value)}
                         className="w-full bg-[#F0F3FF] border border-black/5 rounded-xl px-4 py-3 text-xs text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
                       >
-                        <option value="CC">Cédula de Ciudadanía (CC)</option>
-                        <option value="CE">Cédula de Extranjería (CE)</option>
-                        <option value="NIT">NIT Persona Jurídica</option>
-                        <option value="PASAPORTE">Pasaporte</option>
+                        <option value="CC">{isEn ? "National ID (CC - Colombia)" : "Cédula de Ciudadanía (CC)"}</option>
+                        <option value="CE">{isEn ? "Foreigner ID (CE)" : "Cédula de Extranjería (CE)"}</option>
+                        <option value="NIT">{isEn ? "Corporate / Tax ID (NIT)" : "NIT Persona Jurídica"}</option>
+                        <option value="PASAPORTE">{isEn ? "Passport" : "Pasaporte"}</option>
                       </select>
                     </div>
 
                     <div className="sm:col-span-2">
-                      <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">Número de Documento *</label>
+                      <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">
+                        {isEn ? "Document Number *" : "Número de Documento *"}
+                      </label>
                       <input
                         type="text"
                         required
                         value={docNumber}
                         onChange={(e) => setDocNumber(e.target.value)}
-                        placeholder="Ej: 1098765432"
+                        placeholder={isEn ? "e.g.: 1098765432" : "Ej: 1098765432"}
                         className="w-full bg-[#F0F3FF] border border-black/5 rounded-xl px-4 py-3 text-xs text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
                       />
                     </div>
@@ -623,13 +849,35 @@ export default function CompositorRegistroPage() {
 
                   {/* Campos de Cuenta para Dispersión Wompi */}
                   <div className="p-4 bg-[#F0F3FF]/70 rounded-2xl border border-black/5 space-y-3">
-                    <span className="text-xs font-montserrat font-bold text-[#0071BC] block flex items-center gap-1">
-                      <span className="material-symbols-outlined text-sm">account_balance</span>
-                      Cuenta Bancaria / Bolsillo Nequi para Dispersión de Regalías (Wompi API)
+                    <span className="text-xs font-montserrat font-bold text-[#0071BC] flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-base">account_balance</span>
+                      {isEn
+                        ? "Bank Account / Digital Pocket for Royalty Payouts (Wompi API)"
+                        : "Cuenta Bancaria / Bolsillo Nequi para Dispersión de Regalías (Wompi API)"}
                     </span>
+
+                    {/* AVISO CLAVE SOBRE CUENTA COLOMBIANA */}
+                    <div className="p-3.5 bg-amber-50 border border-amber-200/90 rounded-xl text-amber-950 text-xs flex items-start gap-2.5 shadow-sm">
+                      <span className="material-symbols-outlined text-lg text-amber-600 shrink-0 mt-0.5">warning</span>
+                      <div className="space-y-1">
+                        <p className="font-extrabold text-[#111C2D] font-montserrat text-[12px]">
+                          {isEn
+                            ? "Mandatory Colombian Account Requirement"
+                            : "Requisito Indispensable: Cuenta o Bolsillo Colombiano"}
+                        </p>
+                        <p className="text-[#4C4546] text-[11px] leading-relaxed">
+                          {isEn
+                            ? "Please note: Your savings account or digital pocket (Nequi / Daviplata) must belong to a Colombian financial institution in Colombian Pesos (COP). Automated royalty disbursements are processed through the Colombian national banking clearing system (Wompi)."
+                            : "Ten en cuenta: La cuenta de ahorros o bolsillo digital (Nequi / Daviplata) debe pertenecer a una entidad financiera colombiana en pesos (COP). Los giros automáticos de regalías se dispersan a través de la red de compensación bancaria nacional con Wompi."}
+                        </p>
+                      </div>
+                    </div>
+
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                       <div>
-                        <label className="block font-bold text-[#111C2D] mb-1">Banco / Plataforma *</label>
+                        <label className="block font-bold text-[#111C2D] mb-1">
+                          {isEn ? "Bank / Platform *" : "Banco / Plataforma *"}
+                        </label>
                         <select 
                           value={bankName}
                           onChange={(e) => setBankName(e.target.value)}
@@ -641,31 +889,42 @@ export default function CompositorRegistroPage() {
                           <option value="Daviplata">Daviplata</option>
                           <option value="Banco de Bogotá">Banco de Bogotá</option>
                           <option value="BBVA Colombia">BBVA Colombia</option>
-                          <option value="Transferencia Internacional (SWIFT / IBAN)">Transferencia Internacional (SWIFT / IBAN)</option>
+                          <option value="Transferencia Internacional (SWIFT / IBAN)">
+                            {isEn ? "International Wire (SWIFT / IBAN - Colombian Bank)" : "Transferencia Internacional (SWIFT / IBAN)"}
+                          </option>
                         </select>
                       </div>
                       <div>
-                        <label className="block font-bold text-[#111C2D] mb-1">Tipo de Cuenta *</label>
+                        <label className="block font-bold text-[#111C2D] mb-1">
+                          {isEn ? "Account Type *" : "Tipo de Cuenta *"}
+                        </label>
                         <select 
                           value={accountType}
                           onChange={(e) => setAccountType(e.target.value)}
                           className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-xs font-semibold text-[#111C2D]"
                         >
-                          <option value="AHORROS">Cuenta de Ahorros</option>
-                          <option value="CORRIENTE">Cuenta Corriente</option>
-                          <option value="NEQUI">Bolsillo Nequi</option>
-                          <option value="DAVIPLATA">Bolsillo Daviplata</option>
+                          <option value="AHORROS">{isEn ? "Savings Account (Colombia)" : "Cuenta de Ahorros"}</option>
+                          <option value="CORRIENTE">{isEn ? "Checking Account (Colombia)" : "Cuenta Corriente"}</option>
+                          <option value="NEQUI">{isEn ? "Nequi Pocket (Colombia)" : "Bolsillo Nequi"}</option>
+                          <option value="DAVIPLATA">{isEn ? "Daviplata Pocket (Colombia)" : "Bolsillo Daviplata"}</option>
                         </select>
                       </div>
                       <div>
-                        <label className="block font-bold text-[#111C2D] mb-1">Número de Cuenta / Celular *</label>
+                        <label className="block font-bold text-[#111C2D] mb-1">
+                          {isEn ? "Account / Mobile Number *" : "Número de Cuenta / Celular *"}
+                        </label>
                         <input
                           type="text"
                           value={accountNumber}
                           onChange={(e) => setAccountNumber(e.target.value)}
-                          placeholder="Ej: 582-910284-12"
+                          placeholder={isEn ? "e.g.: 582-910284-12" : "Ej: 582-910284-12"}
                           className="w-full bg-white border border-black/10 rounded-xl px-3 py-2 text-xs font-mono text-[#111C2D]"
                         />
+                        <p className="text-[10px] text-[#4C4546] mt-1 font-medium">
+                          {isEn
+                            ? "* Colombian bank account or active phone number."
+                            : "* Cuenta bancaria colombiana o celular activo."}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -676,12 +935,14 @@ export default function CompositorRegistroPage() {
                   <div className="flex items-center gap-2 border-b border-black/5 pb-2">
                     <span className="w-6 h-6 rounded-full bg-[#FBB03B] text-[#111C2D] text-xs font-bold flex items-center justify-center font-montserrat">3</span>
                     <h2 className="text-xs font-black uppercase text-[#111C2D] tracking-wider font-montserrat">
-                      Credenciales del Portal
+                      {isEn ? "Portal Credentials" : "Credenciales del Portal"}
                     </h2>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">Correo Electrónico *</label>
+                    <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">
+                      {isEn ? "Email Address *" : "Correo Electrónico *"}
+                    </label>
                     <div className="relative">
                       <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[#4C4546] text-lg">
                         mail
@@ -691,7 +952,7 @@ export default function CompositorRegistroPage() {
                         required
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        placeholder="compositor@pianocolombia.com"
+                        placeholder={isEn ? "composer@pianocolombia.com" : "compositor@pianocolombia.com"}
                         className="w-full pl-10 pr-4 py-3 bg-[#F0F3FF] border border-black/5 rounded-xl text-xs text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
                       />
                     </div>
@@ -699,7 +960,9 @@ export default function CompositorRegistroPage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">Contraseña *</label>
+                      <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">
+                        {isEn ? "Password *" : "Contraseña *"}
+                      </label>
                       <div className="relative">
                         <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[#4C4546] text-lg">
                           lock
@@ -709,7 +972,7 @@ export default function CompositorRegistroPage() {
                           required
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          placeholder="Mínimo 6 caracteres"
+                          placeholder={isEn ? "Minimum 6 characters" : "Mínimo 6 caracteres"}
                           className="w-full pl-10 pr-10 py-3 bg-[#F0F3FF] border border-black/5 rounded-xl text-xs text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
                         />
                         <button
@@ -725,7 +988,9 @@ export default function CompositorRegistroPage() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">Confirmar Contraseña *</label>
+                      <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">
+                        {isEn ? "Confirm Password *" : "Confirmar Contraseña *"}
+                      </label>
                       <div className="relative">
                         <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[#4C4546] text-lg">
                           lock_reset
@@ -735,7 +1000,7 @@ export default function CompositorRegistroPage() {
                           required
                           value={confirmPassword}
                           onChange={(e) => setConfirmPassword(e.target.value)}
-                          placeholder="Repite tu contraseña"
+                          placeholder={isEn ? "Repeat your password" : "Repite tu contraseña"}
                           className={`w-full pl-10 pr-10 py-3 bg-[#F0F3FF] border rounded-xl text-xs text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 ${
                             confirmPassword && confirmPassword !== password
                               ? "border-red-400 focus:ring-red-400"
@@ -756,19 +1021,20 @@ export default function CompositorRegistroPage() {
                       </div>
                       {confirmPassword && confirmPassword !== password && (
                         <p className="text-[11px] text-red-600 font-medium mt-1">
-                          Las contraseñas no coinciden
+                          {isEn ? "Passwords do not match" : "Las contraseñas no coinciden"}
                         </p>
                       )}
                       {confirmPassword && confirmPassword === password && (
                         <p className="text-[11px] text-emerald-600 font-medium mt-1 flex items-center gap-1">
-                          <span className="material-symbols-outlined text-xs">check</span> Las contraseñas coinciden
+                          <span className="material-symbols-outlined text-xs">check</span>{" "}
+                          {isEn ? "Passwords match" : "Las contraseñas coinciden"}
                         </p>
                       )}
                     </div>
                   </div>
                 </div>
 
-                {/* Términos & Privacidad */}
+                {/* Términos & Privacidad Administrables desde el CMS */}
                 <div className="space-y-3 pt-2 bg-[#F0F3FF]/60 p-4 rounded-2xl border border-black/5">
                   <label className="flex items-start gap-2.5 cursor-pointer text-xs text-[#4C4546] font-medium">
                     <input
@@ -778,9 +1044,7 @@ export default function CompositorRegistroPage() {
                       onChange={(e) => setAgreeTerms(e.target.checked)}
                       className="mt-0.5 rounded border-black/20 text-[#0071BC] focus:ring-[#0071BC]"
                     />
-                    <span>
-                      Acepto los <Link href="#" className="text-[#0071BC] font-bold hover:underline font-montserrat">Términos y Condiciones para Compositores</Link> de Piano Colombia (liquidación 80% neto autor / 20% plataforma).
-                    </span>
+                    {renderLegalCheckboxLabel(cmsLegals.composer_terms)}
                   </label>
 
                   <label className="flex items-start gap-2.5 cursor-pointer text-xs text-[#4C4546] font-medium">
@@ -791,9 +1055,7 @@ export default function CompositorRegistroPage() {
                       onChange={(e) => setAgreePrivacy(e.target.checked)}
                       className="mt-0.5 rounded border-black/20 text-[#0071BC] focus:ring-[#0071BC]"
                     />
-                    <span>
-                      Autorizo la <Link href="#" className="text-[#0071BC] font-bold hover:underline font-montserrat">Política de Tratamiento de Datos Personales</Link> y verificación de obras.
-                    </span>
+                    {renderLegalCheckboxLabel(cmsLegals.privacy_policy)}
                   </label>
                 </div>
 
@@ -806,20 +1068,28 @@ export default function CompositorRegistroPage() {
                   {isSubmitting ? (
                     <>
                       <span className="w-4 h-4 border-2 border-[#111C2D] border-t-transparent rounded-full animate-spin"></span>
-                      <span>Validando datos y enviando código...</span>
+                      <span>
+                        {isEn
+                          ? "Validating details and sending code..."
+                          : "Validando datos y enviando código..."}
+                      </span>
                     </>
                   ) : (
                     <>
                       <span className="material-symbols-outlined text-lg">send</span>
-                      <span>Continuar y Verificar Correo por Código OTP</span>
+                      <span>
+                        {isEn
+                          ? "Continue & Verify Email via OTP Code"
+                          : "Continuar y Verificar Correo por Código OTP"}
+                      </span>
                     </>
                   )}
                 </button>
 
                 <div className="text-center text-xs text-[#4C4546]">
-                  ¿Ya estás registrado como compositor?{" "}
+                  {isEn ? "Already registered as a composer? " : "¿Ya estás registrado como compositor? "}
                   <Link href="/compositor/login" className="text-[#0071BC] font-bold hover:underline font-montserrat">
-                    Inicia Sesión Aquí
+                    {isEn ? "Sign In Here" : "Inicia Sesión Aquí"}
                   </Link>
                 </div>
 
@@ -831,26 +1101,53 @@ export default function CompositorRegistroPage() {
         </div>
       </main>
 
+      {/* Modal Interactivo de Lectura de Documentos Legales */}
+      {legalModalDoc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-black/10 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-black/5 flex items-center justify-between bg-[#F0F3FF]/70">
+              <div className="space-y-0.5">
+                <span className="text-[10px] font-bold font-montserrat text-[#0071BC] uppercase tracking-wider">
+                  {isEn ? "Legal Document • Piano Colombia" : "Documento Legal • Piano Colombia"}
+                </span>
+                <h3 className="text-base sm:text-lg font-black font-montserrat text-[#111C2D]">
+                  {isEn ? legalModalDoc.title_en : legalModalDoc.title_es}
+                </h3>
+                <p className="text-[11px] text-[#4C4546]">
+                  {isEn ? legalModalDoc.updated_at_text_en : legalModalDoc.updated_at_text_es}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLegalModalDoc(null)}
+                className="w-9 h-9 rounded-full bg-white hover:bg-black/5 text-[#111C2D] flex items-center justify-center transition border border-black/10 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-4 text-xs sm:text-sm text-[#4C4546] leading-relaxed whitespace-pre-line font-normal">
+              {formatCommissionText(isEn ? legalModalDoc.content_en : legalModalDoc.content_es)}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-black/5 flex justify-end bg-slate-50">
+              <button
+                type="button"
+                onClick={() => setLegalModalDoc(null)}
+                className="px-6 py-2.5 bg-[#111C2D] hover:bg-[#0071BC] text-white font-bold text-xs uppercase tracking-wider rounded-xl transition font-montserrat cursor-pointer"
+              >
+                {isEn ? "Close" : "Entendido y Cerrar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Footer Unificado Stitch */}
       <Footer />
-
-      {/* Flotante WhatsApp Support */}
-      <aside aria-label="Soporte WhatsApp" className="fixed bottom-6 right-6 z-50">
-        <a
-          href="https://wa.me/573137529693"
-          target="_blank"
-          rel="noopener noreferrer"
-          title="Atención directa a compositores vía WhatsApp"
-          className="flex items-center gap-2.5 bg-white hover:bg-emerald-50 text-[#111C2D] border border-emerald-500/40 rounded-full px-4 py-2.5 shadow-lg backdrop-blur-md transition-all duration-200 group hover:scale-105"
-        >
-          <span className="relative flex h-2.5 w-2.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-          </span>
-          <span className="material-symbols-outlined text-emerald-600 text-lg group-hover:scale-110 transition-transform">chat</span>
-          <span className="text-xs font-bold hidden md:inline font-montserrat">Soporte Compositores</span>
-        </a>
-      </aside>
 
     </div>
   );

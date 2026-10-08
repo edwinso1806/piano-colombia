@@ -12,18 +12,23 @@ import {
   deleteAdminBlogCategory,
   uploadFileToCloudflareR2,
 } from "@/lib/api-client";
+import { autoTranslateBlogDraft, translateBlogCategory } from "@/lib/localize-messages";
 
 interface BlogPostItem {
   id: string;
   title: string;
+  title_en?: string | null;
   slug: string;
   category: string;
+  category_en?: string | null;
   author: string;
   published_at: string;
   read_time: string;
   cover_image: string | null;
   excerpt: string | null;
+  excerpt_en?: string | null;
   content: string;
+  content_en?: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -32,6 +37,7 @@ interface BlogPostItem {
 interface BlogCategoryItem {
   id: string;
   name: string;
+  name_en?: string | null;
   slug: string;
   created_at: string;
 }
@@ -88,29 +94,37 @@ export default function AdminBlogPage() {
   const [isUploadingCover, setIsUploadingCover] = useState(false);
   const [isUploadingInlineImage, setIsUploadingInlineImage] = useState(false);
   const [editorPreviewMode, setEditorPreviewMode] = useState<"write" | "preview">("write");
+  const [editorLangTab, setEditorLangTab] = useState<"es" | "en">("es");
 
   // Confirmación de eliminación
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
 
-  // Textarea ref para insertar tags enriquecidos
+  // Textarea ref para insertar tags enriquecidos (ES y EN)
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const textareaEnRef = useRef<HTMLTextAreaElement>(null);
   const coverFileInputRef = useRef<HTMLInputElement>(null);
   const inlineImageInputRef = useRef<HTMLInputElement>(null);
 
   // Abrir editor para nuevo artículo
   const handleOpenNewPost = () => {
+    const firstCat = categories[0]?.name || "Actualidad";
     setEditingPost({
       title: "",
+      title_en: "",
       slug: "",
-      category: categories[0]?.name || "Actualidad",
+      category: firstCat,
+      category_en: (categories[0] as any)?.name_en || translateBlogCategory(firstCat, true),
       author: "Equipo Piano Colombia",
       published_at: new Date().toISOString().split("T")[0],
       read_time: "5 min de lectura",
       cover_image: null,
       excerpt: "",
+      excerpt_en: "",
       content: "",
+      content_en: "",
       is_active: true,
     });
+    setEditorLangTab("es");
     setEditorPreviewMode("write");
     setIsEditorOpen(true);
   };
@@ -119,10 +133,36 @@ export default function AdminBlogPage() {
   const handleOpenEditPost = (post: BlogPostItem) => {
     setEditingPost({
       ...post,
+      title_en: post.title_en || "",
+      excerpt_en: post.excerpt_en || "",
+      content_en: post.content_en || "",
+      category_en: post.category_en || translateBlogCategory(post.category, true),
       published_at: post.published_at ? new Date(post.published_at).toISOString().split("T")[0] : "",
     });
+    setEditorLangTab("es");
     setEditorPreviewMode("write");
     setIsEditorOpen(true);
+  };
+
+  // Traducir automáticamente de Español a Inglés
+  const handleAutoTranslateAction = () => {
+    if (!editingPost?.title?.trim() && !editingPost?.content?.trim()) {
+      showToast("Ingresa primero el título o contenido en español para traducir.", "info");
+      return;
+    }
+    const auto = autoTranslateBlogDraft({
+      title: editingPost.title || "",
+      excerpt: editingPost.excerpt || "",
+      content: editingPost.content || "",
+    });
+    setEditingPost((prev) => ({
+      ...prev,
+      title_en: auto.title_en,
+      excerpt_en: auto.excerpt_en,
+      content_en: auto.content_en,
+    }));
+    setEditorLangTab("en");
+    showToast("¡Contenido traducido al inglés! Puedes revisarlo o ajustarlo en esta pestaña.", "success");
   };
 
   // Generador de slug a partir de título
@@ -143,19 +183,24 @@ export default function AdminBlogPage() {
     }));
   };
 
-  // Insertar formato en textarea
+  // Insertar formato en textarea (detecta si redacta en ES o EN)
   const insertFormatting = (tagStart: string, tagEnd: string = "") => {
-    const textarea = textareaRef.current;
+    const isEnTab = editorLangTab === "en";
+    const textarea = isEnTab ? textareaEnRef.current : textareaRef.current;
     if (!textarea) return;
 
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
     const text = textarea.value;
-    const selectedText = text.substring(start, end) || "Texto aquí";
+    const selectedText = text.substring(start, end) || (isEnTab ? "Text here" : "Texto aquí");
     const replacement = `${tagStart}${selectedText}${tagEnd}`;
 
     const newContent = text.substring(0, start) + replacement + text.substring(end);
-    setEditingPost((prev) => ({ ...prev, content: newContent }));
+    if (isEnTab) {
+      setEditingPost((prev) => ({ ...prev, content_en: newContent }));
+    } else {
+      setEditingPost((prev) => ({ ...prev, content: newContent }));
+    }
 
     setTimeout(() => {
       textarea.focus();
@@ -191,14 +236,23 @@ export default function AdminBlogPage() {
       const res = await uploadFileToCloudflareR2(file, "blog-inline");
       const imgTag = `\n<img src="${res.url}" alt="${file.name.replace(/\.[^/.]+$/, "")}" class="my-6 rounded-2xl shadow-md max-w-full mx-auto" />\n`;
 
-      const textarea = textareaRef.current;
+      const isEnTab = editorLangTab === "en";
+      const textarea = isEnTab ? textareaEnRef.current : textareaRef.current;
       if (textarea) {
         const start = textarea.selectionStart;
         const text = textarea.value;
         const newContent = text.substring(0, start) + imgTag + text.substring(start);
-        setEditingPost((prev) => ({ ...prev, content: newContent }));
+        if (isEnTab) {
+          setEditingPost((prev) => ({ ...prev, content_en: newContent }));
+        } else {
+          setEditingPost((prev) => ({ ...prev, content: newContent }));
+        }
       } else {
-        setEditingPost((prev) => ({ ...prev, content: (prev?.content || "") + imgTag }));
+        if (isEnTab) {
+          setEditingPost((prev) => ({ ...prev, content_en: (prev?.content_en || "") + imgTag }));
+        } else {
+          setEditingPost((prev) => ({ ...prev, content: (prev?.content || "") + imgTag }));
+        }
       }
       showToast("Imagen insertada en el cuerpo del artículo.", "success");
     } catch (err: any) {
@@ -220,15 +274,43 @@ export default function AdminBlogPage() {
       return;
     }
 
+    // Categoría en inglés
+    const selectedCat = categories.find((c) => c.name === editingPost.category);
+    const category_en = (selectedCat as any)?.name_en || translateBlogCategory(editingPost.category, true);
+
+    // Salvaguarda multilingüe: Si el admin no llenó inglés, autogenerar
+    let finalTitleEn = editingPost.title_en?.trim();
+    let finalExcerptEn = editingPost.excerpt_en?.trim();
+    let finalContentEn = editingPost.content_en?.trim();
+
+    if (!finalTitleEn || !finalContentEn) {
+      const auto = autoTranslateBlogDraft({
+        title: editingPost.title || "",
+        excerpt: editingPost.excerpt || "",
+        content: editingPost.content || "",
+      });
+      if (!finalTitleEn) finalTitleEn = auto.title_en;
+      if (!finalExcerptEn) finalExcerptEn = auto.excerpt_en;
+      if (!finalContentEn) finalContentEn = auto.content_en;
+    }
+
+    const payload = {
+      ...editingPost,
+      title_en: finalTitleEn,
+      excerpt_en: finalExcerptEn,
+      content_en: finalContentEn,
+      category_en,
+    };
+
     setIsSavingPost(true);
     try {
       if (editingPost.id) {
         // Actualizar
-        const res = await updateAdminBlogPost(editingPost.id, editingPost);
+        const res = await updateAdminBlogPost(editingPost.id, payload);
         showToast(res.message || "Artículo actualizado correctamente.", "success");
       } else {
         // Crear
-        const res = await createAdminBlogPost(editingPost);
+        const res = await createAdminBlogPost(payload);
         showToast(res.message || "Artículo creado y publicado exitosamente.", "success");
       }
       setIsEditorOpen(false);
@@ -643,36 +725,7 @@ export default function AdminBlogPage() {
             {/* Modal Body */}
             <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6">
               
-              {/* Fila 1: Título y Slug */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="md:col-span-2 space-y-1.5">
-                  <label className="text-xs font-bold text-[#111C2D] font-montserrat">
-                    Título del Artículo <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={editingPost.title || ""}
-                    onChange={(e) => handleTitleChange(e.target.value)}
-                    placeholder="Ej: El Bambuco en el Piano: Rítmica y Articulación..."
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 text-xs font-medium focus:outline-none focus:border-[#0071BC] bg-[#F9F9FF]"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-[#111C2D] font-montserrat">
-                    Slug (URL Amigable)
-                  </label>
-                  <input
-                    type="text"
-                    value={editingPost.slug || ""}
-                    onChange={(e) => setEditingPost((prev) => ({ ...prev, slug: e.target.value }))}
-                    placeholder="el-bambuco-en-el-piano"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 text-xs font-mono text-slate-600 focus:outline-none focus:border-[#0071BC] bg-[#F9F9FF]"
-                  />
-                </div>
-              </div>
-
-              {/* Fila 2: Categoría, Autor, Fecha y Tiempo de Lectura */}
+              {/* Sección 1: Metadatos Globales (Categoría, Autor, Fecha, Lectura) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Categoría */}
                 <div className="space-y-1.5">
@@ -734,7 +787,7 @@ export default function AdminBlogPage() {
                 </div>
               </div>
 
-              {/* Fila 3: Imagen de Portada y Estado Activo */}
+              {/* Sección 2: Imagen de Portada y Estado Activo */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-2xl bg-[#F8FAFC] border border-black/5">
                 <div className="md:col-span-2 space-y-2">
                   <label className="text-xs font-bold text-[#111C2D] font-montserrat block">
@@ -802,173 +855,424 @@ export default function AdminBlogPage() {
                 </div>
               </div>
 
-              {/* Extracto Corto */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-[#111C2D] font-montserrat">
-                  Resumen Corto / Extracto (2 a 3 líneas)
-                </label>
-                <textarea
-                  rows={2}
-                  value={editingPost.excerpt || ""}
-                  onChange={(e) => setEditingPost((prev) => ({ ...prev, excerpt: e.target.value }))}
-                  placeholder="Breve sinopsis que aparecerá en las tarjetas de la página de inicio y el catálogo..."
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 text-xs font-medium focus:outline-none focus:border-[#0071BC] bg-[#F9F9FF]"
-                />
-              </div>
-
-              {/* Editor de Contenido Enriquecido */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-[#111C2D] font-montserrat">
-                    Contenido del Artículo <span className="text-red-500">*</span>
-                  </label>
-
-                  {/* Switch Redacción vs Vista Previa */}
-                  <div className="flex items-center bg-slate-100 rounded-lg p-0.5 text-xs font-bold">
-                    <button
-                      type="button"
-                      onClick={() => setEditorPreviewMode("write")}
-                      className={`px-3 py-1 rounded-md transition ${
-                        editorPreviewMode === "write"
-                          ? "bg-white text-[#111C2D] shadow-2xs"
-                          : "text-slate-500 hover:text-[#111C2D]"
-                      }`}
-                    >
-                      Redactar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditorPreviewMode("preview")}
-                      className={`px-3 py-1 rounded-md transition ${
-                        editorPreviewMode === "preview"
-                          ? "bg-white text-[#111C2D] shadow-2xs"
-                          : "text-slate-500 hover:text-[#111C2D]"
-                      }`}
-                    >
-                      Vista Previa
-                    </button>
-                  </div>
+              {/* Selector de Pestaña de Idioma */}
+              <div className="flex items-center justify-between border-y border-black/10 py-3 bg-[#F8FAFC] -mx-6 px-6 sm:-mx-8 sm:px-8">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditorLangTab("es")}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold font-montserrat transition cursor-pointer flex items-center gap-1.5 ${
+                      editorLangTab === "es"
+                        ? "bg-[#0071BC] text-white shadow-xs"
+                        : "bg-white border border-black/10 text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    <span>🇨🇴</span>
+                    <span>Español (Principal)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditorLangTab("en")}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold font-montserrat transition cursor-pointer flex items-center gap-1.5 ${
+                      editorLangTab === "en"
+                        ? "bg-[#0071BC] text-white shadow-xs"
+                        : "bg-white border border-black/10 text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    <span>🇺🇸</span>
+                    <span>English (Traducción)</span>
+                    {editingPost.title_en && (
+                      <span className="text-[10px] bg-emerald-500 text-white rounded-full px-1.5 py-0.2">✓</span>
+                    )}
+                  </button>
                 </div>
 
-                {editorPreviewMode === "write" ? (
-                  <div className="border border-black/10 rounded-2xl overflow-hidden bg-white shadow-2xs">
-                    {/* Barra de herramientas enriquecidas */}
-                    <div className="flex items-center gap-1 p-2 bg-[#F8FAFC] border-b border-black/5 flex-wrap">
-                      <button
-                        type="button"
-                        onClick={() => insertFormatting("<strong>", "</strong>")}
-                        className="p-1.5 rounded hover:bg-slate-200 text-slate-700 font-bold text-xs"
-                        title="Negrita"
-                      >
-                        B
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => insertFormatting("<em>", "</em>")}
-                        className="p-1.5 rounded hover:bg-slate-200 text-slate-700 italic text-xs"
-                        title="Cursiva"
-                      >
-                        I
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => insertFormatting("<h2>", "</h2>")}
-                        className="px-2 py-1 rounded hover:bg-slate-200 text-slate-700 font-bold text-xs"
-                        title="Título Principal (H2)"
-                      >
-                        H2
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => insertFormatting("<h3>", "</h3>")}
-                        className="px-2 py-1 rounded hover:bg-slate-200 text-slate-700 font-bold text-xs"
-                        title="Subtítulo (H3)"
-                      >
-                        H3
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => insertFormatting("<blockquote>\n  \"", "\"\n</blockquote>")}
-                        className="p-1.5 rounded hover:bg-slate-200 text-slate-700 text-xs flex items-center"
-                        title="Cita destacada"
-                      >
-                        <span className="material-symbols-outlined text-sm">format_quote</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => insertFormatting("<ul>\n  <li>", "</li>\n</ul>")}
-                        className="p-1.5 rounded hover:bg-slate-200 text-slate-700 text-xs flex items-center"
-                        title="Lista con viñetas"
-                      >
-                        <span className="material-symbols-outlined text-sm">format_list_bulleted</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => insertFormatting("<ol>\n  <li>", "</li>\n</ol>")}
-                        className="p-1.5 rounded hover:bg-slate-200 text-slate-700 text-xs flex items-center"
-                        title="Lista numerada"
-                      >
-                        <span className="material-symbols-outlined text-sm">format_list_numbered</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => insertFormatting('<a href="https://" target="_blank">', "</a>")}
-                        className="p-1.5 rounded hover:bg-slate-200 text-slate-700 text-xs flex items-center"
-                        title="Enlace"
-                      >
-                        <span className="material-symbols-outlined text-sm">link</span>
-                      </button>
+                <button
+                  type="button"
+                  onClick={handleAutoTranslateAction}
+                  className="px-3.5 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 hover:bg-amber-100 transition text-xs font-bold font-montserrat flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                  title="Traducir automáticamente de español a inglés"
+                >
+                  <span className="material-symbols-outlined text-sm text-amber-600">auto_awesome</span>
+                  <span>Traducir con IA a Inglés</span>
+                </button>
+              </div>
 
-                      <div className="h-5 w-px bg-slate-300 mx-1"></div>
-
-                      {/* Botón Insertar Imagen en el Cuerpo */}
+              {/* ========================================================
+                  CONTENIDO EN ESPAÑOL
+                  ======================================================== */}
+              {editorLangTab === "es" && (
+                <div className="space-y-5 animate-in fade-in duration-150">
+                  {/* Fila Título y Slug */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="md:col-span-2 space-y-1.5">
+                      <label className="text-xs font-bold text-[#111C2D] font-montserrat">
+                        Título del Artículo (Español) <span className="text-red-500">*</span>
+                      </label>
                       <input
-                        type="file"
-                        ref={inlineImageInputRef}
-                        onChange={handleInlineImageUpload}
-                        accept="image/*"
-                        className="hidden"
+                        type="text"
+                        value={editingPost.title || ""}
+                        onChange={(e) => handleTitleChange(e.target.value)}
+                        placeholder="Ej: El Bambuco en el Piano: Rítmica y Articulación..."
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 text-xs font-medium focus:outline-none focus:border-[#0071BC] bg-[#F9F9FF]"
                       />
-                      <button
-                        type="button"
-                        disabled={isUploadingInlineImage}
-                        onClick={() => inlineImageInputRef.current?.click()}
-                        className="px-2.5 py-1 rounded-lg bg-[#F0F3FF] text-[#0071BC] hover:bg-[#e0eaff] transition text-xs font-bold flex items-center gap-1 cursor-pointer"
-                        title="Subir e insertar imagen dentro del texto"
-                      >
-                        <span className="material-symbols-outlined text-sm">
-                          {isUploadingInlineImage ? "sync" : "add_photo_alternate"}
-                        </span>
-                        <span>{isUploadingInlineImage ? "Subiendo imagen..." : "Insertar Imagen"}</span>
-                      </button>
                     </div>
 
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-[#111C2D] font-montserrat">
+                        Slug (URL Amigable)
+                      </label>
+                      <input
+                        type="text"
+                        value={editingPost.slug || ""}
+                        onChange={(e) => setEditingPost((prev) => ({ ...prev, slug: e.target.value }))}
+                        placeholder="el-bambuco-en-el-piano"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 text-xs font-mono text-slate-600 focus:outline-none focus:border-[#0071BC] bg-[#F9F9FF]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Extracto Corto */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-[#111C2D] font-montserrat">
+                      Resumen Corto / Extracto (Español)
+                    </label>
                     <textarea
-                      ref={textareaRef}
-                      rows={12}
-                      value={editingPost.content || ""}
-                      onChange={(e) => setEditingPost((prev) => ({ ...prev, content: e.target.value }))}
-                      placeholder="Escribe el artículo utilizando texto o las herramientas superiores para insertar títulos, citas e imágenes..."
-                      className="w-full p-4 text-xs font-mono leading-relaxed focus:outline-none bg-white resize-y"
+                      rows={2}
+                      value={editingPost.excerpt || ""}
+                      onChange={(e) => setEditingPost((prev) => ({ ...prev, excerpt: e.target.value }))}
+                      placeholder="Breve sinopsis que aparecerá en las tarjetas de la página de inicio..."
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 text-xs font-medium focus:outline-none focus:border-[#0071BC] bg-[#F9F9FF]"
                     />
                   </div>
-                ) : (
-                  /* Vista Previa Enriquecida */
-                  <div className="border border-black/10 rounded-2xl p-6 bg-slate-50 min-h-[300px] overflow-y-auto">
-                    <div
-                      className="prose prose-slate max-w-none text-[#111C2D] text-xs leading-relaxed space-y-3
-                        [&>h2]:text-base [&>h2]:font-bold [&>h2]:text-[#111C2D] [&>h2]:mt-4
-                        [&>h3]:text-sm [&>h3]:font-bold [&>h3]:text-[#111C2D] [&>h3]:mt-3
-                        [&>p]:text-[#4C4546]
-                        [&>blockquote]:border-l-4 [&>blockquote]:border-[#FBB03B] [&>blockquote]:pl-3 [&>blockquote]:italic
-                        [&>ul]:list-disc [&>ul]:pl-5
-                        [&>ol]:list-decimal [&>ol]:pl-5
-                        [&>img]:rounded-xl [&>img]:shadow-xs [&>img]:max-w-md [&>img]:mx-auto"
-                      dangerouslySetInnerHTML={{ __html: editingPost.content || "<p className='text-slate-400 italic'>Sin contenido todavía...</p>" }}
+
+                  {/* Editor de Contenido Enriquecido */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-[#111C2D] font-montserrat">
+                        Contenido del Artículo (Español) <span className="text-red-500">*</span>
+                      </label>
+
+                      {/* Switch Redacción vs Vista Previa */}
+                      <div className="flex items-center bg-slate-100 rounded-lg p-0.5 text-xs font-bold">
+                        <button
+                          type="button"
+                          onClick={() => setEditorPreviewMode("write")}
+                          className={`px-3 py-1 rounded-md transition ${
+                            editorPreviewMode === "write"
+                              ? "bg-white text-[#111C2D] shadow-2xs"
+                              : "text-slate-500 hover:text-[#111C2D]"
+                          }`}
+                        >
+                          Redactar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditorPreviewMode("preview")}
+                          className={`px-3 py-1 rounded-md transition ${
+                            editorPreviewMode === "preview"
+                              ? "bg-white text-[#111C2D] shadow-2xs"
+                              : "text-slate-500 hover:text-[#111C2D]"
+                          }`}
+                        >
+                          Vista Previa
+                        </button>
+                      </div>
+                    </div>
+
+                    {editorPreviewMode === "write" ? (
+                      <div className="border border-black/10 rounded-2xl overflow-hidden bg-white shadow-2xs">
+                        <div className="flex items-center gap-1 p-2 bg-[#F8FAFC] border-b border-black/5 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => insertFormatting("<strong>", "</strong>")}
+                            className="p-1.5 rounded hover:bg-slate-200 text-slate-700 font-bold text-xs"
+                            title="Negrita"
+                          >
+                            B
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => insertFormatting("<em>", "</em>")}
+                            className="p-1.5 rounded hover:bg-slate-200 text-slate-700 italic text-xs"
+                            title="Cursiva"
+                          >
+                            I
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => insertFormatting("<h2>", "</h2>")}
+                            className="px-2 py-1 rounded hover:bg-slate-200 text-slate-700 font-bold text-xs"
+                            title="Título Principal (H2)"
+                          >
+                            H2
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => insertFormatting("<h3>", "</h3>")}
+                            className="px-2 py-1 rounded hover:bg-slate-200 text-slate-700 font-bold text-xs"
+                            title="Subtítulo (H3)"
+                          >
+                            H3
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => insertFormatting("<blockquote>\n  \"", "\"\n</blockquote>")}
+                            className="p-1.5 rounded hover:bg-slate-200 text-slate-700 text-xs flex items-center"
+                            title="Cita destacada"
+                          >
+                            <span className="material-symbols-outlined text-sm">format_quote</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => insertFormatting("<ul>\n  <li>", "</li>\n</ul>")}
+                            className="p-1.5 rounded hover:bg-slate-200 text-slate-700 text-xs flex items-center"
+                            title="Lista con viñetas"
+                          >
+                            <span className="material-symbols-outlined text-sm">format_list_bulleted</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => insertFormatting("<ol>\n  <li>", "</li>\n</ol>")}
+                            className="p-1.5 rounded hover:bg-slate-200 text-slate-700 text-xs flex items-center"
+                            title="Lista numerada"
+                          >
+                            <span className="material-symbols-outlined text-sm">format_list_numbered</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => insertFormatting('<a href="https://" target="_blank">', "</a>")}
+                            className="p-1.5 rounded hover:bg-slate-200 text-slate-700 text-xs flex items-center"
+                            title="Enlace"
+                          >
+                            <span className="material-symbols-outlined text-sm">link</span>
+                          </button>
+
+                          <div className="h-5 w-px bg-slate-300 mx-1"></div>
+
+                          {/* Subir e Insertar Imagen */}
+                          <input
+                            type="file"
+                            ref={inlineImageInputRef}
+                            onChange={handleInlineImageUpload}
+                            accept="image/*"
+                            className="hidden"
+                          />
+                          <button
+                            type="button"
+                            disabled={isUploadingInlineImage}
+                            onClick={() => inlineImageInputRef.current?.click()}
+                            className="px-2.5 py-1 rounded-lg bg-[#F0F3FF] text-[#0071BC] hover:bg-[#e0eaff] transition text-xs font-bold flex items-center gap-1 cursor-pointer"
+                            title="Subir e insertar imagen dentro del texto"
+                          >
+                            <span className="material-symbols-outlined text-sm">
+                              {isUploadingInlineImage ? "sync" : "add_photo_alternate"}
+                            </span>
+                            <span>{isUploadingInlineImage ? "Subiendo..." : "Insertar Imagen"}</span>
+                          </button>
+                        </div>
+
+                        <textarea
+                          ref={textareaRef}
+                          rows={12}
+                          value={editingPost.content || ""}
+                          onChange={(e) => setEditingPost((prev) => ({ ...prev, content: e.target.value }))}
+                          placeholder="Escribe el artículo utilizando texto enriquecido, subtítulos y citas..."
+                          className="w-full p-4 text-xs font-mono leading-relaxed focus:outline-none bg-white resize-y"
+                        />
+                      </div>
+                    ) : (
+                      /* Vista Previa Enriquecida */
+                      <div className="border border-black/10 rounded-2xl p-6 bg-slate-50 min-h-[300px] overflow-y-auto">
+                        <div
+                          className="prose prose-slate max-w-none text-[#111C2D] text-xs leading-relaxed space-y-3
+                            [&>h2]:text-base [&>h2]:font-bold [&>h2]:text-[#111C2D] [&>h2]:mt-4
+                            [&>h3]:text-sm [&>h3]:font-bold [&>h3]:text-[#111C2D] [&>h3]:mt-3
+                            [&>p]:text-[#4C4546]
+                            [&>blockquote]:border-l-4 [&>blockquote]:border-[#FBB03B] [&>blockquote]:pl-3 [&>blockquote]:italic
+                            [&>ul]:list-disc [&>ul]:pl-5
+                            [&>ol]:list-decimal [&>ol]:pl-5
+                            [&>img]:rounded-xl [&>img]:shadow-xs [&>img]:max-w-md [&>img]:mx-auto"
+                          dangerouslySetInnerHTML={{ __html: editingPost.content || "<p className='text-slate-400 italic'>Sin contenido todavía...</p>" }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ========================================================
+                  CONTENIDO EN INGLÉS
+                  ======================================================== */}
+              {editorLangTab === "en" && (
+                <div className="space-y-5 animate-in fade-in duration-150">
+                  {/* Título en Inglés */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-[#111C2D] font-montserrat flex items-center justify-between">
+                      <span>Article Title (English)</span>
+                      <span className="text-[11px] text-[#0071BC] font-normal">Shown to English visitors</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={editingPost.title_en || ""}
+                      onChange={(e) => setEditingPost((prev) => ({ ...prev, title_en: e.target.value }))}
+                      placeholder="E.g.: The Bambuco on the Piano: Rhythm and Articulation for Concert Performance..."
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 text-xs font-medium focus:outline-none focus:border-[#0071BC] bg-[#F9F9FF]"
                     />
                   </div>
-                )}
-              </div>
+
+                  {/* Extracto en Inglés */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-[#111C2D] font-montserrat">
+                      Short Summary / Excerpt (English)
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={editingPost.excerpt_en || ""}
+                      onChange={(e) => setEditingPost((prev) => ({ ...prev, excerpt_en: e.target.value }))}
+                      placeholder="Brief English synopsis for cards and previews..."
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-black/10 text-xs font-medium focus:outline-none focus:border-[#0071BC] bg-[#F9F9FF]"
+                    />
+                  </div>
+
+                  {/* Contenido en Inglés */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-[#111C2D] font-montserrat">
+                        Article Content (English)
+                      </label>
+
+                      <div className="flex items-center bg-slate-100 rounded-lg p-0.5 text-xs font-bold">
+                        <button
+                          type="button"
+                          onClick={() => setEditorPreviewMode("write")}
+                          className={`px-3 py-1 rounded-md transition ${
+                            editorPreviewMode === "write"
+                              ? "bg-white text-[#111C2D] shadow-2xs"
+                              : "text-slate-500 hover:text-[#111C2D]"
+                          }`}
+                        >
+                          Write
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditorPreviewMode("preview")}
+                          className={`px-3 py-1 rounded-md transition ${
+                            editorPreviewMode === "preview"
+                              ? "bg-white text-[#111C2D] shadow-2xs"
+                              : "text-slate-500 hover:text-[#111C2D]"
+                          }`}
+                        >
+                          Preview
+                        </button>
+                      </div>
+                    </div>
+
+                    {editorPreviewMode === "write" ? (
+                      <div className="border border-black/10 rounded-2xl overflow-hidden bg-white shadow-2xs">
+                        <div className="flex items-center gap-1 p-2 bg-[#F8FAFC] border-b border-black/5 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => insertFormatting("<strong>", "</strong>")}
+                            className="p-1.5 rounded hover:bg-slate-200 text-slate-700 font-bold text-xs"
+                            title="Bold"
+                          >
+                            B
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => insertFormatting("<em>", "</em>")}
+                            className="p-1.5 rounded hover:bg-slate-200 text-slate-700 italic text-xs"
+                            title="Italic"
+                          >
+                            I
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => insertFormatting("<h2>", "</h2>")}
+                            className="px-2 py-1 rounded hover:bg-slate-200 text-slate-700 font-bold text-xs"
+                            title="Heading (H2)"
+                          >
+                            H2
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => insertFormatting("<h3>", "</h3>")}
+                            className="px-2 py-1 rounded hover:bg-slate-200 text-slate-700 font-bold text-xs"
+                            title="Subheading (H3)"
+                          >
+                            H3
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => insertFormatting("<blockquote>\n  \"", "\"\n</blockquote>")}
+                            className="p-1.5 rounded hover:bg-slate-200 text-slate-700 text-xs flex items-center"
+                            title="Quote"
+                          >
+                            <span className="material-symbols-outlined text-sm">format_quote</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => insertFormatting("<ul>\n  <li>", "</li>\n</ul>")}
+                            className="p-1.5 rounded hover:bg-slate-200 text-slate-700 text-xs flex items-center"
+                            title="Bullet List"
+                          >
+                            <span className="material-symbols-outlined text-sm">format_list_bulleted</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => insertFormatting("<ol>\n  <li>", "</li>\n</ol>")}
+                            className="p-1.5 rounded hover:bg-slate-200 text-slate-700 text-xs flex items-center"
+                            title="Numbered List"
+                          >
+                            <span className="material-symbols-outlined text-sm">format_list_numbered</span>
+                          </button>
+
+                          <div className="h-5 w-px bg-slate-300 mx-1"></div>
+
+                          {/* Subir e Insertar Imagen */}
+                          <button
+                            type="button"
+                            disabled={isUploadingInlineImage}
+                            onClick={() => inlineImageInputRef.current?.click()}
+                            className="px-2.5 py-1 rounded-lg bg-[#F0F3FF] text-[#0071BC] hover:bg-[#e0eaff] transition text-xs font-bold flex items-center gap-1 cursor-pointer"
+                            title="Upload and insert inline image"
+                          >
+                            <span className="material-symbols-outlined text-sm">
+                              {isUploadingInlineImage ? "sync" : "add_photo_alternate"}
+                            </span>
+                            <span>{isUploadingInlineImage ? "Uploading..." : "Insert Image"}</span>
+                          </button>
+                        </div>
+
+                        <textarea
+                          ref={textareaEnRef}
+                          rows={12}
+                          value={editingPost.content_en || ""}
+                          onChange={(e) => setEditingPost((prev) => ({ ...prev, content_en: e.target.value }))}
+                          placeholder="Write English content or click 'Traducir con IA a Inglés' to auto-translate..."
+                          className="w-full p-4 text-xs font-mono leading-relaxed focus:outline-none bg-white resize-y"
+                        />
+                      </div>
+                    ) : (
+                      /* Vista Previa Enriquecida */
+                      <div className="border border-black/10 rounded-2xl p-6 bg-slate-50 min-h-[300px] overflow-y-auto">
+                        <div
+                          className="prose prose-slate max-w-none text-[#111C2D] text-xs leading-relaxed space-y-3
+                            [&>h2]:text-base [&>h2]:font-bold [&>h2]:text-[#111C2D] [&>h2]:mt-4
+                            [&>h3]:text-sm [&>h3]:font-bold [&>h3]:text-[#111C2D] [&>h3]:mt-3
+                            [&>p]:text-[#4C4546]
+                            [&>blockquote]:border-l-4 [&>blockquote]:border-[#FBB03B] [&>blockquote]:pl-3 [&>blockquote]:italic
+                            [&>ul]:list-disc [&>ul]:pl-5
+                            [&>ol]:list-decimal [&>ol]:pl-5
+                            [&>img]:rounded-xl [&>img]:shadow-xs [&>img]:max-w-md [&>img]:mx-auto"
+                          dangerouslySetInnerHTML={{ __html: editingPost.content_en || "<p className='text-slate-400 italic'>No English content yet...</p>" }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
             </div>
 

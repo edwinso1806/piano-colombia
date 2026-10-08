@@ -12,12 +12,28 @@ async function fetchScoreDetails(slug: string) {
       headers: {
         "x-publishable-api-key": PUBLISHABLE_KEY,
       },
-      next: { revalidate: 15 },
+      cache: "no-store",
     });
 
     if (res.ok) {
       const data = await res.json();
       if (data.score) {
+        let descriptionEn = data.score.description_en || null;
+        if (!descriptionEn && data.score.description_es) {
+          try {
+            const transUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=es&tl=en&dt=t&q=${encodeURIComponent(data.score.description_es)}`;
+            const transRes = await fetch(transUrl);
+            if (transRes.ok) {
+              const transJson = await transRes.json();
+              if (Array.isArray(transJson) && Array.isArray(transJson[0])) {
+                descriptionEn = transJson[0].map((s: any) => s[0]).join('');
+              }
+            }
+          } catch (e) {
+            // Silently fall through
+          }
+        }
+
         return {
           id: data.score.id,
           title: data.score.title,
@@ -26,7 +42,9 @@ async function fetchScoreDetails(slug: string) {
           difficulty: data.score.difficulty,
           priceCOP: data.score.price_cop || 45000,
           priceUSD: data.score.price_usd || 12,
-          description: data.score.description_es,
+          description: data.score.description_es || descriptionEn,
+          description_es: data.score.description_es,
+          description_en: descriptionEn,
           tonality: data.score.tonality,
           pages_count: data.score.pages_count,
           audio_sample_url: data.score.audio_sample_url,

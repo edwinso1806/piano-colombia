@@ -16,5 +16,6 @@ export const CustomerDownload = model.define("customer_download", {
   buyer_name: model.text(),
   buyer_email: model.text(),
   buyer_tax_id: model.text().nullable(),
+  language: model.text().default("es"),
   expires_at: model.dateTime().nullable(),
 })

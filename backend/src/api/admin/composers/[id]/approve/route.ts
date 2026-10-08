@@ -1,7 +1,7 @@
 import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { COMPOSER_MODULE } from "../../../../../modules/composer"
 import { Client } from "pg"
-import { sendEmail, generateComposerApprovedHTML } from "../../../../../lib/resend-mailer"
+import { sendEmail, generateComposerApprovedHTML, EMAIL_SUBJECTS } from "../../../../../lib/resend-mailer"
 
 function getPgClient() {
   return new Client({
@@ -43,17 +43,19 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       if (composerData && composerData.email) {
         const composerFullName = `${composerData.first_name || ""} ${composerData.last_name || ""}`.trim()
         const artisticName = composerData.artistic_name || composerFullName
+        const composerLang = (composerData as any).preferred_language === "en" ? "en" : "es"
 
         await sendEmail({
           to: composerData.email,
-          subject: "🎉 ¡Tu perfil de compositor ha sido aprobado en Piano Colombia!",
+          subject: EMAIL_SUBJECTS.composerApproved[composerLang],
           html: generateComposerApprovedHTML({
             composerName: composerFullName,
             artisticName,
             loginUrl: "http://localhost:3000/compositor/login",
+            lang: composerLang,
           }),
         })
-        console.log(`📧 Correo de aprobación enviado exitosamente a ${composerData.email}`)
+        console.log(`📧 Correo de aprobación enviado exitosamente a ${composerData.email} (Idioma: ${composerLang})`)
       }
     } catch (emailErr: any) {
       console.warn("⚠️ Error enviando correo de aprobación al compositor:", emailErr.message)

@@ -9,5 +9,6 @@ export const CustomerAccount = model.define("customer_account", {
   salt: model.text(),
   phone: model.text().nullable(),
   tax_id: model.text().nullable(),
+  preferred_language: model.text().default("es"),
   is_active: model.boolean().default(true),
 })

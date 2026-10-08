@@ -34,14 +34,18 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
 
     const post = await createBlogPost({
       title: body.title,
+      title_en: body.title_en,
       slug: body.slug,
       category: body.category || "Actualidad",
+      category_en: body.category_en,
       author: body.author || "Equipo Piano Colombia",
       published_at: body.published_at,
       read_time: body.read_time,
       cover_image: body.cover_image,
       excerpt: body.excerpt,
+      excerpt_en: body.excerpt_en,
       content: body.content,
+      content_en: body.content_en,
       is_active: body.is_active !== undefined ? Boolean(body.is_active) : true,
     })
 

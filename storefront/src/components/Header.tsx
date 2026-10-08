@@ -33,7 +33,7 @@ export default function Header({ activePage }: HeaderProps) {
 
   // Menú de navegación para Móvil
   const mobileNav = [
-    { href: "/", label: "Inicio", activeKey: "inicio", icon: "home" },
+    { href: "/", label: t("nav.home", "Inicio"), activeKey: "inicio", icon: "home" },
     { href: "/tienda", label: t("nav.catalog", "Tienda de Partituras"), activeKey: "tienda", icon: "storefront" },
     { href: "/compositores", label: t("nav.composers", "Compositores"), activeKey: "compositores", icon: "groups" },
     { href: "/blog", label: t("nav.blog", "Blog & Artículos"), activeKey: "blog", icon: "article" },
@@ -144,7 +144,7 @@ export default function Header({ activePage }: HeaderProps) {
                       className="flex items-center gap-2.5 px-4 py-2 text-[#111C2D] hover:bg-[#F0F3FF] transition font-semibold"
                     >
                       <span className="material-symbols-outlined text-base text-[#0071BC]">cloud_download</span>
-                      <span>Mis Partituras & Descargas</span>
+                      <span>{t("nav.scores_and_downloads", "Mis Partituras & Descargas")}</span>
                     </Link>
                     <Link
                       href="/mi-cuenta/descargas?tab=colecciones"
@@ -153,7 +153,7 @@ export default function Header({ activePage }: HeaderProps) {
                     >
                       <div className="flex items-center gap-2.5">
                         <span className="material-symbols-outlined text-base text-[#C1272D]">bookmark</span>
-                        <span>Partituras Guardadas</span>
+                        <span>{t("nav.saved_scores", "Partituras Guardadas")}</span>
                       </div>
                       {savedScores.length > 0 && (
                         <span className="px-2 py-0.5 rounded-full bg-red-100 text-[#C1272D] text-[10px] font-black font-montserrat">
@@ -171,7 +171,7 @@ export default function Header({ activePage }: HeaderProps) {
                       className="w-full flex items-center gap-2.5 px-4 py-2 text-red-600 hover:bg-red-50 transition font-semibold text-left"
                     >
                       <span className="material-symbols-outlined text-base text-red-500">logout</span>
-                      <span>Cerrar Sesión</span>
+                      <span>{t("nav.logout", "Cerrar Sesión")}</span>
                     </button>
                   </div>
                 </>
@@ -203,7 +203,7 @@ export default function Header({ activePage }: HeaderProps) {
       <MobileDrawer
         isOpen={isMobileMenuOpen}
         onClose={() => setIsMobileMenuOpen(false)}
-        title="Navegación Piano Colombia"
+        title={t("nav.navigation", "Navegación Piano Colombia")}
       >
         <div className="space-y-6 py-1">
           {/* Header Interno de Marca */}
@@ -220,7 +220,7 @@ export default function Header({ activePage }: HeaderProps) {
                 PIANO COLOMBIA
               </span>
               <span className="text-[9px] font-extrabold text-[#4C4546] uppercase tracking-wider font-montserrat block mt-0.5">
-                Archivo Digital Urtext
+                {t("nav.digital_archive", "Archivo Digital Urtext")}
               </span>
             </div>
           </div>
@@ -228,7 +228,7 @@ export default function Header({ activePage }: HeaderProps) {
           {/* Enlaces Principales de Navegación */}
           <div className="space-y-1">
             <span className="text-[10px] font-extrabold text-[#4C4546] uppercase tracking-widest block font-montserrat px-1 mb-2">
-              Explorar Tienda
+              {t("nav.explore_store", "Explorar Tienda")}
             </span>
             <nav className="space-y-1 text-xs font-semibold">
               {mobileNav.map((item) => {
@@ -260,7 +260,7 @@ export default function Header({ activePage }: HeaderProps) {
           {/* Área de Compras & Usuario */}
           <div className="space-y-2 pt-3 border-t border-black/5">
             <span className="text-[10px] font-extrabold text-[#4C4546] uppercase tracking-widest block font-montserrat px-1 mb-1">
-              Mi Cuenta & Carrito
+              {t("nav.my_account", "Mi Cuenta")} & {t("nav.cart", "Carrito")}
             </span>
 
             {/* Link al Carrito */}
@@ -271,14 +271,14 @@ export default function Header({ activePage }: HeaderProps) {
             >
               <div className="flex items-center gap-3">
                 <span className="material-symbols-outlined text-lg text-[#0071BC]">shopping_cart</span>
-                <span>Mi Carrito de Compras</span>
+                <span>{t("cart.title", "Mi Carrito de Compras")}</span>
               </div>
               {totalItems > 0 ? (
                 <span className="px-2 py-0.5 rounded-full bg-[#C1272D] text-white text-[10px] font-black">
-                  {totalItems} ítems
+                  {totalItems}
                 </span>
               ) : (
-                <span className="text-[10px] text-[#4C4546] font-normal">Vacío</span>
+                <span className="text-[10px] text-[#4C4546] font-normal">{t("cart.empty_short", "Vacío")}</span>
               )}
             </Link>
 
@@ -304,7 +304,7 @@ export default function Header({ activePage }: HeaderProps) {
                     }}
                     className="px-2.5 py-1 bg-white border border-red-200 text-red-600 rounded-lg text-[10px] font-bold hover:bg-red-50"
                   >
-                    Salir
+                    {t("nav.logout", "Salir")}
                   </button>
                 </div>
                 <Link
@@ -314,7 +314,7 @@ export default function Header({ activePage }: HeaderProps) {
                 >
                   <div className="flex items-center gap-2.5 text-[#0071BC]">
                     <span className="material-symbols-outlined text-base">cloud_download</span>
-                    <span>Mis Partituras & Licencias</span>
+                    <span>{t("nav.scores_and_downloads", "Mis Partituras & Descargas")}</span>
                   </div>
                   <span className="material-symbols-outlined text-sm text-[#4C4546]/50">chevron_right</span>
                 </Link>
@@ -325,7 +325,7 @@ export default function Header({ activePage }: HeaderProps) {
                 >
                   <div className="flex items-center gap-2.5 text-[#C1272D]">
                     <span className="material-symbols-outlined text-base">bookmark</span>
-                    <span>Partituras Guardadas</span>
+                    <span>{t("nav.saved_scores", "Partituras Guardadas")}</span>
                   </div>
                   {savedScores.length > 0 ? (
                     <span className="px-2 py-0.5 rounded-full bg-red-100 text-[#C1272D] text-[10px] font-black font-montserrat">
@@ -344,7 +344,7 @@ export default function Header({ activePage }: HeaderProps) {
               >
                 <div className="flex items-center gap-3">
                   <span className="material-symbols-outlined text-lg text-[#0071BC]">person</span>
-                  <span>Mi Cuenta / Iniciar Sesión</span>
+                  <span>{t("nav.my_account", "Mi Cuenta")}</span>
                 </div>
                 <span className="material-symbols-outlined text-sm text-[#4C4546]/50">chevron_right</span>
               </Link>
@@ -356,7 +356,7 @@ export default function Header({ activePage }: HeaderProps) {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-[#FBB03B]">
                 <span className="material-symbols-outlined text-xl">music_note</span>
-                <span className="text-xs font-black uppercase tracking-wider">Espacio Compositor</span>
+                <span className="text-xs font-black uppercase tracking-wider">{t("nav.composer_portal", "Portal Compositor")}</span>
               </div>
               <span className="text-[9px] px-2 py-0.5 rounded-full bg-[#FBB03B]/20 text-[#FBB03B] font-bold border border-[#FBB03B]/30 uppercase">
                 Wompi API
@@ -364,7 +364,7 @@ export default function Header({ activePage }: HeaderProps) {
             </div>
 
             <p className="text-[11px] text-slate-300 leading-relaxed font-normal">
-              Publica tus partituras, gestiona derechos de autor y recibe pagos de regalías directo a tu banco.
+              {t("auth.composer_subtitle", "Publica tus partituras, gestiona derechos de autor y recibe pagos de regalías directo a tu banco.")}
             </p>
 
             <div className="grid grid-cols-2 gap-2 pt-1">
@@ -373,14 +373,14 @@ export default function Header({ activePage }: HeaderProps) {
                 onClick={() => setIsMobileMenuOpen(false)}
                 className="py-2.5 bg-[#FBB03B] hover:bg-[#e09b2d] text-[#111C2D] text-[11px] font-extrabold uppercase tracking-wider rounded-xl transition text-center shadow-xs block"
               >
-                Ingresar
+                {t("nav.login", "Ingresar")}
               </Link>
               <Link
                 href="/compositor/registro"
                 onClick={() => setIsMobileMenuOpen(false)}
                 className="py-2.5 bg-white/10 hover:bg-white/20 text-white border border-white/20 text-[11px] font-bold uppercase tracking-wider rounded-xl transition text-center block"
               >
-                Registrarme
+                {t("footer.composer_register", "Registrarme")}
               </Link>
             </div>
           </div>
@@ -389,9 +389,9 @@ export default function Header({ activePage }: HeaderProps) {
           <div className="pt-2 text-[11px] text-[#4C4546] space-y-2 font-montserrat">
             <div className="flex items-center justify-between p-2.5 bg-[#F0F3FF]/60 rounded-xl border border-black/5">
               <span className="font-semibold flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-sm text-[#0071BC]">language</span> Moneda & Idioma:
+                <span className="material-symbols-outlined text-sm text-[#0071BC]">language</span> {t("nav.language", "Idioma")}:
               </span>
-              <span className="font-extrabold text-[#111C2D]">ES | COP ($)</span>
+              <LanguageSwitcher />
             </div>
             <div className="text-center pt-1 text-[10px] text-[#4C4546]">
               Soporte: <strong className="text-[#0071BC]">soporte@pianocolombia.com</strong>

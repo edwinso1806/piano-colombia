@@ -4,6 +4,7 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import { useSavedScores } from "@/context/SavedScoresContext";
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/context/LanguageContext";
 
 interface SaveScoreButtonProps {
   score: {
@@ -31,6 +32,8 @@ export default function SaveScoreButton({
   const router = useRouter();
   const { customer } = useAuth();
   const { isSaved, toggleSaveScore } = useSavedScores();
+  const { language } = useLanguage();
+  const isEn = language === "en";
 
   const isLoggedIn = Boolean(customer?.email);
   const saved = isLoggedIn && isSaved(score);
@@ -56,8 +59,12 @@ export default function SaveScoreButton({
   };
 
   const getTitle = () => {
-    if (!isLoggedIn) return "Inicia sesión para guardar en tus favoritos";
-    return saved ? "Quitar de mis partituras favoritas" : "Guardar en favoritos";
+    if (!isLoggedIn) {
+      return isEn ? "Sign in to save to your favorites" : "Inicia sesión para guardar en tus favoritos";
+    }
+    return saved
+      ? (isEn ? "Remove from my favorite scores" : "Quitar de mis partituras favoritas")
+      : (isEn ? "Save to favorites" : "Guardar en favoritos");
   };
 
   if (variant === "button") {
@@ -80,7 +87,11 @@ export default function SaveScoreButton({
         >
           {saved ? "bookmark_added" : "bookmark_add"}
         </span>
-        <span>{saved ? "Partitura Guardada" : "Guardar en Favoritos"}</span>
+        <span>
+          {saved
+            ? (isEn ? "Score Saved" : "Partitura Guardada")
+            : (isEn ? "Save to Favorites" : "Guardar en Favoritos")}
+        </span>
       </button>
     );
   }
@@ -103,7 +114,11 @@ export default function SaveScoreButton({
         >
           {saved ? "bookmark" : "bookmark_border"}
         </span>
-        {showText && <span>{saved ? "Guardada" : "Guardar"}</span>}
+        {showText && (
+          <span>
+            {saved ? (isEn ? "Saved" : "Guardada") : (isEn ? "Save" : "Guardar")}
+          </span>
+        )}
       </button>
     );
   }

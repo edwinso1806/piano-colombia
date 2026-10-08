@@ -5,6 +5,7 @@ import {
   sendEmail,
   generateComposerRejectedHTML,
   generateComposerBlockedHTML,
+  EMAIL_SUBJECTS,
 } from "../../../../../lib/resend-mailer"
 
 function getPgClient() {
@@ -53,30 +54,33 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       if (composerData && composerData.email) {
         const composerFullName = `${composerData.first_name || ""} ${composerData.last_name || ""}`.trim()
         const artisticName = composerData.artistic_name || composerFullName
+        const composerLang = (composerData as any).preferred_language === "en" ? "en" : "es"
 
         if (is_permanent_block) {
           await sendEmail({
             to: composerData.email,
-            subject: "🚫 Notificación Oficial: Solicitud No Aceptada - Piano Colombia",
+            subject: EMAIL_SUBJECTS.composerBlocked[composerLang],
             html: generateComposerBlockedHTML({
               composerName: composerFullName,
               artisticName,
               reason: rejectionReason,
+              lang: composerLang,
             }),
           })
-          console.log(`📧 Correo de bloqueo definitivo enviado a ${composerData.email}`)
+          console.log(`📧 Correo de bloqueo definitivo enviado a ${composerData.email} (Idioma: ${composerLang})`)
         } else {
           await sendEmail({
             to: composerData.email,
-            subject: "⚠️ Observaciones a tu perfil de Compositor - Piano Colombia",
+            subject: EMAIL_SUBJECTS.composerRejected[composerLang],
             html: generateComposerRejectedHTML({
               composerName: composerFullName,
               artisticName,
               observations: rejectionReason,
               dashboardUrl: "http://localhost:3000/compositor/dashboard/perfil",
+              lang: composerLang,
             }),
           })
-          console.log(`📧 Correo con observaciones de rechazo enviado a ${composerData.email}`)
+          console.log(`📧 Correo con observaciones de rechazo enviado a ${composerData.email} (Idioma: ${composerLang})`)
         }
       }
     } catch (emailErr: any) {

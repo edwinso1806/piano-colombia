@@ -30,6 +30,7 @@ export const Composer = model.define("composer", {
   salt: model.text().nullable(),
   is_featured: model.boolean().default(false),
   commission_percentage: model.number().nullable(), // Porcentaje personalizado (ej: 15 para 15%). Si es null, aplica el general.
+  preferred_language: model.text().default("es"),
   bank_account: model.hasOne(() => ComposerBankAccount, {
     mappedBy: "composer",
   }).nullable(),

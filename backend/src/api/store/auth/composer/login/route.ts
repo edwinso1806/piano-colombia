@@ -1,6 +1,7 @@
 import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { COMPOSER_MODULE } from "../../../../../modules/composer"
 import { generateSessionToken, verifyPassword } from "../../../../../lib/auth-security"
+import { extractLanguage } from "../../../../../lib/resend-mailer"
 
 export const AUTHENTICATE = false
 
@@ -8,10 +9,11 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
   try {
     const composerModuleService = req.scope.resolve(COMPOSER_MODULE)
     const { email, password } = (req.body as any) || {}
+    const lang = extractLanguage(req)
 
     if (!email || !password) {
       return res.status(400).json({
-        message: "Email y contraseña son obligatorios",
+        message: lang === "en" ? "Email and password are required" : "Email y contraseña son obligatorios",
       })
     }
 
@@ -24,7 +26,9 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
 
     if (!composers || composers.length === 0) {
       return res.status(401).json({
-        message: "Correo o contraseña incorrectos. Por favor verifica tus credenciales.",
+        message: lang === "en"
+          ? "Incorrect email or password. Please verify your credentials."
+          : "Correo o contraseña incorrectos. Por favor verifica tus credenciales.",
       })
     }
 
@@ -33,21 +37,27 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
     // Validar contraseña criptográfica (pbkdf2 + salt)
     if (!composer.password_hash || !composer.salt) {
       return res.status(401).json({
-        message: "Esta cuenta de compositor no tiene una contraseña configurada. Por favor utiliza 'Olvidé mi contraseña' o regístrate.",
+        message: lang === "en"
+          ? "This composer account does not have a configured password. Please use 'Forgot password' or register."
+          : "Esta cuenta de compositor no tiene una contraseña configurada. Por favor utiliza 'Olvidé mi contraseña' o regístrate.",
       })
     }
 
     const isPasswordValid = verifyPassword(password, composer.password_hash, composer.salt)
     if (!isPasswordValid) {
       return res.status(401).json({
-        message: "Correo o contraseña incorrectos. Por favor verifica tus credenciales.",
+        message: lang === "en"
+          ? "Incorrect email or password. Please verify your credentials."
+          : "Correo o contraseña incorrectos. Por favor verifica tus credenciales.",
       })
     }
 
     // Las cuentas suspendidas se bloquean, pero PENDING_APPROVAL y REJECTED pueden ingresar para completar/corregir su perfil
     if (composer.status === "SUSPENDED") {
       return res.status(403).json({
-        message: "Esta cuenta de compositor se encuentra suspendida por administración.",
+        message: lang === "en"
+          ? "This composer account is currently suspended by administration."
+          : "Esta cuenta de compositor se encuentra suspendida por administración.",
       })
     }
 
@@ -77,9 +87,10 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       },
     })
   } catch (error: any) {
+    const lang = extractLanguage(req)
     console.error("❌ Error al autenticar compositor:", error)
     return res.status(500).json({
-      message: "Error al autenticar compositor",
+      message: lang === "en" ? "Error authenticating composer" : "Error al autenticar compositor",
       error: error.message,
     })
   }

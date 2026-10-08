@@ -3,7 +3,7 @@ import { DOWNLOAD_MODULE } from "../../../modules/download"
 import { SCORE_MODULE } from "../../../modules/score"
 import { COMPOSER_MODULE } from "../../../modules/composer"
 import { generateWatermarkedScore } from "../../../lib/pdf-watermarker"
-import { sendEmail, generateBuyerPurchaseHTML } from "../../../lib/resend-mailer"
+import { sendEmail, generateBuyerPurchaseHTML, extractLanguage, EMAIL_SUBJECTS } from "../../../lib/resend-mailer"
 import { Client } from "pg"
 import crypto from "crypto"
 
@@ -58,6 +58,8 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
         maxDownloadsAllowed = 5
       }
 
+      const buyerLang = (payload?.lang || payload?.language || payload?.customer_language || extractLanguage(req)) as "es" | "en"
+
       // Registrar descarga protegida en PostgreSQL
       const downloadRecord = await downloadModuleService.createCustomerDownloads({
         order_id: reference,
@@ -72,7 +74,10 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
         buyer_name: customerName,
         buyer_email: customerEmail,
         buyer_tax_id: transaction?.customer_data?.legal_id || null,
-        watermark_text: `Licencia Oficial Piano Colombia · Comprador: ${customerName} · Ref: ${reference}`,
+        language: buyerLang,
+        watermark_text: buyerLang === "en"
+          ? `Official License Piano Colombia · Buyer: ${customerName} · Ref: ${reference}`
+          : `Licencia Oficial Piano Colombia · Comprador: ${customerName} · Ref: ${reference}`,
         expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 días
       })
 
@@ -85,11 +90,12 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
         downloadUrl,
         token: downloadToken,
         priceCop: Math.round(amountInCents / 100),
+        lang: buyerLang,
       })
 
       await sendEmail({
         to: customerEmail,
-        subject: `🎹 Tu Partitura: "${score?.title || "Obra Urtext"}" ya está disponible para descarga`,
+        subject: EMAIL_SUBJECTS.buyerPurchase[buyerLang](score?.title || (buyerLang === "en" ? "Urtext Sheet Music" : "Partitura Urtext")),
         html: purchaseHTML,
       })
 

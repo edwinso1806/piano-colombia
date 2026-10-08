@@ -1,16 +1,19 @@
 import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { CUSTOMER_MODULE } from "../../../../../modules/customer"
 import { generateRegistrationOtp } from "../../../../../lib/otp-service"
-import { sendEmail, generateOtpEmailHTML } from "../../../../../lib/resend-mailer"
+import { sendEmail, generateOtpEmailHTML, extractLanguage, EMAIL_SUBJECTS } from "../../../../../lib/resend-mailer"
 
 export async function POST(req: MedusaRequest, res: MedusaResponse) {
   try {
     const customerModuleService = req.scope.resolve(CUSTOMER_MODULE)
     const { email, password, full_name, phone, tax_id } = (req.body as any) || {}
+    const lang = extractLanguage(req)
 
     if (!email || !password || !full_name) {
       return res.status(400).json({
-        message: "Email, contraseña y nombre completo son obligatorios para iniciar el registro",
+        message: lang === "en"
+          ? "Email, password, and full name are required to start registration"
+          : "Email, contraseña y nombre completo son obligatorios para iniciar el registro",
       })
     }
 
@@ -23,7 +26,9 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
 
     if (existing && existing.length > 0) {
       return res.status(400).json({
-        message: "Ya existe una cuenta registrada con este correo electrónico",
+        message: lang === "en"
+          ? "An account is already registered with this email address"
+          : "Ya existe una cuenta registrada con este correo electrónico",
       })
     }
 
@@ -40,11 +45,12 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
     const emailHtml = generateOtpEmailHTML({
       userName: full_name.trim(),
       otpCode,
+      lang,
     })
 
     const emailResult = await sendEmail({
       to: normalizedEmail,
-      subject: `🔐 Tu código de verificación de Piano Colombia: ${otpCode}`,
+      subject: EMAIL_SUBJECTS.otpVerification[lang](otpCode),
       html: emailHtml,
     })
 
@@ -52,13 +58,18 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
 
     return res.status(200).json({
       success: true,
-      message: `Hemos enviado un código de verificación de 6 dígitos a ${normalizedEmail}`,
+      message: lang === "en"
+        ? `We have sent a 6-digit verification code to ${normalizedEmail}`
+        : `Hemos enviado un código de verificación de 6 dígitos a ${normalizedEmail}`,
       email: normalizedEmail,
     })
   } catch (error: any) {
+    const lang = extractLanguage(req)
     console.error("❌ Error en envío de OTP de registro:", error)
     return res.status(500).json({
-      message: "Error al generar código de verificación de correo",
+      message: lang === "en"
+        ? "Error generating email verification code"
+        : "Error al generar código de verificación de correo",
       error: error.message,
     })
   }

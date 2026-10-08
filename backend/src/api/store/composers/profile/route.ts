@@ -1,7 +1,7 @@
 import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { Client } from "pg"
 import { getAdminAndModeratorEmailsFromDB } from "../../../../lib/admin-recipient-service"
-import { sendEmail, generateComposerProfileUpdatedAdminNotificationHTML } from "../../../../lib/resend-mailer"
+import { sendEmail, generateComposerProfileUpdatedAdminNotificationHTML, extractLanguage, EMAIL_SUBJECTS } from "../../../../lib/resend-mailer"
 
 export const AUTHENTICATE = false
 
@@ -247,6 +247,7 @@ export async function PUT(req: MedusaRequest, res: MedusaResponse) {
     // 5. Notificar vía correo electrónico a TODOS los Administradores y Moderadores
     if (submit_for_review) {
       try {
+        const lang = extractLanguage(req)
         const adminRecipients = await getAdminAndModeratorEmailsFromDB(req)
         const composerFullName = `${updatedRow.first_name || ""} ${updatedRow.last_name || ""}`.trim()
         const artisticName = updatedRow.artistic_name || composerFullName
@@ -257,8 +258,8 @@ export async function PUT(req: MedusaRequest, res: MedusaResponse) {
         const sendPromises = adminRecipients.map((recipient) =>
           sendEmail({
             to: recipient.email,
-            subject: `🚨 [Piano Colombia] Modificación de Perfil de Compositor - ${artisticName} (Intento #${currentAttempts})`,
-            html: (generateComposerProfileUpdatedAdminNotificationHTML as any)({
+            subject: `${EMAIL_SUBJECTS.adminProfileUpdated[lang](artisticName)} (${lang === "en" ? "Attempt" : "Intento"} #${currentAttempts})`,
+            html: generateComposerProfileUpdatedAdminNotificationHTML({
               adminName: recipient.name,
               composerName: composerFullName,
               artisticName,
@@ -268,7 +269,7 @@ export async function PUT(req: MedusaRequest, res: MedusaResponse) {
               previousStatus,
               wasApproved,
               approvalAttempts: currentAttempts,
-              adminDashboardUrl: "http://localhost:3000/admin/compositores",
+              lang,
             }),
           })
         )

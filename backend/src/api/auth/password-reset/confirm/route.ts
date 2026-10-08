@@ -1,6 +1,7 @@
 import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { Client } from "pg"
 import { generateSessionToken, hashPassword } from "../../../../lib/auth-security"
+import { extractLanguage } from "../../../../lib/resend-mailer"
 
 export const AUTHENTICATE = false
 
@@ -32,18 +33,23 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
   const client = getPgClient()
   try {
     const { email, code, new_password, token } = (req.body as any) || {}
+    const lang = extractLanguage(req)
 
     if (!email || !code || !new_password) {
       return res.status(400).json({
         success: false,
-        message: "El correo, el código OTP de 6 dígitos y la nueva contraseña son obligatorios.",
+        message: lang === "en"
+          ? "Email, 6-digit OTP code, and new password are required."
+          : "El correo, el código OTP de 6 dígitos y la nueva contraseña son obligatorios.",
       })
     }
 
     if (new_password.length < 6) {
       return res.status(400).json({
         success: false,
-        message: "La contraseña debe tener al menos 6 caracteres por seguridad.",
+        message: lang === "en"
+          ? "Password must be at least 6 characters long for security."
+          : "La contraseña debe tener al menos 6 caracteres por seguridad.",
       })
     }
 
@@ -73,7 +79,9 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       return res.status(400).json({
         success: false,
         security_alert: true,
-        message: "Alerta de Seguridad: No existe ninguna solicitud OTP activa para este correo electrónico. Si cambiaste el correo tras recibir el código, la operación queda bloqueada.",
+        message: lang === "en"
+          ? "Security Alert: No active OTP request exists for this email address. If you changed the email after receiving the code, the operation is blocked."
+          : "Alerta de Seguridad: No existe ninguna solicitud OTP activa para este correo electrónico. Si cambiaste el correo tras recibir el código, la operación queda bloqueada.",
       })
     }
 
@@ -85,7 +93,9 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       await client.query("DELETE FROM password_reset_otp WHERE id = $1;", [otpRecord.id])
       return res.status(400).json({
         success: false,
-        message: "El código OTP ha expirado (validez de 10 minutos). Por favor solicita uno nuevo.",
+        message: lang === "en"
+          ? "The OTP code has expired (10-minute validity). Please request a new one."
+          : "El código OTP ha expirado (validez de 10 minutos). Por favor solicita uno nuevo.",
       })
     }
 
@@ -95,7 +105,9 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       return res.status(429).json({
         success: false,
         security_alert: true,
-        message: "Has superado el límite de 5 intentos fallidos. Por seguridad el código OTP ha sido revocado. Debes solicitar un nuevo código.",
+        message: lang === "en"
+          ? "You have exceeded the limit of 5 failed attempts. The OTP code has been revoked for security. You must request a new code."
+          : "Has superado el límite de 5 intentos fallidos. Por seguridad el código OTP ha sido revocado. Debes solicitar un nuevo código.",
       })
     }
 
@@ -110,13 +122,17 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
         return res.status(429).json({
           success: false,
           security_alert: true,
-          message: "Código OTP incorrecto. Límite de 5 intentos superado. El código ha sido destruido por seguridad. Solicita uno nuevo.",
+          message: lang === "en"
+            ? "Incorrect OTP code. 5-attempt limit reached. The code has been revoked for security. Request a new one."
+            : "Código OTP incorrecto. Límite de 5 intentos superado. El código ha sido destruido por seguridad. Solicita uno nuevo.",
         })
       }
 
       return res.status(400).json({
         success: false,
-        message: `Código OTP incorrecto. Te quedan ${remaining} intento(s) antes de ser revocado por seguridad.`,
+        message: lang === "en"
+          ? `Incorrect OTP code. You have ${remaining} attempt(s) left before being revoked for security.`
+          : `Código OTP incorrecto. Te quedan ${remaining} intento(s) antes de ser revocado por seguridad.`,
       })
     }
 
@@ -138,14 +154,18 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
           return res.status(403).json({
             success: false,
             security_alert: true,
-            message: "Alerta de Seguridad Crítica: El token criptográfico de activación es inválido o no corresponde a esta cuenta de usuario.",
+            message: lang === "en"
+              ? "Critical Security Alert: The cryptographic activation token is invalid or does not match this user account."
+              : "Alerta de Seguridad Crítica: El token criptográfico de activación es inválido o no corresponde a esta cuenta de usuario.",
           })
         }
       } else if (existingAdmin.activation_token) {
         return res.status(403).json({
           success: false,
           security_alert: true,
-          message: "Alerta de Seguridad: Esta cuenta requiere el token de activación original para confirmar la contraseña.",
+          message: lang === "en"
+            ? "Security Alert: This account requires the original activation token to confirm the password."
+            : "Alerta de Seguridad: Esta cuenta requiere el token de activación original para confirmar la contraseña.",
         })
       }
 
@@ -179,7 +199,9 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
 
     return res.status(200).json({
       success: true,
-      message: "¡Contraseña establecida exitosamente! Tu cuenta ha sido activada correctamente.",
+      message: lang === "en"
+        ? "Password successfully set! Your account has been activated."
+        : "¡Contraseña establecida exitosamente! Tu cuenta ha sido activada correctamente.",
       token: sessionJwt,
       admin: {
         email: normalizedEmail,
@@ -188,10 +210,11 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       },
     })
   } catch (error: any) {
+    const lang = extractLanguage(req)
     console.error("❌ Error al confirmar código OTP:", error)
     return res.status(500).json({
       success: false,
-      message: "Error al validar el código OTP de seguridad.",
+      message: lang === "en" ? "Error validating security OTP code." : "Error al validar el código OTP de seguridad.",
       error: error.message,
     })
   } finally {

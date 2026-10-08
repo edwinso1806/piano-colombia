@@ -2,7 +2,7 @@ import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { DOWNLOAD_MODULE } from "../../../../modules/download"
 import { SCORE_MODULE } from "../../../../modules/score"
 import { COMPOSER_MODULE } from "../../../../modules/composer"
-import { sendEmail, generateBuyerPurchaseHTML } from "../../../../lib/resend-mailer"
+import { sendEmail, generateBuyerPurchaseHTML, extractLanguage, EMAIL_SUBJECTS } from "../../../../lib/resend-mailer"
 import { Client } from "pg"
 import crypto from "crypto"
 
@@ -158,6 +158,8 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
         maxDownloadsAllowed = 5
       }
 
+      const buyerLang = extractLanguage(req)
+
       // Registrar descarga protegida con marca de agua en PostgreSQL
       await downloadModuleService.createCustomerDownloads({
         order_id: reference,
@@ -172,7 +174,10 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
         buyer_name: customerName,
         buyer_email: customerEmail,
         buyer_tax_id: customerLegalId,
-        watermark_text: `Licencia Oficial Piano Colombia · Comprador: ${customerName} · Ref: ${reference}`,
+        language: buyerLang,
+        watermark_text: buyerLang === "en"
+          ? `Official License Piano Colombia · Buyer: ${customerName} · Ref: ${reference}`
+          : `Licencia Oficial Piano Colombia · Comprador: ${customerName} · Ref: ${reference}`,
         expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 días
       })
 
@@ -185,11 +190,12 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
         downloadUrl,
         token: downloadToken,
         priceCop: Math.round(amountInCents / 100),
+        lang: buyerLang,
       })
 
       sendEmail({
         to: customerEmail,
-        subject: `🎹 Your Sheet Music: "${score?.title || "Urtext Score"}" is ready for download`,
+        subject: EMAIL_SUBJECTS.buyerPurchase[buyerLang](score?.title || (buyerLang === "en" ? "Urtext Sheet Music" : "Partitura Urtext")),
         html: purchaseHTML,
       }).catch((err) => console.error("Error enviando email pos-compra:", err))
 

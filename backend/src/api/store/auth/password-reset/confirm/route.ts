@@ -1,5 +1,6 @@
 import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { Client } from "pg"
+import { extractLanguage } from "../../../../../lib/resend-mailer"
 
 export const AUTHENTICATE = false
 
@@ -13,18 +14,23 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
   const client = getPgClient()
   try {
     const { email, code, new_password } = (req.body as any) || {}
+    const lang = extractLanguage(req)
 
     if (!email || !code || !new_password) {
       return res.status(400).json({
         success: false,
-        message: "El correo, el código OTP de 6 dígitos y la nueva contraseña son obligatorios.",
+        message: lang === "en"
+          ? "Email, 6-digit OTP code, and new password are required."
+          : "El correo, el código OTP de 6 dígitos y la nueva contraseña son obligatorios.",
       })
     }
 
     if (new_password.length < 6) {
       return res.status(400).json({
         success: false,
-        message: "La contraseña debe tener al menos 6 caracteres por seguridad.",
+        message: lang === "en"
+          ? "Password must be at least 6 characters long for security."
+          : "La contraseña debe tener al menos 6 caracteres por seguridad.",
       })
     }
 
@@ -43,7 +49,9 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
     if (checkOtp.rows.length === 0) {
       return res.status(400).json({
         success: false,
-        message: "El código OTP ingresado es incorrecto o ha expirado. Por favor solicita uno nuevo.",
+        message: lang === "en"
+          ? "The OTP code entered is incorrect or has expired. Please request a new one."
+          : "El código OTP ingresado es incorrecto o ha expirado. Por favor solicita uno nuevo.",
       })
     }
 
@@ -62,14 +70,17 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
 
     return res.status(200).json({
       success: true,
-      message: "¡Contraseña establecida exitosamente! Tu cuenta ha sido activada correctamente.",
+      message: lang === "en"
+        ? "Password successfully set! Your account has been updated."
+        : "¡Contraseña establecida exitosamente! Tu cuenta ha sido activada correctamente.",
       admin: updateAdmin.rows.length > 0 ? updateAdmin.rows[0] : null,
     })
   } catch (error: any) {
+    const lang = extractLanguage(req)
     console.error("❌ Error al confirmar código OTP:", error)
     return res.status(500).json({
       success: false,
-      message: "Error al validar el código OTP de seguridad.",
+      message: lang === "en" ? "Error validating security OTP code." : "Error al validar el código OTP de seguridad.",
       error: error.message,
     })
   } finally {

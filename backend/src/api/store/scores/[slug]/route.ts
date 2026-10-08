@@ -2,7 +2,7 @@ import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { SCORE_MODULE } from "../../../../modules/score"
 import { COMPOSER_MODULE } from "../../../../modules/composer"
 import { getAdminAndModeratorEmailsFromDB } from "../../../../lib/admin-recipient-service"
-import { sendEmail, generateScoreSubmittedAdminNotificationHTML } from "../../../../lib/resend-mailer"
+import { sendEmail, generateScoreSubmittedAdminNotificationHTML, extractLanguage, EMAIL_SUBJECTS } from "../../../../lib/resend-mailer"
 
 export async function GET(req: MedusaRequest, res: MedusaResponse) {
   try {
@@ -78,6 +78,23 @@ export async function PUT(req: MedusaRequest, res: MedusaResponse) {
     }
     if (body.description || body.description_es) {
       updatePayload.description_es = body.description || body.description_es
+      if (!body.description_en && updatePayload.description_es) {
+        try {
+          const transUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=es&tl=en&dt=t&q=${encodeURIComponent(updatePayload.description_es)}`;
+          const transRes = await fetch(transUrl);
+          if (transRes.ok) {
+            const transJson: any = await transRes.json();
+            if (Array.isArray(transJson) && Array.isArray(transJson[0])) {
+              updatePayload.description_en = transJson[0].map((s: any) => s[0]).join('');
+            }
+          }
+        } catch (err: any) {
+          console.warn("Auto-traducción en update omitida:", err.message);
+        }
+      }
+    }
+    if (body.description_en) {
+      updatePayload.description_en = body.description_en;
     }
     if (body.tonality) updatePayload.tonality = body.tonality
     if (body.pages_count) updatePayload.pages_count = Number(body.pages_count)
@@ -93,6 +110,7 @@ export async function PUT(req: MedusaRequest, res: MedusaResponse) {
       if (existing.composer_id) {
         composerInfo = await composerModuleService.retrieveComposer(existing.composer_id).catch(() => null)
       }
+      const lang = extractLanguage(req)
       const adminRecipients = await getAdminAndModeratorEmailsFromDB(req)
       const composerDisplayName = composerInfo?.artistic_name || composerInfo?.full_name || "Compositor PC"
 
@@ -106,11 +124,12 @@ export async function PUT(req: MedusaRequest, res: MedusaResponse) {
           difficulty: updatePayload.difficulty || existing.difficulty,
           priceCop: updatePayload.price_cop || existing.price_cop,
           adminDashboardUrl: "http://localhost:3000/admin/partituras",
+          lang,
         })
 
         await sendEmail({
           to: admin.email,
-          subject: `🎼 Partitura Modificada en Revisión: "${updatePayload.title || existing.title}" - Piano Colombia`,
+          subject: `${EMAIL_SUBJECTS.adminScoreSubmitted[lang](updatePayload.title || existing.title)} (${lang === "en" ? "Modified" : "Modificada"})`,
           html,
         }).catch((err) => console.warn(`Error enviando notificación de partitura editada a ${admin.email}:`, err.message))
       }

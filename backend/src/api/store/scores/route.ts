@@ -2,7 +2,7 @@ import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { SCORE_MODULE } from "../../../modules/score"
 import { COMPOSER_MODULE } from "../../../modules/composer"
 import { getAdminAndModeratorEmailsFromDB } from "../../../lib/admin-recipient-service"
-import { sendEmail, generateScoreSubmittedAdminNotificationHTML } from "../../../lib/resend-mailer"
+import { sendEmail, generateScoreSubmittedAdminNotificationHTML, extractLanguage, EMAIL_SUBJECTS } from "../../../lib/resend-mailer"
 
 export async function GET(req: MedusaRequest, res: MedusaResponse) {
   try {
@@ -115,6 +115,23 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
 
     const ismn = `979-0-901314-${Math.floor(10 + Math.random() * 90)}-${Math.floor(1 + Math.random() * 9)}`
 
+    // Traducción automática asistida si no se proporcionó descripción en inglés
+    let finalDescriptionEn: string | null = (req.body as any)?.description_en || null;
+    if (!finalDescriptionEn && description && description.trim()) {
+      try {
+        const transUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=es&tl=en&dt=t&q=${encodeURIComponent(description)}`;
+        const transRes = await fetch(transUrl);
+        if (transRes.ok) {
+          const transJson: any = await transRes.json();
+          if (Array.isArray(transJson) && Array.isArray(transJson[0])) {
+            finalDescriptionEn = transJson[0].map((s: any) => s[0]).join('');
+          }
+        }
+      } catch (err: any) {
+        console.warn("Auto-traducción en backend omitida:", err.message);
+      }
+    }
+
     const newScore = await scoreModuleService.createScores({
       title,
       slug,
@@ -125,6 +142,7 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       price_usd: Number(price_usd),
       audio_sample_url: audio_preview_url || null,
       description_es: description || null,
+      description_en: finalDescriptionEn,
       pages_count: Number(pages_count) || 4,
       tonality: tonality || "Mi menor",
       status: "IN_REVIEW" as any,
@@ -136,6 +154,7 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
 
     // Enviar notificación por correo a Administradores y Moderadores
     try {
+      const lang = extractLanguage(req)
       const adminRecipients = await getAdminAndModeratorEmailsFromDB(req)
       const composerDisplayName = composerInfo?.artistic_name || composerInfo?.full_name || composer_name || "Compositor PC"
       
@@ -149,11 +168,12 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
           difficulty,
           priceCop: Number(price_cop),
           adminDashboardUrl: "http://localhost:3000/admin/partituras",
+          lang,
         })
 
         await sendEmail({
           to: admin.email,
-          subject: `🎼 Nueva Partitura en Revisión: "${title}" - Piano Colombia`,
+          subject: EMAIL_SUBJECTS.adminScoreSubmitted[lang](title),
           html,
         }).catch((err) => console.warn(`Error enviando correo de partitura a ${admin.email}:`, err.message))
       }

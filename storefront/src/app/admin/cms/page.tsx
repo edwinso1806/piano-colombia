@@ -15,9 +15,19 @@ import {
   updateAdminFeaturedScores,
   getAdminDownloadSettings,
   updateAdminDownloadSettings,
+  getAdminCmsLegalsApi,
+  updateAdminCmsLegalsApi,
+  updateGeneralCommission,
+  CmsLegalSettings,
+  DEFAULT_CMS_LEGAL_SETTINGS,
+  getCmsWhatsAppApi,
+  getAdminCmsWhatsAppApi,
+  updateAdminCmsWhatsAppApi,
+  CmsWhatsAppSettings,
+  DEFAULT_CMS_WHATSAPP_SETTINGS,
 } from "@/lib/api-client";
 
-type CmsTabId = "hero" | "featured_score" | "featured_scores_home" | "stats" | "categories" | "featured_composers" | "blog" | "metadata" | "legals";
+type CmsTabId = "hero" | "featured_score" | "featured_scores_home" | "stats" | "categories" | "featured_composers" | "blog" | "metadata" | "legals" | "whatsapp";
 
 interface CmsTabConfig {
   id: CmsTabId;
@@ -38,6 +48,7 @@ const CMS_TABS_CONFIG: CmsTabConfig[] = [
   { id: "blog", label: "Bitácora & Blog", badge: "Noticias", icon: "article", iconColor: "text-[#0071BC]", group: "home" },
   { id: "metadata", label: "Géneros & Dificultades", badge: "Catálogo", icon: "tune", iconColor: "text-[#0071BC]", group: "catalog_legal" },
   { id: "legals", label: "Páginas Legales & T&C", icon: "gavel", iconColor: "text-[#C1272D]", group: "catalog_legal" },
+  { id: "whatsapp", label: "Soporte WhatsApp (Cliente & Compositor)", badge: "Chat", icon: "chat", iconColor: "text-emerald-600", group: "catalog_legal" },
 ];
 
 export default function AdminCMSPage() {
@@ -139,6 +150,121 @@ export default function AdminCMSPage() {
       });
     } finally {
       setIsSavingCmsDownloads(false);
+    }
+  };
+
+  // Estado de Páginas Legales y Textos de Checkboxes (CMS)
+  const [cmsLegals, setCmsLegals] = useState<CmsLegalSettings>(DEFAULT_CMS_LEGAL_SETTINGS);
+  const [cmsStandardCommission, setCmsStandardCommission] = useState<number>(20);
+  const [isUpdatingCommission, setIsUpdatingCommission] = useState(false);
+  const [isSavingCmsLegals, setIsSavingCmsLegals] = useState(false);
+  const [editingLegalDocId, setEditingLegalDocId] = useState<"composer_terms" | "privacy_policy" | null>(null);
+  const [editingLegalLang, setEditingLegalLang] = useState<"es" | "en">("es");
+
+  useEffect(() => {
+    getAdminCmsLegalsApi()
+      .then((data) => {
+        if (data && data.composer_terms) {
+          setCmsLegals(data);
+          if (data.default_commission_percentage !== undefined) {
+            setCmsStandardCommission(data.default_commission_percentage);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSaveStandardCommission = async () => {
+    setIsUpdatingCommission(true);
+    setFeedback(null);
+    try {
+      await updateGeneralCommission(cmsStandardCommission);
+      setCmsLegals((prev) => ({
+        ...prev,
+        default_commission_percentage: cmsStandardCommission,
+        author_percentage: 100 - cmsStandardCommission,
+      }));
+      setFeedback({
+        type: "success",
+        message: `✅ Porcentaje estándar de plataforma actualizado exitosamente al ${cmsStandardCommission}% (${100 - cmsStandardCommission}% neto autor).`,
+      });
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 3000);
+    } catch (err: any) {
+      setFeedback({
+        type: "error",
+        message: err.message || "Error al actualizar comisión estándar.",
+      });
+    } finally {
+      setIsUpdatingCommission(false);
+    }
+  };
+
+  const handleSaveCmsLegals = async () => {
+    setIsSavingCmsLegals(true);
+    try {
+      const payload: CmsLegalSettings = {
+        ...cmsLegals,
+        default_commission_percentage: cmsStandardCommission,
+        author_percentage: 100 - cmsStandardCommission,
+      };
+      const res = await updateAdminCmsLegalsApi(payload);
+      setCmsLegals(res);
+      if (res.default_commission_percentage !== undefined) {
+        setCmsStandardCommission(res.default_commission_percentage);
+      }
+      setFeedback({
+        type: "success",
+        message: "Textos y páginas legales guardados exitosamente en la base de datos.",
+      });
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 3000);
+      setEditingLegalDocId(null);
+    } catch (err: any) {
+      setFeedback({
+        type: "error",
+        message: err.message || "Error al actualizar textos legales.",
+      });
+    } finally {
+      setIsSavingCmsLegals(false);
+    }
+  };
+
+  // Estado de Canales de WhatsApp (Cliente y Compositor)
+  const [cmsWhatsAppData, setCmsWhatsAppData] = useState<CmsWhatsAppSettings>(DEFAULT_CMS_WHATSAPP_SETTINGS);
+  const [isSavingWhatsApp, setIsSavingWhatsApp] = useState(false);
+  const [editingWhatsAppChannel, setEditingWhatsAppChannel] = useState<"customer_support" | "composer_support">("customer_support");
+  const [editingWhatsAppLang, setEditingWhatsAppLang] = useState<"es" | "en">("es");
+
+  useEffect(() => {
+    getAdminCmsWhatsAppApi()
+      .then((data) => {
+        if (data && data.customer_support && data.composer_support) {
+          setCmsWhatsAppData(data);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSaveCmsWhatsApp = async () => {
+    setIsSavingWhatsApp(true);
+    setFeedback(null);
+    try {
+      const res = await updateAdminCmsWhatsAppApi(cmsWhatsAppData);
+      setCmsWhatsAppData(res);
+      setFeedback({
+        type: "success",
+        message: "✅ ¡Canales de soporte WhatsApp (Cliente & Compositor) guardados exitosamente en PostgreSQL!",
+      });
+      setIsSaved(true);
+      setTimeout(() => setIsSaved(false), 3000);
+    } catch (err: any) {
+      setFeedback({
+        type: "error",
+        message: err.message || "Error al actualizar configuración de WhatsApp.",
+      });
+    } finally {
+      setIsSavingWhatsApp(false);
     }
   };
 
@@ -3183,35 +3309,638 @@ export default function AdminCMSPage() {
                ========================================== */}
         {activeTab === "legals" && (
           <div className="space-y-6">
-            <h2 className="text-base font-bold font-montserrat text-[#111C2D]">Editor de Páginas Legales & Informativas</h2>
-            <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)]">
+              <div>
+                <h2 className="text-base font-bold font-montserrat text-[#111C2D]">Editor de Páginas Legales & Textos de Checkboxes</h2>
+                <p className="text-xs text-[#4C4546]">
+                  Administra las cláusulas de los documentos oficiales y los textos exactos de las casillas de verificación que aceptan los compositores durante su registro.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={isSavingCmsLegals}
+                onClick={handleSaveCmsLegals}
+                className="px-6 py-2.5 bg-[#0071BC] hover:bg-[#005a96] text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition font-montserrat flex items-center gap-2 cursor-pointer disabled:opacity-50 shrink-0"
+              >
+                {isSavingCmsLegals ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    <span>Guardando...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-base text-[#FBB03B]">save</span>
+                    <span>Guardar Textos Legales en BD</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div className="space-y-6">
               
-              <div className="bg-white p-6 rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                  <h3 className="text-base font-bold font-montserrat text-[#111C2D]">Términos y Condiciones para Compositores</h3>
-                  <p className="text-xs text-[#4C4546]">Última versión: 2 de Septiembre, 2026</p>
+              {/* CARD CMS: ESQUEMA DE COMISIÓN ESTÁNDAR Y PORCENTAJES DE REGALÍAS */}
+              <div className="bg-white p-6 rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] space-y-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-3 border-b border-black/5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-200 shrink-0">
+                      <span className="material-symbols-outlined text-xl">payments</span>
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold font-montserrat text-[#111C2D]">
+                        Porcentaje Estándar de Comisión & Liquidación
+                      </h3>
+                      <p className="text-xs text-[#4C4546]">
+                        Configura el porcentaje estándar de la plataforma. Se refleja automáticamente en los Términos y Condiciones y en la casilla de aceptación al registrarse como compositor.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-3.5 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-black font-mono tracking-tight">
+                      {100 - cmsStandardCommission}% Neto Autor / {cmsStandardCommission}% Plataforma
+                    </span>
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => alert("Abriendo editor Rich-Text...")}
-                  className="px-4 py-2 bg-[#FBB03B] hover:bg-[#e09b2e] text-[#111C2D] font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition font-montserrat flex items-center gap-1"
-                >
-                  <span className="material-symbols-outlined text-base">edit_note</span> Editar Documento
-                </button>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1 items-end">
+                  <div>
+                    <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">
+                      Comisión Estándar Plataforma (% retención) *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="1"
+                        value={cmsStandardCommission}
+                        onChange={(e) => setCmsStandardCommission(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+                        className="w-full pl-4 pr-10 py-2.5 bg-[#F0F3FF] border border-black/10 rounded-xl text-sm font-mono font-bold text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                      />
+                      <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-[#4C4546] font-mono">
+                        %
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">
+                      Liquidación Neta para el Autor (Cálculo automático)
+                    </label>
+                    <div className="w-full px-4 py-2.5 bg-slate-100 border border-black/5 rounded-xl text-sm font-mono font-bold text-emerald-700 flex items-center justify-between">
+                      <span>{100 - cmsStandardCommission}% Neto Autor</span>
+                      <span className="material-symbols-outlined text-base text-emerald-600">verified</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <button
+                      type="button"
+                      disabled={isUpdatingCommission}
+                      onClick={handleSaveStandardCommission}
+                      className="w-full px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition font-montserrat flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {isUpdatingCommission ? (
+                        <>
+                          <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                          <span>Guardando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="material-symbols-outlined text-base">save</span>
+                          <span>Guardar Comisión en BD</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-blue-50/70 rounded-xl border border-blue-200/80 text-blue-900 text-xs flex items-start gap-2.5 leading-relaxed">
+                  <span className="material-symbols-outlined text-base text-[#0071BC] shrink-0 mt-0.5">info</span>
+                  <p>
+                    <strong>Comodines dinámicos:</strong> En los textos de las casillas y en el contenido de las cláusulas puedes escribir{" "}
+                    <code className="bg-blue-100 text-blue-950 px-1 py-0.5 rounded font-mono font-bold">{"{author_percent}"}</code> y{" "}
+                    <code className="bg-blue-100 text-blue-950 px-1 py-0.5 rounded font-mono font-bold">{"{platform_percent}"}</code>. El sistema interpolará automáticamente{" "}
+                    <strong>{100 - cmsStandardCommission}%</strong> para el autor y <strong>{cmsStandardCommission}%</strong> para Piano Colombia.
+                  </p>
+                </div>
               </div>
 
-              <div className="bg-white p-6 rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                  <h3 className="text-base font-bold font-montserrat text-[#111C2D]">Política de Tratamiento de Datos Personales</h3>
-                  <p className="text-xs text-[#4C4546]">Última versión: 2 de Septiembre, 2026</p>
+              {/* DOCUMENTO 1: TÉRMINOS Y CONDICIONES PARA COMPOSITORES */}
+              <div className="bg-white p-6 rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] space-y-5">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-black/5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center border border-amber-200 shrink-0">
+                      <span className="material-symbols-outlined text-xl">gavel</span>
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold font-montserrat text-[#111C2D]">
+                        {cmsLegals.composer_terms.title_es}
+                      </h3>
+                      <p className="text-xs text-[#4C4546]">
+                        {cmsLegals.composer_terms.updated_at_text_es} • {cmsLegals.composer_terms.updated_at_text_en}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setEditingLegalDocId(editingLegalDocId === "composer_terms" ? null : "composer_terms")}
+                    className="px-4 py-2 bg-[#FBB03B] hover:bg-[#e09b2e] text-[#111C2D] font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-xs transition font-montserrat flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-base">
+                      {editingLegalDocId === "composer_terms" ? "expand_less" : "edit_note"}
+                    </span>
+                    {editingLegalDocId === "composer_terms" ? "Ocultar Editor" : "Editar Documento & Checkbox"}
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => alert("Abriendo editor Rich-Text...")}
-                  className="px-4 py-2 bg-[#FBB03B] hover:bg-[#e09b2e] text-[#111C2D] font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition font-montserrat flex items-center gap-1"
-                >
-                  <span className="material-symbols-outlined text-base">edit_note</span> Editar Documento
-                </button>
+
+                {/* Vista previa del checkbox en el registro */}
+                <div className="p-4 bg-[#F0F3FF]/70 rounded-xl border border-black/5 space-y-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#0071BC] font-montserrat block">
+                    Vista previa de la casilla en el formulario de registro:
+                  </span>
+                  <div className="space-y-1.5 text-xs text-[#111C2D]">
+                    <div className="flex items-start gap-2">
+                      <span className="text-[10px] font-bold bg-slate-200 px-1.5 py-0.5 rounded text-slate-700">ES</span>
+                      <p>
+                        {(() => {
+                          const authorPct = 100 - cmsStandardCommission;
+                          const platformPct = cmsStandardCommission;
+                          const interpolated = cmsLegals.composer_terms.checkbox_text_es
+                            .replace(/\{author_percent\}/g, String(authorPct))
+                            .replace(/\{platform_percent\}/g, String(platformPct))
+                            .replace(/\b\d+%\s*neto\s*autor\s*\/\s*\d+%\s*plataforma\b/gi, `${authorPct}% neto autor / ${platformPct}% plataforma`);
+                          if (interpolated.includes("{link}")) {
+                            const [before, after] = interpolated.split("{link}");
+                            return (
+                              <>
+                                {before}
+                                <span className="text-[#0071BC] font-bold underline font-montserrat">
+                                  {cmsLegals.composer_terms.link_text_es}
+                                </span>
+                                {after}
+                              </>
+                            );
+                          }
+                          return interpolated;
+                        })()}
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="text-[10px] font-bold bg-blue-100 px-1.5 py-0.5 rounded text-blue-700">EN</span>
+                      <p>
+                        {(() => {
+                          const authorPct = 100 - cmsStandardCommission;
+                          const platformPct = cmsStandardCommission;
+                          const interpolated = cmsLegals.composer_terms.checkbox_text_en
+                            .replace(/\{author_percent\}/g, String(authorPct))
+                            .replace(/\{platform_percent\}/g, String(platformPct))
+                            .replace(/\b\d+%\s*net\s*author\s*\/\s*\d+%\s*platform\b/gi, `${authorPct}% net author / ${platformPct}% platform`);
+                          if (interpolated.includes("{link}")) {
+                            const [before, after] = interpolated.split("{link}");
+                            return (
+                              <>
+                                {before}
+                                <span className="text-[#0071BC] font-bold underline font-montserrat">
+                                  {cmsLegals.composer_terms.link_text_en}
+                                </span>
+                                {after}
+                              </>
+                            );
+                          }
+                          return interpolated;
+                        })()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Formulario editable desplegable */}
+                {editingLegalDocId === "composer_terms" && (
+                  <div className="space-y-5 pt-3 border-t border-black/5 animate-in fade-in duration-200">
+                    {/* Selector de Idioma para Edición */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-[#4C4546]">Idioma a editar:</span>
+                      <div className="inline-flex rounded-xl bg-[#F0F3FF] p-1 border border-black/5">
+                        <button
+                          type="button"
+                          onClick={() => setEditingLegalLang("es")}
+                          className={`px-3 py-1 rounded-lg text-xs font-bold transition font-montserrat ${
+                            editingLegalLang === "es"
+                              ? "bg-white text-[#111C2D] shadow-xs"
+                              : "text-[#4C4546] hover:text-[#111C2D]"
+                          }`}
+                        >
+                          🇪🇸 Español
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingLegalLang("en")}
+                          className={`px-3 py-1 rounded-lg text-xs font-bold transition font-montserrat ${
+                            editingLegalLang === "en"
+                              ? "bg-white text-[#0071BC] shadow-xs"
+                              : "text-[#4C4546] hover:text-[#111C2D]"
+                          }`}
+                        >
+                          🇺🇸 Inglés (English)
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-[#111C2D] mb-1 font-montserrat">
+                          Título Oficial del Documento ({editingLegalLang === "es" ? "Español" : "Inglés"}) *
+                        </label>
+                        <input
+                          type="text"
+                          value={
+                            editingLegalLang === "es"
+                              ? cmsLegals.composer_terms.title_es
+                              : cmsLegals.composer_terms.title_en
+                          }
+                          onChange={(e) =>
+                            setCmsLegals({
+                              ...cmsLegals,
+                              composer_terms: {
+                                ...cmsLegals.composer_terms,
+                                [editingLegalLang === "es" ? "title_es" : "title_en"]: e.target.value,
+                              },
+                            })
+                          }
+                          className="w-full px-3.5 py-2.5 bg-[#F0F3FF] border border-black/10 rounded-xl text-xs text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-[#111C2D] mb-1 font-montserrat">
+                          Fecha / Versión mostrada ({editingLegalLang === "es" ? "Español" : "Inglés"}) *
+                        </label>
+                        <input
+                          type="text"
+                          value={
+                            editingLegalLang === "es"
+                              ? cmsLegals.composer_terms.updated_at_text_es
+                              : cmsLegals.composer_terms.updated_at_text_en
+                          }
+                          onChange={(e) =>
+                            setCmsLegals({
+                              ...cmsLegals,
+                              composer_terms: {
+                                ...cmsLegals.composer_terms,
+                                [editingLegalLang === "es" ? "updated_at_text_es" : "updated_at_text_en"]: e.target.value,
+                              },
+                            })
+                          }
+                          className="w-full px-3.5 py-2.5 bg-[#F0F3FF] border border-black/10 rounded-xl text-xs text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-[#111C2D] mb-1 font-montserrat">
+                          Texto del Enlace Clickable ({editingLegalLang === "es" ? "Español" : "Inglés"}) *
+                        </label>
+                        <input
+                          type="text"
+                          value={
+                            editingLegalLang === "es"
+                              ? cmsLegals.composer_terms.link_text_es
+                              : cmsLegals.composer_terms.link_text_en
+                          }
+                          onChange={(e) =>
+                            setCmsLegals({
+                              ...cmsLegals,
+                              composer_terms: {
+                                ...cmsLegals.composer_terms,
+                                [editingLegalLang === "es" ? "link_text_es" : "link_text_en"]: e.target.value,
+                              },
+                            })
+                          }
+                          className="w-full px-3.5 py-2.5 bg-[#F0F3FF] border border-black/10 rounded-xl text-xs text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-[#111C2D] mb-1 font-montserrat">
+                          Texto Completo del Checkbox ({editingLegalLang === "es" ? "Español" : "Inglés"}) *
+                          <span className="text-[10px] font-normal text-[#0071BC] ml-2">Usa {"{link}"}, {"{author_percent}"}% y {"{platform_percent}"}%</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={
+                            editingLegalLang === "es"
+                              ? cmsLegals.composer_terms.checkbox_text_es
+                              : cmsLegals.composer_terms.checkbox_text_en
+                          }
+                          onChange={(e) =>
+                            setCmsLegals({
+                              ...cmsLegals,
+                              composer_terms: {
+                                ...cmsLegals.composer_terms,
+                                [editingLegalLang === "es" ? "checkbox_text_es" : "checkbox_text_en"]: e.target.value,
+                              },
+                            })
+                          }
+                          className="w-full px-3.5 py-2.5 bg-[#F0F3FF] border border-black/10 rounded-xl text-xs text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-[#111C2D] mb-1 font-montserrat">
+                        Contenido Completo de los Términos ({editingLegalLang === "es" ? "Español" : "Inglés"}) *
+                      </label>
+                      <textarea
+                        rows={9}
+                        value={
+                          editingLegalLang === "es"
+                            ? cmsLegals.composer_terms.content_es
+                            : cmsLegals.composer_terms.content_en
+                        }
+                        onChange={(e) =>
+                          setCmsLegals({
+                            ...cmsLegals,
+                            composer_terms: {
+                              ...cmsLegals.composer_terms,
+                              [editingLegalLang === "es" ? "content_es" : "content_en"]: e.target.value,
+                            },
+                          })
+                        }
+                        className="w-full p-4 bg-[#F0F3FF] border border-black/10 rounded-xl text-xs text-[#111C2D] font-mono leading-relaxed focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                      ></textarea>
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditingLegalDocId(null)}
+                        className="px-4 py-2 border border-black/10 rounded-xl text-xs font-bold text-[#4C4546] hover:bg-slate-100 transition"
+                      >
+                        Cerrar Edición
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isSavingCmsLegals}
+                        onClick={handleSaveCmsLegals}
+                        className="px-6 py-2 bg-[#0071BC] hover:bg-[#005a96] text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition font-montserrat flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        <span className="material-symbols-outlined text-sm text-[#FBB03B]">save</span>
+                        Guardar Términos en BD
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* DOCUMENTO 2: POLÍTICA DE TRATAMIENTO DE DATOS PERSONALES */}
+              <div className="bg-white p-6 rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] space-y-5">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-black/5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-[#0071BC] flex items-center justify-center border border-blue-200 shrink-0">
+                      <span className="material-symbols-outlined text-xl">shield</span>
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold font-montserrat text-[#111C2D]">
+                        {cmsLegals.privacy_policy.title_es}
+                      </h3>
+                      <p className="text-xs text-[#4C4546]">
+                        {cmsLegals.privacy_policy.updated_at_text_es} • {cmsLegals.privacy_policy.updated_at_text_en}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setEditingLegalDocId(editingLegalDocId === "privacy_policy" ? null : "privacy_policy")}
+                    className="px-4 py-2 bg-[#FBB03B] hover:bg-[#e09b2e] text-[#111C2D] font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-xs transition font-montserrat flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-base">
+                      {editingLegalDocId === "privacy_policy" ? "expand_less" : "edit_note"}
+                    </span>
+                    {editingLegalDocId === "privacy_policy" ? "Ocultar Editor" : "Editar Documento & Checkbox"}
+                  </button>
+                </div>
+
+                {/* Vista previa del checkbox en el registro */}
+                <div className="p-4 bg-[#F0F3FF]/70 rounded-xl border border-black/5 space-y-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#0071BC] font-montserrat block">
+                    Vista previa de la casilla en el formulario de registro:
+                  </span>
+                  <div className="space-y-1.5 text-xs text-[#111C2D]">
+                    <div className="flex items-start gap-2">
+                      <span className="text-[10px] font-bold bg-slate-200 px-1.5 py-0.5 rounded text-slate-700">ES</span>
+                      <p>
+                        {cmsLegals.privacy_policy.checkbox_text_es.includes("{link}") ? (
+                          <>
+                            {cmsLegals.privacy_policy.checkbox_text_es.split("{link}")[0]}
+                            <span className="text-[#0071BC] font-bold underline font-montserrat">
+                              {cmsLegals.privacy_policy.link_text_es}
+                            </span>
+                            {cmsLegals.privacy_policy.checkbox_text_es.split("{link}")[1]}
+                          </>
+                        ) : (
+                          cmsLegals.privacy_policy.checkbox_text_es
+                        )}
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="text-[10px] font-bold bg-blue-100 px-1.5 py-0.5 rounded text-blue-700">EN</span>
+                      <p>
+                        {cmsLegals.privacy_policy.checkbox_text_en.includes("{link}") ? (
+                          <>
+                            {cmsLegals.privacy_policy.checkbox_text_en.split("{link}")[0]}
+                            <span className="text-[#0071BC] font-bold underline font-montserrat">
+                              {cmsLegals.privacy_policy.link_text_en}
+                            </span>
+                            {cmsLegals.privacy_policy.checkbox_text_en.split("{link}")[1]}
+                          </>
+                        ) : (
+                          cmsLegals.privacy_policy.checkbox_text_en
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Formulario editable desplegable */}
+                {editingLegalDocId === "privacy_policy" && (
+                  <div className="space-y-5 pt-3 border-t border-black/5 animate-in fade-in duration-200">
+                    {/* Selector de Idioma para Edición */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-[#4C4546]">Idioma a editar:</span>
+                      <div className="inline-flex rounded-xl bg-[#F0F3FF] p-1 border border-black/5">
+                        <button
+                          type="button"
+                          onClick={() => setEditingLegalLang("es")}
+                          className={`px-3 py-1 rounded-lg text-xs font-bold transition font-montserrat ${
+                            editingLegalLang === "es"
+                              ? "bg-white text-[#111C2D] shadow-xs"
+                              : "text-[#4C4546] hover:text-[#111C2D]"
+                          }`}
+                        >
+                          🇪🇸 Español
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingLegalLang("en")}
+                          className={`px-3 py-1 rounded-lg text-xs font-bold transition font-montserrat ${
+                            editingLegalLang === "en"
+                              ? "bg-white text-[#0071BC] shadow-xs"
+                              : "text-[#4C4546] hover:text-[#111C2D]"
+                          }`}
+                        >
+                          🇺🇸 Inglés (English)
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-[#111C2D] mb-1 font-montserrat">
+                          Título Oficial del Documento ({editingLegalLang === "es" ? "Español" : "Inglés"}) *
+                        </label>
+                        <input
+                          type="text"
+                          value={
+                            editingLegalLang === "es"
+                              ? cmsLegals.privacy_policy.title_es
+                              : cmsLegals.privacy_policy.title_en
+                          }
+                          onChange={(e) =>
+                            setCmsLegals({
+                              ...cmsLegals,
+                              privacy_policy: {
+                                ...cmsLegals.privacy_policy,
+                                [editingLegalLang === "es" ? "title_es" : "title_en"]: e.target.value,
+                              },
+                            })
+                          }
+                          className="w-full px-3.5 py-2.5 bg-[#F0F3FF] border border-black/10 rounded-xl text-xs text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-[#111C2D] mb-1 font-montserrat">
+                          Fecha / Versión mostrada ({editingLegalLang === "es" ? "Español" : "Inglés"}) *
+                        </label>
+                        <input
+                          type="text"
+                          value={
+                            editingLegalLang === "es"
+                              ? cmsLegals.privacy_policy.updated_at_text_es
+                              : cmsLegals.privacy_policy.updated_at_text_en
+                          }
+                          onChange={(e) =>
+                            setCmsLegals({
+                              ...cmsLegals,
+                              privacy_policy: {
+                                ...cmsLegals.privacy_policy,
+                                [editingLegalLang === "es" ? "updated_at_text_es" : "updated_at_text_en"]: e.target.value,
+                              },
+                            })
+                          }
+                          className="w-full px-3.5 py-2.5 bg-[#F0F3FF] border border-black/10 rounded-xl text-xs text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-[#111C2D] mb-1 font-montserrat">
+                          Texto del Enlace Clickable ({editingLegalLang === "es" ? "Español" : "Inglés"}) *
+                        </label>
+                        <input
+                          type="text"
+                          value={
+                            editingLegalLang === "es"
+                              ? cmsLegals.privacy_policy.link_text_es
+                              : cmsLegals.privacy_policy.link_text_en
+                          }
+                          onChange={(e) =>
+                            setCmsLegals({
+                              ...cmsLegals,
+                              privacy_policy: {
+                                ...cmsLegals.privacy_policy,
+                                [editingLegalLang === "es" ? "link_text_es" : "link_text_en"]: e.target.value,
+                              },
+                            })
+                          }
+                          className="w-full px-3.5 py-2.5 bg-[#F0F3FF] border border-black/10 rounded-xl text-xs text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-[#111C2D] mb-1 font-montserrat">
+                          Texto Completo del Checkbox ({editingLegalLang === "es" ? "Español" : "Inglés"}) *
+                          <span className="text-[10px] font-normal text-[#0071BC] ml-2">Usa {"{link}"} para el enlace</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={
+                            editingLegalLang === "es"
+                              ? cmsLegals.privacy_policy.checkbox_text_es
+                              : cmsLegals.privacy_policy.checkbox_text_en
+                          }
+                          onChange={(e) =>
+                            setCmsLegals({
+                              ...cmsLegals,
+                              privacy_policy: {
+                                ...cmsLegals.privacy_policy,
+                                [editingLegalLang === "es" ? "checkbox_text_es" : "checkbox_text_en"]: e.target.value,
+                              },
+                            })
+                          }
+                          className="w-full px-3.5 py-2.5 bg-[#F0F3FF] border border-black/10 rounded-xl text-xs text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-[#111C2D] mb-1 font-montserrat">
+                        Contenido Completo de la Política de Privacidad ({editingLegalLang === "es" ? "Español" : "Inglés"}) *
+                      </label>
+                      <textarea
+                        rows={9}
+                        value={
+                          editingLegalLang === "es"
+                            ? cmsLegals.privacy_policy.content_es
+                            : cmsLegals.privacy_policy.content_en
+                        }
+                        onChange={(e) =>
+                          setCmsLegals({
+                            ...cmsLegals,
+                            privacy_policy: {
+                              ...cmsLegals.privacy_policy,
+                              [editingLegalLang === "es" ? "content_es" : "content_en"]: e.target.value,
+                            },
+                          })
+                        }
+                        className="w-full p-4 bg-[#F0F3FF] border border-black/10 rounded-xl text-xs text-[#111C2D] font-mono leading-relaxed focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                      ></textarea>
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditingLegalDocId(null)}
+                        className="px-4 py-2 border border-black/10 rounded-xl text-xs font-bold text-[#4C4546] hover:bg-slate-100 transition"
+                      >
+                        Cerrar Edición
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isSavingCmsLegals}
+                        onClick={handleSaveCmsLegals}
+                        className="px-6 py-2 bg-[#0071BC] hover:bg-[#005a96] text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition font-montserrat flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        <span className="material-symbols-outlined text-sm text-[#FBB03B]">save</span>
+                        Guardar Política en BD
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* CARD CMS: LÍMITE DE DESCARGAS POR LICENCIA */}
@@ -3273,6 +4002,460 @@ export default function AdminCMSPage() {
                       </>
                     )}
                   </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        {/* ==========================================
+               TAB: CANALES DE SOPORTE WHATSAPP
+               ========================================== */}
+        {activeTab === "whatsapp" && (
+          <div className="space-y-6">
+            {/* Header del Tab */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)]">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <h2 className="text-base font-bold font-montserrat text-[#111C2D]">
+                    Gestor de Canales de Soporte WhatsApp
+                  </h2>
+                </div>
+                <p className="text-xs text-[#4C4546] max-w-2xl">
+                  Configura números de WhatsApp independientes, textos bilingües y mensajes de bienvenida tanto para los compradores de la tienda como para los compositores afiliados.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                disabled={isSavingWhatsApp}
+                onClick={handleSaveCmsWhatsApp}
+                className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition font-montserrat flex items-center gap-2 cursor-pointer disabled:opacity-50 shrink-0"
+              >
+                {isSavingWhatsApp ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    <span>Guardando...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-base">save</span>
+                    <span>Guardar Canales en BD</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Selector de Canal: Cliente (Tienda) vs Compositor */}
+            <div className="flex flex-wrap items-center gap-3 bg-white p-3 rounded-2xl border border-black/5 shadow-2xs">
+              <span className="text-xs font-bold text-[#4C4546] mr-1 hidden sm:inline">Canal a Configurar:</span>
+              <button
+                type="button"
+                onClick={() => setEditingWhatsAppChannel("customer_support")}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition font-montserrat flex items-center gap-2 cursor-pointer ${
+                  editingWhatsAppChannel === "customer_support"
+                    ? "bg-[#0071BC] text-white shadow-xs"
+                    : "bg-[#F0F3FF] text-[#111C2D] hover:bg-slate-200/60"
+                }`}
+              >
+                <span className="material-symbols-outlined text-base">storefront</span>
+                <span>🛍️ Atención al Cliente (Tienda)</span>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                  cmsWhatsAppData.customer_support.is_active ? "bg-emerald-500/20 text-emerald-300" : "bg-black/10 text-slate-500"
+                }`}>
+                  {cmsWhatsAppData.customer_support.is_active ? "Activo" : "Inactivo"}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setEditingWhatsAppChannel("composer_support")}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition font-montserrat flex items-center gap-2 cursor-pointer ${
+                  editingWhatsAppChannel === "composer_support"
+                    ? "bg-[#111C2D] text-white shadow-xs"
+                    : "bg-[#F0F3FF] text-[#111C2D] hover:bg-slate-200/60"
+                }`}
+              >
+                <span className="material-symbols-outlined text-base">music_note</span>
+                <span>🎼 Soporte a Compositores (Portal)</span>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                  cmsWhatsAppData.composer_support.is_active ? "bg-emerald-500/20 text-emerald-300" : "bg-black/10 text-slate-500"
+                }`}>
+                  {cmsWhatsAppData.composer_support.is_active ? "Activo" : "Inactivo"}
+                </span>
+              </button>
+            </div>
+
+            {/* Contenedor Principal: Editor + Vista Previa en Vivo */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              
+              {/* Columna Izquierda: Formulario de Configuración (7 cols) */}
+              <div className="lg:col-span-7 bg-white p-6 rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] space-y-5">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 border-b border-black/5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-200 shrink-0">
+                      <span className="material-symbols-outlined text-lg">
+                        {editingWhatsAppChannel === "customer_support" ? "storefront" : "music_note"}
+                      </span>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold font-montserrat text-[#111C2D]">
+                        {editingWhatsAppChannel === "customer_support"
+                          ? "Canal de Atención a Clientes & Compradores"
+                          : "Canal de Soporte Editorial a Compositores"}
+                      </h3>
+                      <p className="text-[11px] text-[#4C4546]">
+                        {editingWhatsAppChannel === "customer_support"
+                          ? "Visible en la tienda pública, ficha de partituras, carrito y portada."
+                          : "Visible en el registro, inicio de sesión y portal del compositor."}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Selector de Idioma para los textos */}
+                  <div className="inline-flex rounded-xl bg-[#F0F3FF] p-1 border border-black/5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setEditingWhatsAppLang("es")}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition font-montserrat ${
+                        editingWhatsAppLang === "es"
+                          ? "bg-white text-[#111C2D] shadow-xs"
+                          : "text-[#4C4546] hover:text-[#111C2D]"
+                      }`}
+                    >
+                      🇪🇸 Español
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingWhatsAppLang("en")}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold transition font-montserrat ${
+                        editingWhatsAppLang === "en"
+                          ? "bg-white text-[#0071BC] shadow-xs"
+                          : "text-[#4C4546] hover:text-[#111C2D]"
+                      }`}
+                    >
+                      🇺🇸 English
+                    </button>
+                  </div>
+                </div>
+
+                {/* Fila 1: Número de WhatsApp & Estado Activo */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-[#111C2D] mb-1 font-montserrat">
+                      Número de WhatsApp (con indicativo internacional) *
+                    </label>
+                    <div className="relative">
+                      <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-emerald-600 text-lg">
+                        phone
+                      </span>
+                      <input
+                        type="text"
+                        value={cmsWhatsAppData[editingWhatsAppChannel].phone}
+                        onChange={(e) =>
+                          setCmsWhatsAppData({
+                            ...cmsWhatsAppData,
+                            [editingWhatsAppChannel]: {
+                              ...cmsWhatsAppData[editingWhatsAppChannel],
+                              phone: e.target.value,
+                            },
+                          })
+                        }
+                        placeholder="573137529693"
+                        className="w-full pl-10 pr-4 py-2.5 bg-[#F0F3FF] border border-black/10 rounded-xl text-xs font-mono font-bold text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                      />
+                    </div>
+                    <p className="text-[10px] text-[#4C4546] mt-1 font-medium">
+                      Ej: 573137529693 (57 para Colombia + 10 dígitos)
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#111C2D] mb-1 font-montserrat">
+                      Disponibilidad del Canal
+                    </label>
+                    <div className="flex items-center gap-3 pt-2">
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={cmsWhatsAppData[editingWhatsAppChannel].is_active}
+                          onChange={(e) =>
+                            setCmsWhatsAppData({
+                              ...cmsWhatsAppData,
+                              [editingWhatsAppChannel]: {
+                                ...cmsWhatsAppData[editingWhatsAppChannel],
+                                is_active: e.target.checked,
+                              },
+                            })
+                          }
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                      </label>
+                      <span className="text-xs font-semibold text-[#111C2D]">
+                        {cmsWhatsAppData[editingWhatsAppChannel].is_active ? "Canal Activo en Tienda" : "Canal Oculto / En Pausa"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Fila 2: Etiquetas & Nombre del Asesor */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-[#111C2D] mb-1 font-montserrat">
+                      Texto del Botón Flotante ({editingWhatsAppLang === "es" ? "Español" : "Inglés"}) *
+                    </label>
+                    <input
+                      type="text"
+                      value={
+                        editingWhatsAppLang === "es"
+                          ? cmsWhatsAppData[editingWhatsAppChannel].label_es
+                          : cmsWhatsAppData[editingWhatsAppChannel].label_en
+                      }
+                      onChange={(e) =>
+                        setCmsWhatsAppData({
+                          ...cmsWhatsAppData,
+                          [editingWhatsAppChannel]: {
+                            ...cmsWhatsAppData[editingWhatsAppChannel],
+                            [editingWhatsAppLang === "es" ? "label_es" : "label_en"]: e.target.value,
+                          },
+                        })
+                      }
+                      className="w-full px-3.5 py-2.5 bg-[#F0F3FF] border border-black/10 rounded-xl text-xs text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#111C2D] mb-1 font-montserrat">
+                      Nombre del Asesor / Área ({editingWhatsAppLang === "es" ? "Español" : "Inglés"}) *
+                    </label>
+                    <input
+                      type="text"
+                      value={
+                        editingWhatsAppLang === "es"
+                          ? cmsWhatsAppData[editingWhatsAppChannel].agent_name_es
+                          : cmsWhatsAppData[editingWhatsAppChannel].agent_name_en
+                      }
+                      onChange={(e) =>
+                        setCmsWhatsAppData({
+                          ...cmsWhatsAppData,
+                          [editingWhatsAppChannel]: {
+                            ...cmsWhatsAppData[editingWhatsAppChannel],
+                            [editingWhatsAppLang === "es" ? "agent_name_es" : "agent_name_en"]: e.target.value,
+                          },
+                        })
+                      }
+                      className="w-full px-3.5 py-2.5 bg-[#F0F3FF] border border-black/10 rounded-xl text-xs text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                    />
+                  </div>
+                </div>
+
+                {/* Fila 3: Tiempo de Respuesta */}
+                <div>
+                  <label className="block text-xs font-bold text-[#111C2D] mb-1 font-montserrat">
+                    Mensaje de Tiempo de Respuesta ({editingWhatsAppLang === "es" ? "Español" : "Inglés"}) *
+                  </label>
+                  <input
+                    type="text"
+                    value={
+                      editingWhatsAppLang === "es"
+                        ? cmsWhatsAppData[editingWhatsAppChannel].response_time_es
+                        : cmsWhatsAppData[editingWhatsAppChannel].response_time_en
+                    }
+                    onChange={(e) =>
+                      setCmsWhatsAppData({
+                        ...cmsWhatsAppData,
+                        [editingWhatsAppChannel]: {
+                          ...cmsWhatsAppData[editingWhatsAppChannel],
+                          [editingWhatsAppLang === "es" ? "response_time_es" : "response_time_en"]: e.target.value,
+                        },
+                      })
+                    }
+                    className="w-full px-3.5 py-2.5 bg-[#F0F3FF] border border-black/10 rounded-xl text-xs text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                  />
+                </div>
+
+                {/* Fila 4: Burbuja de Bienvenida en la Ventana de Chat */}
+                <div>
+                  <label className="block text-xs font-bold text-[#111C2D] mb-1 font-montserrat">
+                    Burbuja de Bienvenida en la Ventana ({editingWhatsAppLang === "es" ? "Español" : "Inglés"}) *
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={
+                      editingWhatsAppLang === "es"
+                        ? cmsWhatsAppData[editingWhatsAppChannel].welcome_bubble_es
+                        : cmsWhatsAppData[editingWhatsAppChannel].welcome_bubble_en
+                    }
+                    onChange={(e) =>
+                      setCmsWhatsAppData({
+                        ...cmsWhatsAppData,
+                        [editingWhatsAppChannel]: {
+                          ...cmsWhatsAppData[editingWhatsAppChannel],
+                          [editingWhatsAppLang === "es" ? "welcome_bubble_es" : "welcome_bubble_en"]: e.target.value,
+                        },
+                      })
+                    }
+                    className="w-full p-3 bg-[#F0F3FF] border border-black/10 rounded-xl text-xs text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                  ></textarea>
+                </div>
+
+                {/* Fila 5: Mensaje Predeterminado de Saludo */}
+                <div>
+                  <label className="block text-xs font-bold text-[#111C2D] mb-1 font-montserrat">
+                    Mensaje Predeterminado al Iniciar Chat ({editingWhatsAppLang === "es" ? "Español" : "Inglés"}) *
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={
+                      editingWhatsAppLang === "es"
+                        ? cmsWhatsAppData[editingWhatsAppChannel].default_message_es
+                        : cmsWhatsAppData[editingWhatsAppChannel].default_message_en
+                    }
+                    onChange={(e) =>
+                      setCmsWhatsAppData({
+                        ...cmsWhatsAppData,
+                        [editingWhatsAppChannel]: {
+                          ...cmsWhatsAppData[editingWhatsAppChannel],
+                          [editingWhatsAppLang === "es" ? "default_message_es" : "default_message_en"]: e.target.value,
+                        },
+                      })
+                    }
+                    className="w-full p-3 bg-[#F0F3FF] border border-black/10 rounded-xl text-xs text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                  ></textarea>
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="button"
+                    disabled={isSavingWhatsApp}
+                    onClick={handleSaveCmsWhatsApp}
+                    className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition font-montserrat flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-sm">save</span>
+                    Guardar Cambios de WhatsApp en BD
+                  </button>
+                </div>
+              </div>
+
+              {/* Columna Derecha: Vista Previa en Vivo de la Ventana Flotante (5 cols) */}
+              <div className="lg:col-span-5 space-y-4">
+                <div className="flex items-center justify-between pb-1">
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#0071BC] font-montserrat flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-base">visibility</span>
+                    Vista Previa en Vivo para el Cliente
+                  </span>
+                  <span className="text-[10px] bg-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded-full">
+                    {editingWhatsAppLang.toUpperCase()}
+                  </span>
+                </div>
+
+                {/* Simulación de la Ventana Emergente */}
+                <div className="bg-white rounded-3xl shadow-2xl border border-black/10 overflow-hidden font-sans">
+                  {/* Cabecera */}
+                  <div className="bg-[#111C2D] text-white p-4 relative">
+                    <div className="flex items-center gap-3">
+                      <div className="relative">
+                        <div className="w-11 h-11 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center text-emerald-400 font-bold">
+                          <span className="material-symbols-outlined text-xl">chat</span>
+                        </div>
+                        <span className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 border border-[#111C2D]"></span>
+                        </span>
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <h4 className="text-xs font-bold font-montserrat text-white truncate">
+                            Piano Colombia
+                          </h4>
+                          <span className="material-symbols-outlined text-[11px] text-blue-400">verified</span>
+                        </div>
+                        <p className="text-[11px] text-emerald-400 font-semibold truncate font-montserrat">
+                          {editingWhatsAppLang === "es"
+                            ? cmsWhatsAppData[editingWhatsAppChannel].agent_name_es
+                            : cmsWhatsAppData[editingWhatsAppChannel].agent_name_en}
+                        </p>
+                        <p className="text-[10px] text-white/60 truncate">
+                          {editingWhatsAppLang === "es"
+                            ? cmsWhatsAppData[editingWhatsAppChannel].response_time_es
+                            : cmsWhatsAppData[editingWhatsAppChannel].response_time_en}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Cuerpo del Chat */}
+                  <div className="p-4 bg-[#ECE5DD]/40 space-y-3">
+                    <div className="flex justify-center">
+                      <span className="text-[10px] bg-black/10 text-slate-600 px-2.5 py-0.5 rounded-full font-medium">
+                        Canal Oficial WhatsApp
+                      </span>
+                    </div>
+
+                    <div className="flex items-start gap-2 max-w-[95%]">
+                      <div className="bg-white rounded-2xl rounded-tl-xs p-3 shadow-xs text-xs text-[#111C2D] space-y-1.5 leading-relaxed">
+                        <p className="font-bold text-[#0071BC] text-[10px] font-montserrat">
+                          Piano Colombia •{" "}
+                          {editingWhatsAppLang === "es"
+                            ? cmsWhatsAppData[editingWhatsAppChannel].label_es
+                            : cmsWhatsAppData[editingWhatsAppChannel].label_en}
+                        </p>
+                        <p className="text-[11px]">
+                          {editingWhatsAppLang === "es"
+                            ? cmsWhatsAppData[editingWhatsAppChannel].welcome_bubble_es
+                            : cmsWhatsAppData[editingWhatsAppChannel].welcome_bubble_en}
+                        </p>
+                        <div className="flex items-center justify-end gap-1 text-[10px] text-slate-400 pt-1">
+                          <span>En línea</span>
+                          <span className="material-symbols-outlined text-xs text-blue-500">done_all</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Pie con Previsualización de Envío */}
+                  <div className="p-4 bg-white border-t border-black/5 space-y-2.5">
+                    <div className="p-2.5 bg-[#F0F3FF] rounded-xl border border-black/5 text-[11px] text-[#4C4546]">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
+                        Mensaje preparado:
+                      </span>
+                      <p className="italic">
+                        "{editingWhatsAppLang === "es"
+                          ? cmsWhatsAppData[editingWhatsAppChannel].default_message_es
+                          : cmsWhatsAppData[editingWhatsAppChannel].default_message_en}"
+                      </p>
+                    </div>
+
+                    <div className="w-full py-2.5 px-4 bg-[#25D366] text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition font-montserrat flex items-center justify-center gap-2 cursor-pointer">
+                      <span className="material-symbols-outlined text-base">send</span>
+                      <span>Iniciar Chat en WhatsApp</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Previsualización del Botón Flotante */}
+                <div className="p-4 bg-slate-100/70 rounded-2xl border border-black/5 space-y-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 font-montserrat block">
+                    Previsualización del Botón Flotante en Pantalla:
+                  </span>
+                  <div className="flex justify-end pt-1">
+                    <div className="flex items-center gap-2.5 bg-white text-[#111C2D] border border-emerald-500/40 rounded-full px-4 py-2.5 shadow-md">
+                      <span className="relative flex h-2.5 w-2.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                      </span>
+                      <span className="material-symbols-outlined text-emerald-600 text-base">chat</span>
+                      <span className="text-xs font-bold font-montserrat">
+                        {editingWhatsAppLang === "es"
+                          ? cmsWhatsAppData[editingWhatsAppChannel].label_es
+                          : cmsWhatsAppData[editingWhatsAppChannel].label_en}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
 

@@ -1,5 +1,6 @@
 import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { PAYOUT_MODULE } from "../../../../modules/payout"
+import { COMPOSER_MODULE } from "../../../../modules/composer"
 import { PayoutBatchStatus } from "../../../../modules/payout/models/payout-batch"
 import { PayoutItemStatus } from "../../../../modules/payout/models/payout-item"
 import {
@@ -10,6 +11,7 @@ import {
 import {
   sendEmail,
   generateComposerPayoutNotificationHTML,
+  EMAIL_SUBJECTS,
 } from "../../../../lib/resend-mailer"
 
 export const AUTHENTICATE = false
@@ -17,6 +19,7 @@ export const AUTHENTICATE = false
 export async function POST(req: MedusaRequest, res: MedusaResponse) {
   try {
     const payoutModuleService = req.scope.resolve(PAYOUT_MODULE)
+    const composerModuleService = req.scope.resolve(COMPOSER_MODULE)
     const { items, executedBy = "Tesorero PC" } = (req.body as any) || {}
 
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -99,6 +102,16 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
         // Notificación automática por correo electrónico al compositor (solo si la transferencia fue exitosa)
         if (transferResult.success && transferResult.status !== "FAILED" && item.email && item.email.includes("@")) {
           try {
+            let composerLang = (item.preferred_language || item.language || "es") as "es" | "en"
+            if (!item.preferred_language && item.composerId) {
+              try {
+                const comp = await composerModuleService.retrieveComposer(item.composerId).catch(() => null)
+                if (comp && (comp as any).preferred_language) {
+                  composerLang = (comp as any).preferred_language === "en" ? "en" : "es"
+                }
+              } catch {}
+            }
+
             const emailHtml = generateComposerPayoutNotificationHTML({
               composerName: item.composerName,
               batchNumber,
@@ -111,14 +124,15 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
               accountNumberMasked: maskAccountNumber(item.accountNumber || ""),
               wompiTransferId: transferResult.wompiTransferId,
               salesCount: item.totalSalesCount || 1,
+              lang: composerLang,
             })
 
             await sendEmail({
               to: item.email,
-              subject: `💰 [Piano Colombia] Liquidación de Regalías Procesada - ${batchNumber}`,
+              subject: EMAIL_SUBJECTS.composerPayout[composerLang](batchNumber),
               html: emailHtml,
             })
-            console.log(`📧 Notificación de liquidación enviada al compositor: ${item.email}`)
+            console.log(`📧 Notificación de liquidación enviada al compositor: ${item.email} (Idioma: ${composerLang})`)
           } catch (mailErr: any) {
             console.warn(`⚠️ No se pudo enviar correo al compositor ${item.email}:`, mailErr.message)
           }

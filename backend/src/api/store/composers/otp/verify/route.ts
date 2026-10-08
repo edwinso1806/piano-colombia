@@ -3,16 +3,19 @@ import { COMPOSER_MODULE } from "../../../../../modules/composer"
 import { verifyComposerRegistrationOtp } from "../../../../../lib/otp-service"
 import { hashPassword } from "../../../../../lib/auth-security"
 import { getAdminAndModeratorEmailsFromDB } from "../../../../../lib/admin-recipient-service"
-import { sendEmail, generateNewComposerAdminNotificationHTML } from "../../../../../lib/resend-mailer"
+import { sendEmail, generateNewComposerAdminNotificationHTML, extractLanguage } from "../../../../../lib/resend-mailer"
 
 export async function POST(req: MedusaRequest, res: MedusaResponse) {
   try {
     const composerModuleService = req.scope.resolve(COMPOSER_MODULE)
     const { email, code } = (req.body as any) || {}
+    const lang = extractLanguage(req)
 
     if (!email || !code) {
       return res.status(400).json({
-        message: "El correo electrónico y el código de 6 dígitos son obligatorios",
+        message: lang === "en"
+          ? "Email and 6-digit code are required"
+          : "El correo electrónico y el código de 6 dígitos son obligatorios",
       })
     }
 
@@ -22,7 +25,9 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
     const verification = verifyComposerRegistrationOtp(normalizedEmail, code)
     if (!verification.valid || !verification.payload) {
       return res.status(400).json({
-        message: verification.error || "Código de verificación inválido o expirado.",
+        message: lang === "en"
+          ? "Invalid or expired verification code."
+          : (verification.error || "Código de verificación inválido o expirado."),
       })
     }
 
@@ -36,7 +41,9 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
 
     if (existingComposers && existingComposers.length > 0) {
       return res.status(400).json({
-        message: "Este correo electrónico ya fue registrado previamente como compositor.",
+        message: lang === "en"
+          ? "This email address was already registered as a composer."
+          : "Este correo electrónico ya fue registrado previamente como compositor.",
       })
     }
 
@@ -47,7 +54,9 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
 
       if (existingAccounts && existingAccounts.length > 0) {
         return res.status(400).json({
-          message: "Este número de documento ya fue registrado previamente por otro compositor.",
+          message: lang === "en"
+            ? "This identification document number was already registered by another composer."
+            : "Este número de documento ya fue registrado previamente por otro compositor.",
         })
       }
     }
@@ -78,6 +87,7 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       region: data.region || null,
       password_hash: password_hash || null,
       salt: salt || null,
+      preferred_language: data.preferred_language || lang,
       status: "PENDING_APPROVAL",
     })
 
@@ -126,12 +136,17 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
     return res.status(201).json({
       success: true,
       composer,
-      message: "¡Correo electrónico verificado exitosamente! Tu solicitud de registro de compositor ha sido ingresada para moderación.",
+      message: lang === "en"
+        ? "Email successfully verified! Your composer registration request has been submitted for moderation."
+        : "¡Correo electrónico verificado exitosamente! Tu solicitud de registro de compositor ha sido ingresada para moderación.",
     })
   } catch (error: any) {
+    const lang = extractLanguage(req)
     console.error("❌ Error verificando OTP de compositor:", error)
     return res.status(500).json({
-      message: error.message || "Error al completar el registro del compositor",
+      message: lang === "en"
+        ? "Error completing composer registration"
+        : (error.message || "Error al completar el registro del compositor"),
     })
   }
 }

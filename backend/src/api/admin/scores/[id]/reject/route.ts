@@ -1,7 +1,7 @@
 import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { SCORE_MODULE } from "../../../../../modules/score"
 import { COMPOSER_MODULE } from "../../../../../modules/composer"
-import { sendEmail, generateScoreRejectedHTML } from "../../../../../lib/resend-mailer"
+import { sendEmail, generateScoreRejectedHTML, EMAIL_SUBJECTS } from "../../../../../lib/resend-mailer"
 
 export const AUTHENTICATE = false
 
@@ -30,17 +30,19 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       if (existingScore.composer_id) {
         const composer: any = await composerModuleService.retrieveComposer(existingScore.composer_id).catch(() => null)
         if (composer && composer.email) {
+          const composerLang = composer.preferred_language === "en" ? "en" : "es"
           const html = generateScoreRejectedHTML({
             composerName: composer.full_name || composer.artistic_name || "Estimado Compositor",
             artisticName: composer.artistic_name || composer.full_name,
             scoreTitle: existingScore.title,
             observations: rejectionNotes,
             dashboardUrl: "http://localhost:3000/compositor/dashboard/partituras",
+            lang: composerLang,
           })
 
           await sendEmail({
             to: composer.email,
-            subject: `⚠️ Observaciones de Revisión en tu Partitura "${existingScore.title}" - Piano Colombia`,
+            subject: EMAIL_SUBJECTS.scoreRejected[composerLang](existingScore.title),
             html,
           }).catch((err) => console.warn(`Error enviando correo de rechazo al compositor ${composer.email}:`, err.message))
         }

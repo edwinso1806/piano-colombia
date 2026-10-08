@@ -1,10 +1,68 @@
 const MEDUSA_URL = process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL || "http://localhost:9000"
 const PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY || "pk_0372bd6f8b5885e7dcfd759e152d7a9db36782d5eaace95f07e707f2e9f68ce3"
 
-const defaultHeaders: HeadersInit = {
-  "x-publishable-api-key": PUBLISHABLE_KEY,
-  "Content-Type": "application/json",
+export function getCurrentLanguage(): "es" | "en" {
+  if (typeof window !== "undefined") {
+    try {
+      const stored = localStorage.getItem("piano_colombia_lang")
+      if (stored === "en" || stored === "es") return stored
+      const cookieMatch = document.cookie.match(/(?:^|; )piano_colombia_lang=(es|en)/)
+      if (cookieMatch && (cookieMatch[1] === "es" || cookieMatch[1] === "en")) {
+        return cookieMatch[1] as "es" | "en"
+      }
+    } catch {
+      // Fallback
+    }
+  }
+  return "es"
 }
+
+export function getApiHeaders(extra?: Record<string, string>): Record<string, string> {
+  const lang = getCurrentLanguage()
+  return {
+    "x-publishable-api-key": PUBLISHABLE_KEY,
+    "Content-Type": "application/json",
+    "x-language": lang,
+    "x-lang": lang,
+    "Accept-Language": lang === "en" ? "en-US,en;q=0.9" : "es-CO,es;q=0.9",
+    ...(extra || {}),
+  }
+}
+
+export const defaultHeaders: HeadersInit = new Proxy(
+  {
+    "x-publishable-api-key": PUBLISHABLE_KEY,
+    "Content-Type": "application/json",
+  },
+  {
+    get(target: any, prop: string | symbol) {
+      if (prop === "x-language" || prop === "x-lang") {
+        return getCurrentLanguage()
+      }
+      if (prop === "Accept-Language") {
+        return getCurrentLanguage() === "en" ? "en-US,en;q=0.9" : "es-CO,es;q=0.9"
+      }
+      return target[prop]
+    },
+    ownKeys(target: any) {
+      return ["x-publishable-api-key", "Content-Type", "x-language", "Accept-Language"]
+    },
+    getOwnPropertyDescriptor(target: any, prop: string | symbol) {
+      if (prop === "x-language" || prop === "x-lang") {
+        return { value: getCurrentLanguage(), writable: true, enumerable: true, configurable: true }
+      }
+      if (prop === "Accept-Language") {
+        return {
+          value: getCurrentLanguage() === "en" ? "en-US,en;q=0.9" : "es-CO,es;q=0.9",
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        }
+      }
+      return Object.getOwnPropertyDescriptor(target, prop)
+    },
+  }
+)
 
 // ----------------------------------------------------------------------
 // 1. Catálogo de Partituras (Scores)
@@ -191,7 +249,7 @@ export async function sendComposerOtpApi(composerData: any) {
   const res = await fetch(`${MEDUSA_URL}/store/composers/otp/send`, {
     method: "POST",
     headers: defaultHeaders,
-    body: JSON.stringify(composerData),
+    body: JSON.stringify({ lang: getCurrentLanguage(), ...composerData }),
   })
 
   const data = await res.json().catch(() => ({}))
@@ -366,17 +424,17 @@ export async function loginCustomerApi(email: string, password: string) {
   try {
     const res = await fetch(`${MEDUSA_URL}/store/auth/login`, {
       method: "POST",
-      headers: defaultHeaders,
-      body: JSON.stringify({ email, password }),
+      headers: getApiHeaders(),
+      body: JSON.stringify({ email, password, lang: getCurrentLanguage() }),
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
-      throw new Error(data.message || "Correo o contraseña incorrectos. Por favor verifica tus credenciales.")
+      throw new Error(data.message || (getCurrentLanguage() === "en" ? "Incorrect email or password. Please check your credentials." : "Correo o contraseña incorrectos. Por favor verifica tus credenciales."))
     }
     return data
   } catch (err: any) {
     if (err.message === "Failed to fetch" || err.message?.includes("fetch") || err.name === "TypeError") {
-      throw new Error("No se pudo conectar con el servidor de autenticación. Por favor intenta de nuevo.")
+      throw new Error(getCurrentLanguage() === "en" ? "Could not connect to the authentication server. Please try again." : "No se pudo conectar con el servidor de autenticación. Por favor intenta de nuevo.")
     }
     throw err
   }
@@ -392,21 +450,22 @@ export async function sendOtpRegisterApi(payload: {
   try {
     const res = await fetch(`${MEDUSA_URL}/store/auth/otp/send`, {
       method: "POST",
-      headers: defaultHeaders,
+      headers: getApiHeaders(),
       body: JSON.stringify({
         full_name: payload.fullName,
         email: payload.email,
         password: payload.password,
         phone: payload.phone,
         tax_id: payload.taxId,
+        lang: getCurrentLanguage(),
       }),
     })
     const data = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(data.message || "Error al enviar código de verificación")
+    if (!res.ok) throw new Error(data.message || (getCurrentLanguage() === "en" ? "Error sending verification code" : "Error al enviar código de verificación"))
     return data
   } catch (err: any) {
     if (err.message === "Failed to fetch" || err.message?.includes("fetch") || err.name === "TypeError") {
-      throw new Error("No se pudo conectar con el servidor de autenticación. Por favor intenta de nuevo.")
+      throw new Error(getCurrentLanguage() === "en" ? "Could not connect to the authentication server. Please try again." : "No se pudo conectar con el servidor de autenticación. Por favor intenta de nuevo.")
     }
     throw err
   }
@@ -419,18 +478,19 @@ export async function verifyOtpRegisterApi(payload: {
   try {
     const res = await fetch(`${MEDUSA_URL}/store/auth/otp/verify`, {
       method: "POST",
-      headers: defaultHeaders,
+      headers: getApiHeaders(),
       body: JSON.stringify({
         email: payload.email,
         code: payload.code,
+        lang: getCurrentLanguage(),
       }),
     })
     const data = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(data.message || "Código de verificación inválido")
+    if (!res.ok) throw new Error(data.message || (getCurrentLanguage() === "en" ? "Invalid verification code" : "Código de verificación inválido"))
     return data
   } catch (err: any) {
     if (err.message === "Failed to fetch" || err.message?.includes("fetch") || err.name === "TypeError") {
-      throw new Error("No se pudo conectar con el servidor de autenticación. Por favor intenta de nuevo.")
+      throw new Error(getCurrentLanguage() === "en" ? "Could not connect to the authentication server. Please try again." : "No se pudo conectar con el servidor de autenticación. Por favor intenta de nuevo.")
     }
     throw err
   }
@@ -534,15 +594,15 @@ export async function loginComposerApi(email: string, password: string) {
   try {
     const res = await fetch(`${MEDUSA_URL}/store/auth/composer/login`, {
       method: "POST",
-      headers: defaultHeaders,
-      body: JSON.stringify({ email, password }),
+      headers: getApiHeaders(),
+      body: JSON.stringify({ email, password, lang: getCurrentLanguage() }),
     })
     const data = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(data.message || "Correo o contraseña incorrectos. Por favor verifica tus credenciales.")
+    if (!res.ok) throw new Error(data.message || (getCurrentLanguage() === "en" ? "Incorrect email or password. Please verify your credentials." : "Correo o contraseña incorrectos. Por favor verifica tus credenciales."))
     return data
   } catch (err: any) {
     if (err.message === "Failed to fetch" || err.message?.includes("fetch") || err.name === "TypeError") {
-      throw new Error("No se pudo conectar con el servidor. Por favor intenta de nuevo.")
+      throw new Error(getCurrentLanguage() === "en" ? "Could not connect to the server. Please try again." : "No se pudo conectar con el servidor. Por favor intenta de nuevo.")
     }
     throw err
   }
@@ -593,11 +653,12 @@ export async function requestPasswordResetApi(payload: {
   try {
     const res = await fetch(`${MEDUSA_URL}/auth/password-reset/request`, {
       method: "POST",
-      headers: defaultHeaders,
+      headers: getApiHeaders(),
       body: JSON.stringify({
         email: payload.email,
         role: payload.role || "customer",
         token: payload.token,
+        lang: getCurrentLanguage(),
       }),
     })
     const data = await res.json().catch(() => ({}))
@@ -621,13 +682,14 @@ export async function confirmPasswordResetApi(payload: {
   try {
     const res = await fetch(`${MEDUSA_URL}/auth/password-reset/confirm`, {
       method: "POST",
-      headers: defaultHeaders,
+      headers: getApiHeaders(),
       body: JSON.stringify({
         email: payload.email,
         code: payload.code,
         new_password: payload.newPassword,
         role: payload.role || "customer",
         token: payload.token,
+        lang: getCurrentLanguage(),
       }),
     })
     const data = await res.json().catch(() => ({}))
@@ -1379,11 +1441,12 @@ export async function chargeWompiCardDirectly(payload: {
   customer_legal_id_type?: string
   score_slug?: string
   score_id?: string
+  lang?: "es" | "en"
 }) {
   const res = await fetch(`${MEDUSA_URL}/store/wompi/charge`, {
     method: "POST",
     headers: defaultHeaders,
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ lang: payload.lang || getCurrentLanguage(), ...payload }),
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok || !data.success) {
@@ -1432,6 +1495,241 @@ export async function updateAdminDownloadSettings(maxDownloads: number, updateEx
   }
   return data
 }
+
+// ----------------------------------------------------------------------
+// 16. Páginas Legales & Textos Administrables (CMS / Admin / Store)
+// ----------------------------------------------------------------------
+
+export interface CmsLegalDocument {
+  id: "composer_terms" | "privacy_policy"
+  title_es: string
+  title_en: string
+  checkbox_text_es: string
+  checkbox_text_en: string
+  link_text_es: string
+  link_text_en: string
+  content_es: string
+  content_en: string
+  updated_at_text_es: string
+  updated_at_text_en: string
+}
+
+export interface CmsLegalSettings {
+  composer_terms: CmsLegalDocument
+  privacy_policy: CmsLegalDocument
+  default_commission_percentage?: number
+  author_percentage?: number
+}
+
+export const DEFAULT_CMS_LEGAL_SETTINGS: CmsLegalSettings = {
+  default_commission_percentage: 20,
+  author_percentage: 80,
+  composer_terms: {
+    id: "composer_terms",
+    title_es: "Términos y Condiciones para Compositores",
+    title_en: "Terms & Conditions for Composers",
+    checkbox_text_es: "Acepto los {link} de Piano Colombia (liquidación {author_percent}% neto autor / {platform_percent}% plataforma).",
+    checkbox_text_en: "I accept the {link} of Piano Colombia ({author_percent}% net author / {platform_percent}% platform royalty settlement).",
+    link_text_es: "Términos y Condiciones para Compositores",
+    link_text_en: "Terms & Conditions for Composers",
+    updated_at_text_es: "Última versión: 2 de Septiembre, 2026",
+    updated_at_text_en: "Last updated: September 2, 2026",
+    content_es: `1. OBJETO Y REGISTRO DE OBRAS
+El presente acuerdo regula la relación editorial entre Piano Colombia y el Compositor para la catalogación, publicación y distribución digital de partituras en formato Urtext y ediciones críticas.
+
+2. DERECHOS DE AUTOR Y PROPIEDAD INTELECTUAL
+El compositor conserva en todo momento el 100% de la titularidad sobre sus derechos morales y patrimoniales de autor, amparados por la Ley 23 de 1982 de la República de Colombia y los tratados internacionales de la OMPI. El compositor concede a Piano Colombia una licencia no exclusiva para la comercialización digital, estampado de sellos DRM nominales y custodia en servidores de alta disponibilidad.
+
+3. ESQUEMA DE REGALÍAS Y LIQUIDACIÓN
+El compositor percibirá el {author_percent}% del valor neto recaudado por cada venta individual de sus obras en la plataforma. Piano Colombia retendrá el {platform_percent}% restante, destinado a costos operativos, procesamiento en pasarela de pagos Wompi/Bancolombia, almacenamiento en la nube y soporte técnico a usuarios.
+
+4. DISPERSIÓN AUTOMÁTICA DE FONDOS
+Las regalías se liquidarán periódicamente de acuerdo con los ciclos oficiales de corte y se transferirán directamente a la cuenta bancaria colombiana o billetera digital certificada (Bancolombia, Davivienda, Nequi, Daviplata) registrada en el perfil del compositor.
+
+5. COMITÉ EDITORIAL Y CURADURÍA
+Toda obra postulada ingresará a una etapa de revisión técnica y musicológica. Piano Colombia se reserva el derecho de solicitar ajustes formales de grabado musical previo a su publicación en la tienda pública.`,
+    content_en: `1. PURPOSE AND WORK REGISTRATION
+This agreement governs the editorial partnership between Piano Colombia and the Composer for the cataloging, publication, and digital distribution of sheet music in Urtext and critical editions.
+
+2. COPYRIGHT AND INTELLECTUAL PROPERTY
+The composer retains 100% of moral and economic copyrights under Colombian Copyright Law (Law 23 of 1982) and WIPO international conventions. The composer grants Piano Colombia a non-exclusive license for digital distribution, personalized DRM watermarking, and secure cloud storage.
+
+3. ROYALTIES AND SETTLEMENT STRUCTURE
+The composer receives {author_percent}% net of the retail price for each score sold on the platform. Piano Colombia retains {platform_percent}% covering payment processing via Wompi/Bancolombia, server infrastructure, cloud hosting, and continuous technical support.
+
+4. AUTOMATED DISBURSEMENT
+Royalties are calculated per settlement cycle and disbursed directly to the Colombian bank account or authorized digital pocket (Bancolombia, Davivienda, Nequi, Daviplata) registered in the composer portal.
+
+5. EDITORIAL BOARD AND CURATION
+All submitted pieces undergo technical and musicological review. Piano Colombia reserves the right to request engraving corrections before publishing scores in the public catalog.`,
+  },
+  privacy_policy: {
+    id: "privacy_policy",
+    title_es: "Política de Tratamiento de Datos Personales",
+    title_en: "Personal Data Processing Policy",
+    checkbox_text_es: "Autorizo la {link} y verificación de obras.",
+    checkbox_text_en: "I authorize the {link} and score verification.",
+    link_text_es: "Política de Tratamiento de Datos Personales",
+    link_text_en: "Personal Data Processing Policy",
+    updated_at_text_es: "Última versión: 2 de Septiembre, 2026",
+    updated_at_text_en: "Last updated: September 2, 2026",
+    content_es: `De conformidad con la Ley Estatutaria 1581 de 2012 y el Decreto Reglamentario 1377 de 2013 de Colombia, Piano Colombia garantiza la protección y confidencialidad de los datos personales suministrados.
+
+FINALIDADES DEL TRATAMIENTO:
+1. Creación, autenticación y gestión del perfil artístico y comercial del compositor.
+2. Tramitación de giros de regalías, certificados de retención y liquidaciones vía Wompi Bancolombia.
+3. Generación del certificado de licencia nominativa estampado en las partituras digitales vendidas.
+4. Notificaciones editoriales, estados de aprobación de obras y comunicaciones de soporte.
+
+DERECHOS DEL TITULAR:
+El titular de los datos podrá en cualquier momento ejercer sus derechos de conocer, actualizar, rectificar y revocar la autorización de sus datos personales a través de los canales oficiales de Piano Colombia.`,
+    content_en: `In accordance with Colombian Statutory Law 1581 of 2012 and Decree 1377 of 2013 regarding Personal Data Protection (Habeas Data), Piano Colombia ensures the security and confidential treatment of personal records.
+
+PURPOSES OF PROCESSING:
+1. Registration, authentication, and management of the composer artistic profile.
+2. Processing of royalty payouts, tax certificates, and disbursements via Wompi Bancolombia.
+3. Generation of custom personalized license watermarks on purchased sheet music.
+4. Editorial status updates, score review alerts, and customer service communication.
+
+DATA SUBJECT RIGHTS:
+You have the right to access, update, rectify, and request the deletion of your personal information at any time through our official support channels.`,
+  },
+}
+
+export async function getCmsLegalsApi(): Promise<CmsLegalSettings> {
+  try {
+    const res = await fetch(`${MEDUSA_URL}/store/cms/legals`, {
+      cache: "no-store",
+      headers: defaultHeaders,
+    })
+    if (!res.ok) return DEFAULT_CMS_LEGAL_SETTINGS
+    const data = await res.json()
+    return data.legals || DEFAULT_CMS_LEGAL_SETTINGS
+  } catch {
+    return DEFAULT_CMS_LEGAL_SETTINGS
+  }
+}
+
+export async function getAdminCmsLegalsApi(): Promise<CmsLegalSettings> {
+  try {
+    const res = await fetch(`${MEDUSA_URL}/admin/cms/legals`, {
+      cache: "no-store",
+      headers: defaultHeaders,
+    })
+    if (!res.ok) return DEFAULT_CMS_LEGAL_SETTINGS
+    const data = await res.json()
+    return data.legals || DEFAULT_CMS_LEGAL_SETTINGS
+  } catch {
+    return DEFAULT_CMS_LEGAL_SETTINGS
+  }
+}
+
+export async function updateAdminCmsLegalsApi(payload: Partial<CmsLegalSettings>): Promise<CmsLegalSettings> {
+  const res = await fetch(`${MEDUSA_URL}/admin/cms/legals`, {
+    method: "POST",
+    headers: { ...defaultHeaders, "Content-Type": "application/json" },
+    body: JSON.stringify({ legals: payload }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok || !data.success) {
+    throw new Error(data.message || "Error al actualizar textos legales")
+  }
+  return data.legals
+}
+
+export interface WhatsAppChannelSettings {
+  phone: string
+  label_es: string
+  label_en: string
+  default_message_es: string
+  default_message_en: string
+  agent_name_es: string
+  agent_name_en: string
+  response_time_es: string
+  response_time_en: string
+  welcome_bubble_es: string
+  welcome_bubble_en: string
+  is_active: boolean
+}
+
+export interface CmsWhatsAppSettings {
+  customer_support: WhatsAppChannelSettings
+  composer_support: WhatsAppChannelSettings
+}
+
+export const DEFAULT_CMS_WHATSAPP_SETTINGS: CmsWhatsAppSettings = {
+  customer_support: {
+    phone: "573137529693",
+    label_es: "Atención al Cliente",
+    label_en: "Customer Support",
+    default_message_es: "¡Hola Piano Colombia! Necesito asesoría con la compra de partituras o descargas en la tienda.",
+    default_message_en: "Hello Piano Colombia! I need assistance with sheet music purchases or downloads in the store.",
+    agent_name_es: "Asesoría Comercial & Soporte",
+    agent_name_en: "Sales & Customer Support",
+    response_time_es: "Responde habitualmente en pocos minutos",
+    response_time_en: "Usually replies in a few minutes",
+    welcome_bubble_es: "¡Hola! 👋 Bienvenido a la tienda oficial de Piano Colombia. ¿Tienes dudas con alguna partitura, formato Urtext o proceso de pago? Escríbenos y te ayudamos de inmediato.",
+    welcome_bubble_en: "Hello! 👋 Welcome to the official Piano Colombia store. Do you have questions about sheet music, Urtext editions, or payments? Chat with us and we'll help right away.",
+    is_active: true,
+  },
+  composer_support: {
+    phone: "573137529693",
+    label_es: "Soporte Compositores",
+    label_en: "Composer Support",
+    default_message_es: "¡Hola Piano Colombia! Requiero soporte sobre mi registro de compositor o liquidación de obras.",
+    default_message_en: "Hello Piano Colombia! I need support regarding my composer registration or royalty settlements.",
+    agent_name_es: "Comité Editorial & Regalías",
+    agent_name_en: "Editorial Board & Royalties",
+    response_time_es: "Responde habitualmente en horario hábil",
+    response_time_en: "Replies during business hours",
+    welcome_bubble_es: "¡Hola Maestro! 🎼 Este es el canal exclusivo para compositores y autores afiliados. Si tienes consultas sobre registro, carga de partituras o liquidación de regalías, estamos aquí para apoyarte.",
+    welcome_bubble_en: "Hello Maestro! 🎼 This is our dedicated channel for affiliated composers. If you have inquiries regarding registration, score uploads, or royalty payouts, we are here to assist.",
+    is_active: true,
+  },
+}
+
+export async function getCmsWhatsAppApi(): Promise<CmsWhatsAppSettings> {
+  try {
+    const res = await fetch(`${MEDUSA_URL}/store/cms/whatsapp`, {
+      cache: "no-store",
+      headers: defaultHeaders,
+    })
+    if (!res.ok) return DEFAULT_CMS_WHATSAPP_SETTINGS
+    const data = await res.json()
+    return data.whatsapp || DEFAULT_CMS_WHATSAPP_SETTINGS
+  } catch {
+    return DEFAULT_CMS_WHATSAPP_SETTINGS
+  }
+}
+
+export async function getAdminCmsWhatsAppApi(): Promise<CmsWhatsAppSettings> {
+  try {
+    const res = await fetch(`${MEDUSA_URL}/admin/cms/whatsapp`, {
+      cache: "no-store",
+      headers: defaultHeaders,
+    })
+    if (!res.ok) return DEFAULT_CMS_WHATSAPP_SETTINGS
+    const data = await res.json()
+    return data.whatsapp || DEFAULT_CMS_WHATSAPP_SETTINGS
+  } catch {
+    return DEFAULT_CMS_WHATSAPP_SETTINGS
+  }
+}
+
+export async function updateAdminCmsWhatsAppApi(payload: Partial<CmsWhatsAppSettings>): Promise<CmsWhatsAppSettings> {
+  const res = await fetch(`${MEDUSA_URL}/admin/cms/whatsapp`, {
+    method: "POST",
+    headers: { ...defaultHeaders, "Content-Type": "application/json" },
+    body: JSON.stringify({ whatsapp: payload }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok || !data.success) {
+    throw new Error(data.message || "Error al actualizar configuración de WhatsApp")
+  }
+  return data.whatsapp
+}
+
+
 
 
 

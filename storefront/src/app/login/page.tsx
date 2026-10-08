@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/context/LanguageContext";
 import {
   loginCustomerApi,
   sendOtpRegisterApi,
@@ -14,14 +15,18 @@ import {
   requestPasswordResetApi,
   confirmPasswordResetApi,
 } from "@/lib/api-client";
+import { localizeAuthMessage } from "@/lib/localize-messages";
 
 function CustomerLoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectPath = searchParams.get("redirect") || "/mi-cuenta/descargas";
   const { loginCustomer } = useAuth();
+  const { t, language } = useLanguage();
+  const isEn = language === "en";
 
   const [mode, setMode] = useState<"login" | "register" | "forgot_email" | "forgot_otp">("login");
+
   const [registerStep, setRegisterStep] = useState<"form" | "otp">("form");
 
   const [showPassword, setShowPassword] = useState(false);
@@ -119,7 +124,7 @@ function CustomerLoginForm() {
     if (!forgotEmail || !forgotEmail.includes("@")) {
       setNotification({
         type: "error",
-        message: "Por favor ingresa un correo electrónico válido.",
+        message: isEn ? "Please enter a valid email address." : "Por favor ingresa un correo electrónico válido.",
       });
       return;
     }
@@ -142,13 +147,17 @@ function CustomerLoginForm() {
       setConfirmNewPassword("");
       setNotification({
         type: "info",
-        message: res.message || `Hemos enviado un código de 6 dígitos a ${forgotEmail}. Revisa tu bandeja de entrada o spam.`,
+        message: isEn
+          ? `6-digit OTP code successfully sent to ${forgotEmail}! (Please also check your Spam folder).`
+          : (res.message || `Hemos enviado un código de 6 dígitos a ${forgotEmail}. Revisa tu bandeja de entrada o spam.`),
       });
     } catch (err: any) {
       console.error("Error al solicitar código de recuperación:", err);
       setNotification({
         type: "error",
-        message: err.message || "Error al solicitar el código de recuperación.",
+        message: isEn
+          ? "Error requesting password reset code."
+          : (err.message || "Error al solicitar el código de recuperación."),
       });
     } finally {
       setIsSubmitting(false);
@@ -162,7 +171,7 @@ function CustomerLoginForm() {
     if (!forgotOtp || forgotOtp.trim().length !== 6) {
       setNotification({
         type: "error",
-        message: "Por favor ingresa el código de 6 dígitos completo.",
+        message: isEn ? "Please enter the complete 6-digit code." : "Por favor ingresa el código de 6 dígitos completo.",
       });
       return;
     }
@@ -170,7 +179,9 @@ function CustomerLoginForm() {
     if (newPassword.length < 6) {
       setNotification({
         type: "error",
-        message: "La nueva contraseña debe tener al menos 6 caracteres por seguridad.",
+        message: isEn
+          ? "The new password must be at least 6 characters long for security."
+          : "La nueva contraseña debe tener al menos 6 caracteres por seguridad.",
       });
       return;
     }
@@ -178,7 +189,9 @@ function CustomerLoginForm() {
     if (newPassword !== confirmNewPassword) {
       setNotification({
         type: "error",
-        message: "Las contraseñas no coinciden. Por favor verifica ambos campos.",
+        message: isEn
+          ? "Passwords do not match. Please verify both fields."
+          : "Las contraseñas no coinciden. Por favor verifica ambos campos.",
       });
       return;
     }
@@ -196,7 +209,9 @@ function CustomerLoginForm() {
 
       setNotification({
         type: "success",
-        message: res.message || "¡Contraseña actualizada con éxito! Ya puedes iniciar sesión.",
+        message: isEn
+          ? "Password successfully reset! You can now log in."
+          : (res.message || "¡Contraseña actualizada con éxito! Ya puedes iniciar sesión."),
       });
 
       setEmail(forgotEmail.trim());
@@ -206,7 +221,9 @@ function CustomerLoginForm() {
       console.error("Error al restablecer contraseña:", err);
       setNotification({
         type: "error",
-        message: err.message || "Código incorrecto o expirado. Por favor intenta de nuevo.",
+        message: isEn
+          ? "Invalid or expired code. Please try again."
+          : (err.message || "Código incorrecto o expirado. Por favor intenta de nuevo."),
       });
     } finally {
       setIsSubmitting(false);
@@ -230,12 +247,12 @@ function CustomerLoginForm() {
       setForgotOtp("");
       setNotification({
         type: "info",
-        message: `Nuevo código de recuperación enviado a ${forgotEmail}.`,
+        message: isEn ? `New recovery code sent to ${forgotEmail}.` : `Nuevo código de recuperación enviado a ${forgotEmail}.`,
       });
     } catch (err: any) {
       setNotification({
         type: "error",
-        message: err.message || "Error al reenviar el código.",
+        message: isEn ? "Error resending code." : (err.message || "Error al reenviar el código."),
       });
     } finally {
       setIsSubmitting(false);
@@ -253,7 +270,7 @@ function CustomerLoginForm() {
         if (password !== confirmPassword) {
           setNotification({
             type: "error",
-            message: "Las contraseñas no coinciden. Por favor verifica ambos campos.",
+            message: isEn ? "Passwords do not match. Please verify both fields." : "Las contraseñas no coinciden. Por favor verifica ambos campos.",
           });
           setIsSubmitting(false);
           return;
@@ -262,7 +279,7 @@ function CustomerLoginForm() {
         if (password.length < 6) {
           setNotification({
             type: "error",
-            message: "La contraseña debe tener al menos 6 caracteres por seguridad.",
+            message: isEn ? "Password must be at least 6 characters long for security." : "La contraseña debe tener al menos 6 caracteres por seguridad.",
           });
           setIsSubmitting(false);
           return;
@@ -282,7 +299,9 @@ function CustomerLoginForm() {
         setCanResend(false);
         setNotification({
           type: "info",
-          message: `Hemos enviado un código de 6 dígitos a ${email}. Revisa tu bandeja de entrada o spam.`,
+          message: isEn
+            ? `We have sent a 6-digit verification code to ${email}. Check your inbox or spam folder.`
+            : (res.message || `Hemos enviado un código de 6 dígitos a ${email}. Revisa tu bandeja de entrada o spam.`),
         });
       } else {
         // Login estándar contra PostgreSQL
@@ -296,7 +315,7 @@ function CustomerLoginForm() {
         });
         setNotification({
           type: "success",
-          message: "¡Autenticación exitosa! Redirigiendo...",
+          message: isEn ? "Authentication successful! Redirecting..." : "¡Autenticación exitosa! Redirigiendo...",
         });
 
         setTimeout(() => {
@@ -307,7 +326,7 @@ function CustomerLoginForm() {
       console.error("Error en autenticación:", err.message);
       setNotification({
         type: "error",
-        message: err.message || "Correo o contraseña incorrectos. Por favor verifica tus credenciales.",
+        message: localizeAuthMessage(err.message, isEn) || (isEn ? "Incorrect email or password. Please check your credentials." : "Correo o contraseña incorrectos. Por favor verifica tus credenciales."),
       });
     } finally {
       setIsSubmitting(false);
@@ -320,7 +339,7 @@ function CustomerLoginForm() {
     if (!otpCode || otpCode.trim().length !== 6) {
       setNotification({
         type: "error",
-        message: "Por favor ingresa el código completo de 6 dígitos numéricos.",
+        message: isEn ? "Please enter the complete 6-digit numeric verification code." : "Por favor ingresa el código completo de 6 dígitos numéricos.",
       });
       return;
     }
@@ -344,7 +363,7 @@ function CustomerLoginForm() {
 
       setNotification({
         type: "success",
-        message: "¡Correo verificado y cuenta creada con éxito en base de datos! Redirigiendo...",
+        message: isEn ? "Email verified and account created successfully! Redirecting..." : "¡Correo verificado y cuenta creada con éxito en base de datos! Redirigiendo...",
       });
 
       setTimeout(() => {
@@ -354,7 +373,7 @@ function CustomerLoginForm() {
       console.error("Error al validar OTP:", err.message);
       setNotification({
         type: "error",
-        message: err.message || "Código incorrecto o expirado. Por favor intenta de nuevo.",
+        message: localizeAuthMessage(err.message, isEn) || (isEn ? "Incorrect or expired code. Please try again." : "Código incorrecto o expirado. Por favor intenta de nuevo."),
       });
     } finally {
       setIsSubmitting(false);
@@ -379,12 +398,12 @@ function CustomerLoginForm() {
       setOtpCode("");
       setNotification({
         type: "info",
-        message: `Nuevo código generado y enviado a ${email}.`,
+        message: isEn ? `New code generated and sent to ${email}.` : `Nuevo código generado y enviado a ${email}.`,
       });
     } catch (err: any) {
       setNotification({
         type: "error",
-        message: err.message || "Error al reenviar el código.",
+        message: isEn ? "Error resending code." : (err.message || "Error al reenviar el código."),
       });
     } finally {
       setIsSubmitting(false);
@@ -429,7 +448,9 @@ function CustomerLoginForm() {
     if (typeof window === "undefined" || !(window as any).google?.accounts?.oauth2) {
       setNotification({
         type: "error",
-        message: "El servicio de autenticación de Google aún está cargando. Por favor intenta de nuevo en un segundo.",
+        message: isEn
+          ? "Google authentication service is still loading. Please try again in a moment."
+          : "El servicio de autenticación de Google aún está cargando. Por favor intenta de nuevo en un segundo.",
       });
       setIsGoogleSubmitting(false);
       return;
@@ -461,7 +482,9 @@ function CustomerLoginForm() {
             setIsGoogleSubmitting(false);
             setNotification({
               type: "error",
-              message: `Error al autenticar con Google: ${tokenResponse.error_description || tokenResponse.error}`,
+              message: isEn
+                ? `Error authenticating with Google: ${tokenResponse.error_description || tokenResponse.error}`
+                : `Error al autenticar con Google: ${tokenResponse.error_description || tokenResponse.error}`,
             });
             return;
           }
@@ -475,7 +498,7 @@ function CustomerLoginForm() {
             });
 
             if (!userinfoRes.ok) {
-              throw new Error("No se pudo obtener la información de perfil de Google.");
+              throw new Error(isEn ? "Could not retrieve Google profile information." : "No se pudo obtener la información de perfil de Google.");
             }
 
             const googleUser = await userinfoRes.json();
@@ -503,8 +526,8 @@ function CustomerLoginForm() {
             setNotification({
               type: "success",
               message: res.isNew
-                ? `¡Bienvenido ${name}! Tu cuenta de Google fue vinculada y creada con éxito.`
-                : `¡Hola de nuevo ${name}! Inicio de sesión con Google exitoso.`,
+                ? (isEn ? `Welcome ${name}! Your Google account was linked and created successfully.` : `¡Bienvenido ${name}! Tu cuenta de Google fue vinculada y creada con éxito.`)
+                : (isEn ? `Welcome back ${name}! Successfully signed in with Google.` : `¡Hola de nuevo ${name}! Inicio de sesión con Google exitoso.`),
             });
 
             setShowGoogleConfigModal(false);
@@ -516,7 +539,9 @@ function CustomerLoginForm() {
             console.error("Error procesando datos de Google:", err);
             setNotification({
               type: "error",
-              message: err.message || "Error al sincronizar tu cuenta de Google con Piano Colombia.",
+              message: isEn
+                ? "Error synchronizing your Google account with Piano Colombia."
+                : (err.message || "Error al sincronizar tu cuenta de Google con Piano Colombia."),
             });
           } finally {
             setIsGoogleSubmitting(false);
@@ -530,7 +555,7 @@ function CustomerLoginForm() {
       setIsGoogleSubmitting(false);
       setNotification({
         type: "error",
-        message: err.message || "Error al abrir la ventana de Google Sign-In.",
+        message: isEn ? "Error opening Google Sign-In window." : (err.message || "Error al abrir la ventana de Google Sign-In."),
       });
     }
   };
@@ -565,22 +590,22 @@ function CustomerLoginForm() {
         <div className="text-center space-y-2">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#F0F3FF] border border-[#0071BC]/10 text-[#0071BC] text-[11px] font-extrabold uppercase tracking-wider mb-2 font-montserrat">
             <span className="material-symbols-outlined text-xs">account_circle</span>
-            Área de Clientes • Piano Colombia
+            {isEn ? "Customer Area • Piano Colombia" : "Área de Clientes • Piano Colombia"}
           </div>
 
           <h1 className="text-3xl font-black font-montserrat text-[#111C2D] tracking-tight">
             {registerStep === "otp"
-              ? "Verifica tu Correo"
+              ? (isEn ? "Verify Your Email" : "Verifica tu Correo")
               : mode === "login"
-              ? "Bienvenido de Nuevo"
-              : "Crea tu Cuenta de Cliente"}
+              ? (isEn ? "Welcome Back" : "Bienvenido de Nuevo")
+              : (isEn ? "Create Your Customer Account" : "Crea tu Cuenta de Cliente")}
           </h1>
           <p className="text-xs sm:text-sm text-[#4C4546] font-medium leading-relaxed">
             {registerStep === "otp"
-              ? "Ingresa el código OTP de 6 dígitos que enviamos a tu bandeja para validar tu correo."
+              ? (isEn ? "Enter the 6-digit OTP code sent to your inbox to verify your email." : "Ingresa el código OTP de 6 dígitos que enviamos a tu bandeja para validar tu correo.")
               : mode === "login"
-              ? "Ingresa tus credenciales registradas para gestionar tus partituras y descargas oficiales."
-              : "Regístrate con tu correo o Google para descargar ediciones digitales Urtext autorizadas."}
+              ? (isEn ? "Enter your registered credentials to manage your scores and official downloads." : "Ingresa tus credenciales registradas para gestionar tus partituras y descargas oficiales.")
+              : (isEn ? "Sign up with email or Google to download official authorized Urtext editions." : "Regístrate con tu correo o Google para descargar ediciones digitales Urtext autorizadas.")}
           </p>
         </div>
 
@@ -589,7 +614,9 @@ function CustomerLoginForm() {
           <div className="p-3.5 bg-[#F0F3FF] border border-[#0071BC]/20 rounded-2xl flex items-center gap-3 text-xs text-[#0071BC] font-medium">
             <span className="material-symbols-outlined text-lg shrink-0">shopping_cart_checkout</span>
             <span>
-              Inicia sesión o regístrate para vincular tu compra a tu <strong>licencia legal nominativa</strong>.
+              {isEn
+                ? <>Sign in or register to link your purchase to your <strong>nominative legal license</strong>.</>
+                : <>Inicia sesión o regístrate para vincular tu compra a tu <strong>licencia legal nominativa</strong>.</>}
             </span>
           </div>
         )}
@@ -608,7 +635,7 @@ function CustomerLoginForm() {
             <span className="material-symbols-outlined text-base shrink-0">
               {notification.type === "success" ? "check_circle" : notification.type === "info" ? "info" : "error"}
             </span>
-            <span>{notification.message}</span>
+            <span>{localizeAuthMessage(notification.message, isEn)}</span>
           </div>
         )}
 
@@ -625,13 +652,13 @@ function CustomerLoginForm() {
                   <span className="material-symbols-outlined text-2xl">mark_email_read</span>
                 </div>
                 <p className="text-xs text-[#4C4546]">
-                  Código enviado a: <strong className="text-[#111C2D]">{email}</strong>
+                  {isEn ? "Code sent to:" : "Código enviado a:"} <strong className="text-[#111C2D]">{email}</strong>
                 </p>
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-[#111C2D] mb-2 font-montserrat text-center">
-                  Código de Seguridad (6 Dígitos) *
+                  {isEn ? "Security Code (6 Digits) *" : "Código de Seguridad (6 Dígitos) *"}
                 </label>
                 <div className="relative max-w-xs mx-auto">
                   <input
@@ -647,7 +674,7 @@ function CustomerLoginForm() {
                 </div>
                 <div className="text-center mt-2">
                   <span className="text-[11px] font-mono text-[#64748b]">
-                    ⏱️ Expira en: <strong className="text-[#111C2D]">{formatTimer(timerSeconds)}</strong>
+                    {isEn ? "⏱️ Expires in:" : "⏱️ Expira en:"} <strong className="text-[#111C2D]">{formatTimer(timerSeconds)}</strong>
                   </span>
                 </div>
               </div>
@@ -655,17 +682,17 @@ function CustomerLoginForm() {
               <button
                 type="submit"
                 disabled={isSubmitting || otpCode.length !== 6}
-                className="w-full py-3.5 bg-[#FBB03B] hover:bg-[#e09b2e] disabled:opacity-60 disabled:cursor-not-allowed text-[#111C2D] font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition font-montserrat flex items-center justify-center gap-2"
+                className="w-full py-3.5 bg-[#FBB03B] hover:bg-[#e09b2e] disabled:opacity-60 disabled:cursor-not-allowed text-[#111C2D] font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition font-montserrat flex items-center justify-center gap-2 cursor-pointer"
               >
                 {isSubmitting ? (
                   <>
                     <span className="w-4 h-4 border-2 border-[#111C2D] border-t-transparent rounded-full animate-spin"></span>
-                    Verificando Código...
+                    {isEn ? "Verifying Code..." : "Verificando Código..."}
                   </>
                 ) : (
                   <>
                     <span className="material-symbols-outlined text-lg">verified_user</span>
-                    Verificar y Crear Cuenta
+                    {isEn ? "Verify and Create Account" : "Verificar y Crear Cuenta"}
                   </>
                 )}
               </button>
@@ -677,10 +704,10 @@ function CustomerLoginForm() {
                     setRegisterStep("form");
                     setNotification(null);
                   }}
-                  className="font-bold text-[#4C4546] hover:text-[#111C2D] flex items-center gap-1 font-montserrat"
+                  className="font-bold text-[#4C4546] hover:text-[#111C2D] flex items-center gap-1 font-montserrat cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-sm">arrow_back</span>
-                  Cambiar Correo
+                  {isEn ? "Change Email" : "Cambiar Correo"}
                 </button>
 
                 <button
@@ -689,81 +716,86 @@ function CustomerLoginForm() {
                   onClick={handleResendOtp}
                   className={`font-bold font-montserrat ${
                     canResend
-                      ? "text-[#0071BC] hover:underline"
+                      ? "text-[#0071BC] hover:underline cursor-pointer"
                       : "text-[#94a3b8] cursor-not-allowed"
                   }`}
                 >
-                  {canResend ? "Reenviar Código" : `Reenviar en (${resendCooldown}s)`}
+                  {canResend
+                    ? (isEn ? "Resend Code" : "Reenviar Código")
+                    : (isEn ? `Resend in (${resendCooldown}s)` : `Reenviar en (${resendCooldown}s)`)}
                 </button>
               </div>
             </form>
           ) : mode === "forgot_email" ? (
             <form onSubmit={handleRequestForgotOtp} className="space-y-5">
               <div className="text-center space-y-1.5 pb-2 border-b border-black/5">
-                    <div className="w-12 h-12 bg-amber-50 text-amber-700 rounded-2xl flex items-center justify-center mx-auto border border-amber-200/80">
-                      <span className="material-symbols-outlined text-2xl">lock_reset</span>
-                    </div>
-                    <h2 className="font-montserrat font-extrabold text-base text-[#111C2D]">
-                      Recuperar Contraseña
-                    </h2>
-                    <p className="text-xs text-[#4C4546] max-w-xs mx-auto">
-                      Ingresa tu correo electrónico registrado y te enviaremos un código de seguridad para restablecer tu clave.
-                    </p>
-                  </div>
+                <div className="w-12 h-12 bg-amber-50 text-amber-700 rounded-2xl flex items-center justify-center mx-auto border border-amber-200/80">
+                  <span className="material-symbols-outlined text-2xl">lock_reset</span>
+                </div>
+                <h2 className="font-montserrat font-extrabold text-base text-[#111C2D]">
+                  {isEn ? "Reset Password" : "Recuperar Contraseña"}
+                </h2>
+                <p className="text-xs text-[#4C4546] max-w-xs mx-auto">
+                  {isEn
+                    ? "Enter your registered email address and we will send you a security code to reset your password."
+                    : "Ingresa tu correo electrónico registrado y te enviaremos un código de seguridad para restablecer tu clave."}
+                </p>
+              </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">
-                      Correo Electrónico Registrado *
-                    </label>
-                    <div className="relative">
-                      <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[#4C4546] text-lg">
-                        mail
-                      </span>
-                      <input
-                        type="email"
-                        required
-                        autoFocus
-                        value={forgotEmail}
-                        onChange={(e) => setForgotEmail(e.target.value)}
-                        placeholder="tu.correo@ejemplo.com"
-                        className="w-full pl-10 pr-4 py-3 bg-[#F0F3FF] border border-black/5 rounded-xl text-xs text-[#111C2D] placeholder-[#4C4546]/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
-                      />
-                    </div>
-                  </div>
+              <div>
+                <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">
+                  {isEn ? "Registered Email Address *" : "Correo Electrónico Registrado *"}
+                </label>
+                <div className="relative">
+                  <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[#4C4546] text-lg">
+                    mail
+                  </span>
+                  <input
+                    type="email"
+                    required
+                    autoFocus
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    placeholder="tu.correo@ejemplo.com"
+                    className="w-full pl-10 pr-4 py-3 bg-[#F0F3FF] border border-black/5 rounded-xl text-xs text-[#111C2D] placeholder-[#4C4546]/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                  />
+                </div>
+              </div>
 
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="w-full py-3.5 bg-[#FBB03B] hover:bg-[#e09b2e] text-[#111C2D] font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition font-montserrat flex items-center justify-center gap-2"
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <span className="w-4 h-4 border-2 border-[#111C2D] border-t-transparent rounded-full animate-spin"></span>
-                        Enviando Código...
-                      </>
-                    ) : (
-                      <>
-                        <span className="material-symbols-outlined text-lg">send</span>
-                        Enviar Código de Recuperación
-                      </>
-                    )}
-                  </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full py-3.5 bg-[#FBB03B] hover:bg-[#e09b2e] text-[#111C2D] font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-md transition font-montserrat flex items-center justify-center gap-2 cursor-pointer"
+              >
+                {isSubmitting ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-[#111C2D] border-t-transparent rounded-full animate-spin"></span>
+                    {isEn ? "Sending Code..." : "Enviando Código..."}
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-lg">send</span>
+                    {isEn ? "Send Reset Code" : "Enviar Código de Recuperación"}
+                  </>
+                )}
+              </button>
 
-                  <div className="pt-2 border-t border-black/5 text-center">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMode("login");
-                        setNotification(null);
-                      }}
-                      className="text-xs font-bold text-[#0071BC] hover:underline font-montserrat inline-flex items-center gap-1"
-                    >
-                      <span className="material-symbols-outlined text-sm">arrow_back</span>
-                      Volver a Iniciar Sesión
-                    </button>
-                  </div>
-                </form>
-              ) : mode === "forgot_otp" ? (
+              <div className="pt-2 border-t border-black/5 text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("login");
+                    setNotification(null);
+                  }}
+                  className="text-xs font-bold text-[#0071BC] hover:underline font-montserrat inline-flex items-center gap-1 cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-sm">arrow_back</span>
+                  {isEn ? "Back to Sign In" : "Volver a Iniciar Sesión"}
+                </button>
+              </div>
+            </form>
+          ) : mode === "forgot_otp" ? (
+
                 /* =========================================================
                      VISTA RECUPERAR CONTRASEÑA: PASO 2 (VALIDAR Y NUEVA CLAVE)
                    ========================================================= */
@@ -773,16 +805,17 @@ function CustomerLoginForm() {
                       <span className="material-symbols-outlined text-2xl">key</span>
                     </div>
                     <h2 className="font-montserrat font-extrabold text-base text-[#111C2D]">
-                      Crear Nueva Contraseña
+                      {isEn ? "Create New Password" : "Crear Nueva Contraseña"}
                     </h2>
                     <p className="text-xs text-[#4C4546]">
-                      Código enviado a: <strong className="text-[#111C2D]">{forgotEmail}</strong>
+                      {isEn ? "Code sent to: " : "Código enviado a: "}
+                      <strong className="text-[#111C2D]">{forgotEmail}</strong>
                     </p>
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-[#111C2D] mb-1 font-montserrat text-center">
-                      Código de Seguridad (6 Dígitos) *
+                      {isEn ? "Security Code (6 Digits) *" : "Código de Seguridad (6 Dígitos) *"}
                     </label>
                     <div className="relative max-w-xs mx-auto">
                       <input
@@ -798,14 +831,15 @@ function CustomerLoginForm() {
                     </div>
                     <div className="text-center mt-1">
                       <span className="text-[11px] font-mono text-[#64748b]">
-                        ⏱️ Expira en: <strong className="text-[#111C2D]">{formatTimer(forgotTimer)}</strong>
+                        {isEn ? "⏱️ Expires in: " : "⏱️ Expira en: "}
+                        <strong className="text-[#111C2D]">{formatTimer(forgotTimer)}</strong>
                       </span>
                     </div>
                   </div>
 
                   <div>
                     <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">
-                      Nueva Contraseña *
+                      {isEn ? "New Password *" : "Nueva Contraseña *"}
                     </label>
                     <div className="relative">
                       <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[#4C4546] text-lg">
@@ -817,7 +851,7 @@ function CustomerLoginForm() {
                         minLength={6}
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder="Mínimo 6 caracteres"
+                        placeholder={isEn ? "Minimum 6 characters" : "Mínimo 6 caracteres"}
                         className="w-full pl-10 pr-10 py-3 bg-[#F0F3FF] border border-black/5 rounded-xl text-xs text-[#111C2D] placeholder-[#4C4546]/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
                       />
                       <button
@@ -834,7 +868,7 @@ function CustomerLoginForm() {
 
                   <div>
                     <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">
-                      Confirmar Nueva Contraseña *
+                      {isEn ? "Confirm New Password *" : "Confirmar Nueva Contraseña *"}
                     </label>
                     <div className="relative">
                       <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[#4C4546] text-lg">
@@ -846,7 +880,7 @@ function CustomerLoginForm() {
                         minLength={6}
                         value={confirmNewPassword}
                         onChange={(e) => setConfirmNewPassword(e.target.value)}
-                        placeholder="Repite tu nueva contraseña"
+                        placeholder={isEn ? "Repeat your new password" : "Repite tu nueva contraseña"}
                         className={`w-full pl-10 pr-10 py-3 bg-[#F0F3FF] border rounded-xl text-xs text-[#111C2D] placeholder-[#4C4546]/60 focus:bg-white focus:outline-none focus:ring-2 ${
                           confirmNewPassword && confirmNewPassword !== newPassword
                             ? "border-red-400 focus:ring-red-400"
@@ -867,12 +901,13 @@ function CustomerLoginForm() {
                     </div>
                     {confirmNewPassword && confirmNewPassword !== newPassword && (
                       <p className="text-[11px] text-red-600 font-medium mt-1">
-                        Las contraseñas no coinciden
+                        {isEn ? "Passwords do not match" : "Las contraseñas no coinciden"}
                       </p>
                     )}
                     {confirmNewPassword && confirmNewPassword === newPassword && (
                       <p className="text-[11px] text-emerald-600 font-medium mt-1 flex items-center gap-1">
-                        <span className="material-symbols-outlined text-xs">check</span> Las contraseñas coinciden
+                        <span className="material-symbols-outlined text-xs">check</span>
+                        {isEn ? "Passwords match" : "Las contraseñas coinciden"}
                       </p>
                     )}
                   </div>
@@ -885,12 +920,12 @@ function CustomerLoginForm() {
                     {isSubmitting ? (
                       <>
                         <span className="w-4 h-4 border-2 border-[#111C2D] border-t-transparent rounded-full animate-spin"></span>
-                        Actualizando Contraseña...
+                        {isEn ? "Updating Password..." : "Actualizando Contraseña..."}
                       </>
                     ) : (
                       <>
                         <span className="material-symbols-outlined text-lg">check_circle</span>
-                        Restablecer y Guardar Contraseña
+                        {isEn ? "Reset and Save Password" : "Restablecer y Guardar Contraseña"}
                       </>
                     )}
                   </button>
@@ -905,7 +940,7 @@ function CustomerLoginForm() {
                       className="font-bold text-[#4C4546] hover:text-[#111C2D] flex items-center gap-1 font-montserrat"
                     >
                       <span className="material-symbols-outlined text-sm">arrow_back</span>
-                      Cambiar Correo
+                      {isEn ? "Change Email" : "Cambiar Correo"}
                     </button>
 
                     <button
@@ -918,7 +953,9 @@ function CustomerLoginForm() {
                           : "text-[#94a3b8] cursor-not-allowed"
                       }`}
                     >
-                      {forgotCanResend ? "Reenviar Código" : `Reenviar en (${forgotResendCooldown}s)`}
+                      {forgotCanResend
+                        ? (isEn ? "Resend Code" : "Reenviar Código")
+                        : (isEn ? `Resend in (${forgotResendCooldown}s)` : `Reenviar en (${forgotResendCooldown}s)`)}
                     </button>
                   </div>
                 </form>
@@ -957,14 +994,16 @@ function CustomerLoginForm() {
                       </svg>
                     )}
                     <span>
-                      {mode === "login" ? "Continuar con Google" : "Registrarme con Google"}
+                      {mode === "login"
+                        ? (isEn ? "Continue with Google" : "Continuar con Google")
+                        : (isEn ? "Sign up with Google" : "Registrarme con Google")}
                     </span>
                   </button>
 
                   <div className="relative flex items-center justify-center">
                     <div className="w-full border-t border-black/10"></div>
                     <span className="absolute bg-white px-3 text-[11px] font-bold text-[#94a3b8] uppercase tracking-wider font-montserrat">
-                      o con correo
+                      {isEn ? "or with email" : "o con correo"}
                     </span>
                   </div>
 
@@ -983,7 +1022,7 @@ function CustomerLoginForm() {
                           : "text-[#4C4546] hover:text-[#111C2D]"
                       }`}
                     >
-                      Iniciar Sesión
+                      {isEn ? "Sign In" : "Iniciar Sesión"}
                     </button>
                     <button
                       type="button"
@@ -998,7 +1037,7 @@ function CustomerLoginForm() {
                           : "text-[#4C4546] hover:text-[#111C2D]"
                       }`}
                     >
-                      Crear Cuenta
+                      {isEn ? "Create Account" : "Crear Cuenta"}
                     </button>
                   </div>
 
@@ -1009,7 +1048,7 @@ function CustomerLoginForm() {
                       <>
                         <div>
                           <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">
-                            Nombre Completo *
+                            {isEn ? "Full Name *" : "Nombre Completo *"}
                           </label>
                           <div className="relative">
                             <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[#4C4546] text-lg">
@@ -1020,7 +1059,7 @@ function CustomerLoginForm() {
                               required
                               value={fullName}
                               onChange={(e) => setFullName(e.target.value)}
-                              placeholder="Ej: Juan Pérez"
+                              placeholder={isEn ? "e.g. John Doe" : "Ej: Juan Pérez"}
                               className="w-full pl-10 pr-4 py-3 bg-[#F0F3FF] border border-black/5 rounded-xl text-xs text-[#111C2D] placeholder-[#4C4546]/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
                             />
                           </div>
@@ -1028,8 +1067,10 @@ function CustomerLoginForm() {
 
                         <div>
                           <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat flex items-center justify-between">
-                            <span>Teléfono Móvil Celular</span>
-                            <span className="text-[10px] text-[#0071BC] font-semibold">Para SMS y Checkout</span>
+                            <span>{isEn ? "Mobile Phone" : "Teléfono Móvil Celular"}</span>
+                            <span className="text-[10px] text-[#0071BC] font-semibold">
+                              {isEn ? "For SMS & Checkout" : "Para SMS y Checkout"}
+                            </span>
                           </label>
                           <div className="relative">
                             <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[#4C4546] text-lg">
@@ -1049,7 +1090,7 @@ function CustomerLoginForm() {
 
                     <div>
                       <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">
-                        Correo Electrónico *
+                        {isEn ? "Email Address *" : "Correo Electrónico *"}
                       </label>
                       <div className="relative">
                         <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[#4C4546] text-lg">
@@ -1060,7 +1101,7 @@ function CustomerLoginForm() {
                           required
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
-                          placeholder="tu.correo@ejemplo.com"
+                          placeholder={isEn ? "your.email@example.com" : "tu.correo@ejemplo.com"}
                           className="w-full pl-10 pr-4 py-3 bg-[#F0F3FF] border border-black/5 rounded-xl text-xs text-[#111C2D] placeholder-[#4C4546]/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
                         />
                       </div>
@@ -1069,7 +1110,7 @@ function CustomerLoginForm() {
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
                         <label className="block text-xs font-bold text-[#111C2D] font-montserrat">
-                          Contraseña *
+                          {isEn ? "Password *" : "Contraseña *"}
                         </label>
                         {mode === "login" && (
                           <button
@@ -1081,7 +1122,7 @@ function CustomerLoginForm() {
                             }}
                             className="text-[11px] font-bold text-[#0071BC] hover:underline font-montserrat"
                           >
-                            ¿Olvidaste tu contraseña?
+                            {isEn ? "Forgot your password?" : "¿Olvidaste tu contraseña?"}
                           </button>
                         )}
                       </div>
@@ -1094,7 +1135,7 @@ function CustomerLoginForm() {
                           required
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          placeholder="Ingresa tu contraseña"
+                          placeholder={isEn ? "Enter your password" : "Ingresa tu contraseña"}
                           className="w-full pl-10 pr-10 py-3 bg-[#F0F3FF] border border-black/5 rounded-xl text-xs text-[#111C2D] placeholder-[#4C4546]/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
                         />
                         <button
@@ -1112,7 +1153,7 @@ function CustomerLoginForm() {
                 {mode === "register" && (
                   <div>
                     <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">
-                      Confirmar Contraseña *
+                      {isEn ? "Confirm Password *" : "Confirmar Contraseña *"}
                     </label>
                     <div className="relative">
                       <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[#4C4546] text-lg">
@@ -1123,7 +1164,7 @@ function CustomerLoginForm() {
                         required
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="Repite tu contraseña"
+                        placeholder={isEn ? "Repeat your password" : "Repite tu contraseña"}
                         className={`w-full pl-10 pr-10 py-3 bg-[#F0F3FF] border rounded-xl text-xs text-[#111C2D] placeholder-[#4C4546]/60 focus:bg-white focus:outline-none focus:ring-2 ${
                           confirmPassword && confirmPassword !== password
                             ? "border-red-400 focus:ring-red-400"
@@ -1144,12 +1185,13 @@ function CustomerLoginForm() {
                     </div>
                     {confirmPassword && confirmPassword !== password && (
                       <p className="text-[11px] text-red-600 font-medium mt-1">
-                        Las contraseñas no coinciden
+                        {isEn ? "Passwords do not match" : "Las contraseñas no coinciden"}
                       </p>
                     )}
                     {confirmPassword && confirmPassword === password && (
                       <p className="text-[11px] text-emerald-600 font-medium mt-1 flex items-center gap-1">
-                        <span className="material-symbols-outlined text-xs">check</span> Las contraseñas coinciden
+                        <span className="material-symbols-outlined text-xs">check</span>
+                        {isEn ? "Passwords match" : "Las contraseñas coinciden"}
                       </p>
                     )}
                   </div>
@@ -1165,8 +1207,15 @@ function CustomerLoginForm() {
                       className="mt-0.5 rounded border-black/20 text-[#0071BC] focus:ring-[#0071BC]"
                     />
                     <label htmlFor="terms" className="text-[11px] text-[#4C4546] leading-snug">
-                      Acepto los <span className="text-[#0071BC] font-semibold underline">Términos de Servicio</span> y la{" "}
-                      <span className="text-[#0071BC] font-semibold underline">Política de Privacidad</span> de Piano Colombia.
+                      {isEn ? "I accept the " : "Acepto los "}
+                      <span className="text-[#0071BC] font-semibold underline">
+                        {isEn ? "Terms of Service" : "Términos de Servicio"}
+                      </span>
+                      {isEn ? " and the " : " y la "}
+                      <span className="text-[#0071BC] font-semibold underline">
+                        {isEn ? "Privacy Policy" : "Política de Privacidad"}
+                      </span>
+                      {" " + (isEn ? "of Piano Colombia." : "de Piano Colombia.")}
                     </label>
                   </div>
                 )}
@@ -1179,17 +1228,19 @@ function CustomerLoginForm() {
                   {isSubmitting ? (
                     <>
                       <span className="w-4 h-4 border-2 border-[#111C2D] border-t-transparent rounded-full animate-spin"></span>
-                      {mode === "login" ? "Validando Credenciales..." : "Enviando Código de Verificación..."}
+                      {mode === "login"
+                        ? (isEn ? "Validating Credentials..." : "Validando Credenciales...")
+                        : (isEn ? "Sending Verification Code..." : "Enviando Código de Verificación...")}
                     </>
                   ) : mode === "login" ? (
                     <>
                       <span className="material-symbols-outlined text-lg">login</span>
-                      Ingresar a Mi Cuenta
+                      {isEn ? "Sign In to My Account" : "Ingresar a Mi Cuenta"}
                     </>
                   ) : (
                     <>
                       <span className="material-symbols-outlined text-lg">send</span>
-                      Continuar y Verificar Correo
+                      {isEn ? "Continue & Verify Email" : "Continuar y Verificar Correo"}
                     </>
                   )}
                 </button>
@@ -1202,13 +1253,15 @@ function CustomerLoginForm() {
 
         {/* Box de llamada a Compositores */}
         <div className="p-4 bg-white rounded-2xl border border-black/5 shadow-2xs text-center space-y-1">
-          <span className="text-xs text-[#4C4546] font-medium">¿Eres compositor y deseas publicar tus obras?</span>
+          <span className="text-xs text-[#4C4546] font-medium">
+            {isEn ? "Are you a composer looking to publish your works?" : "¿Eres compositor y deseas publicar tus obras?"}
+          </span>
           <br />
           <Link
             href="/compositor/login"
             className="text-xs font-bold text-[#0071BC] hover:underline inline-flex items-center gap-1 font-montserrat"
           >
-            Acceder al Portal del Compositor
+            {isEn ? "Access Composer Portal" : "Acceder al Portal del Compositor"}
             <span className="material-symbols-outlined text-sm">arrow_forward</span>
           </Link>
         </div>
