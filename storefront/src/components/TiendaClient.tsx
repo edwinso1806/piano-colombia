@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useLanguage } from "@/context/LanguageContext";
 import SaveScoreButton from "@/components/SaveScoreButton";
+import { resolveMediaUrl } from "@/lib/api-client";
 
 const DIFFICULTY_LEVELS = ["Principiante", "Intermedio", "Avanzado", "Virtuoso"] as const;
 type DifficultyLevel = (typeof DIFFICULTY_LEVELS)[number];
@@ -22,6 +23,32 @@ interface TiendaClientProps {
   activeLevels: string[];
   activeCategory: any;
   difficultyCounts: Record<DifficultyLevel, number>;
+}
+
+function ScoreCardThumbnail({ previewUrl, title }: { previewUrl?: string; title: string }) {
+  const [hasError, setHasError] = useState(false);
+  const resolvedUrl = previewUrl ? resolveMediaUrl(previewUrl) : null;
+
+  if (resolvedUrl && !hasError) {
+    return (
+      <img
+        src={resolvedUrl}
+        alt={title}
+        className="w-full h-full object-contain filter group-hover:scale-105 transition-transform duration-500 rounded shadow-xs"
+        onError={() => setHasError(true)}
+      />
+    );
+  }
+
+  return (
+    <div className="py-6 opacity-30 select-none text-center flex flex-col justify-center px-4 w-full">
+      <div className="h-0.5 w-full bg-slate-300 my-1"></div>
+      <div className="h-0.5 w-full bg-slate-300 my-1"></div>
+      <div className="h-0.5 w-full bg-slate-300 my-1"></div>
+      <div className="h-0.5 w-full bg-slate-300 my-1"></div>
+      <div className="mt-2 font-serif italic text-[#111C2D] font-bold text-sm truncate">{title}</div>
+    </div>
+  );
 }
 
 export default function TiendaClient({
@@ -401,21 +428,10 @@ export default function TiendaClient({
               >
                 {/* Miniature Preview Container */}
                 <div className="relative aspect-[4/3] bg-slate-100/70 p-3 overflow-hidden border-b border-black/5 flex items-center justify-center">
-                  {score.previewPages && score.previewPages.length > 0 ? (
-                    <img
-                      src={score.previewPages[0]}
-                      alt={score.title}
-                      className="w-full h-full object-contain filter group-hover:scale-105 transition-transform duration-500 rounded shadow-xs"
-                    />
-                  ) : (
-                    <div className="py-6 opacity-30 select-none text-center flex flex-col justify-center px-4 w-full">
-                      <div className="h-0.5 w-full bg-slate-300 my-1"></div>
-                      <div className="h-0.5 w-full bg-slate-300 my-1"></div>
-                      <div className="h-0.5 w-full bg-slate-300 my-1"></div>
-                      <div className="h-0.5 w-full bg-slate-300 my-1"></div>
-                      <div className="mt-2 font-serif italic text-[#111C2D] font-bold text-sm truncate">{score.title}</div>
-                    </div>
-                  )}
+                  <ScoreCardThumbnail
+                    previewUrl={score.previewPages && score.previewPages.length > 0 ? score.previewPages[0] : undefined}
+                    title={score.title}
+                  />
                 </div>
 
                 {/* Body Content */}

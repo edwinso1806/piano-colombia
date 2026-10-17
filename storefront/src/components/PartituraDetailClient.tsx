@@ -8,6 +8,7 @@ import { useAlert } from "@/context/AlertContext";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SaveScoreButton from "@/components/SaveScoreButton";
+import { resolveMediaUrl } from "@/lib/api-client";
 
 interface PartituraDetailClientProps {
   score: {
@@ -140,7 +141,7 @@ export default function PartituraDetailClient({ score }: PartituraDetailClientPr
       priceUSD: score.priceUSD || 12,
       slug: score.slug || score.id,
       previewPages: previews,
-      mediaUrl: score.audio_sample_url || "",
+      mediaUrl: resolveMediaUrl(score.audio_sample_url) || "",
       description: score.description || "",
       tags: [],
     });
@@ -191,9 +192,10 @@ export default function PartituraDetailClient({ score }: PartituraDetailClientPr
     }
   }, [isEn, score.description_en, score.description_es, score.description]);
 
-  const previews = score.preview_images && score.preview_images.length > 0
+  const rawPreviews = Array.isArray(score.preview_images)
     ? score.preview_images
-    : [];
+    : (typeof score.preview_images === "string" ? [score.preview_images] : []);
+  const previews = rawPreviews.map((url: string) => resolveMediaUrl(url)).filter(Boolean);
 
   const composerName =
     score.composer?.artistic_name ||
@@ -324,7 +326,7 @@ export default function PartituraDetailClient({ score }: PartituraDetailClientPr
                 </div>
               </div>
               <a
-                href={score.audio_sample_url}
+                href={resolveMediaUrl(score.audio_sample_url)}
                 target="_blank"
                 rel="noreferrer"
                 className="px-4 py-2 bg-[#0071BC] text-white text-xs font-bold rounded-xl hover:bg-[#005a96] transition flex items-center gap-1.5 font-montserrat"

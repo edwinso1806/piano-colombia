@@ -7,7 +7,7 @@ import { MOCK_COMPOSERS, MOCK_SCORES } from "@/lib/mock-data";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SaveScoreButton from "@/components/SaveScoreButton";
-import { getHeroCms, getCmsCategories, getStoreFeaturedComposers, getStoreFeaturedScores, getStoreBlogPosts } from "@/lib/api-client";
+import { getHeroCms, getCmsCategories, getStoreFeaturedComposers, getStoreFeaturedScores, getStoreBlogPosts, resolveMediaUrl } from "@/lib/api-client";
 import { useLanguage } from "@/context/LanguageContext";
 import { translateBlogCategory, formatReadTime } from "@/lib/localize-messages";
 
@@ -254,7 +254,7 @@ export default function Home() {
               featured_tempo: h.featured_tempo || "Andante cantabile",
               featured_ismn: h.featured_ismn || "ISMN 979-0-901314-18-2",
               featured_audio_sample: h.featured_audio_sample || "Pasillo No. 1 — L. A. Calvo",
-              featured_audio_url: h.featured_audio_url || "",
+              featured_audio_url: resolveMediaUrl(h.featured_audio_url) || "",
               featured_badge_text: h.featured_badge_text || "GRABADO URTEXT 100% Alta Resolución",
               featured_link_url: h.featured_link_url || "/partitura/malvaloca",
             });
@@ -850,19 +850,20 @@ export default function Home() {
                     const p = score.preview_images || score.previewPages;
                     if (!p) return null;
                     if (Array.isArray(p) && p.length > 0) {
-                      return typeof p[0] === "string" ? p[0].trim() : null;
+                      const raw = typeof p[0] === "string" ? p[0].trim() : null;
+                      return raw ? resolveMediaUrl(raw) : null;
                     }
                     if (typeof p === "string") {
                       const trimmed = p.trim();
                       if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
                         try {
                           const parsed = JSON.parse(trimmed);
-                          if (Array.isArray(parsed) && parsed.length > 0) return parsed[0];
+                          if (Array.isArray(parsed) && parsed.length > 0) return resolveMediaUrl(parsed[0]);
                         } catch {}
                       }
                       const parts = trimmed.split(/[\s,]+/).filter((s) => s.startsWith("http") || s.startsWith("/"));
-                      if (parts.length > 0) return parts[0];
-                      if (trimmed.startsWith("http") || trimmed.startsWith("/")) return trimmed;
+                      if (parts.length > 0) return resolveMediaUrl(parts[0]);
+                      if (trimmed.startsWith("http") || trimmed.startsWith("/")) return resolveMediaUrl(trimmed);
                     }
                     return null;
                   })();

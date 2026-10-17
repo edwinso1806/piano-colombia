@@ -1,6 +1,26 @@
 const MEDUSA_URL = process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL || "http://localhost:9000"
 const PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY || "pk_0372bd6f8b5885e7dcfd759e152d7a9db36782d5eaace95f07e707f2e9f68ce3"
 
+export function resolveMediaUrl(url?: string | null): string {
+  if (!url) return ""
+  if (url.startsWith("data:") || url.startsWith("blob:")) return url
+
+  const backendUrl = (process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL || "http://localhost:9000").replace(/\/$/, "")
+
+  // Si la URL guardada en base de datos apunta a localhost:9000 o 127.0.0.1:9000
+  if (url.includes("localhost:9000") || url.includes("127.0.0.1:9000")) {
+    return url.replace(/https?:\/\/(localhost|127\.0\.0\.1):9000/, backendUrl)
+  }
+
+  // Si es una ruta relativa (/media?key=... o media?key=...)
+  if (url.startsWith("/media?") || url.startsWith("media?")) {
+    const clean = url.startsWith("/") ? url : `/${url}`
+    return `${backendUrl}${clean}`
+  }
+
+  return url
+}
+
 export function getCurrentLanguage(): "es" | "en" {
   if (typeof window !== "undefined") {
     try {

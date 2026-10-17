@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { MOCK_SCORES } from "@/lib/mock-data";
-import { getCatalogScores, getCmsCategories } from "@/lib/api-client";
+import { getCatalogScores, getCmsCategories, resolveMediaUrl } from "@/lib/api-client";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SaveScoreButton from "@/components/SaveScoreButton";
@@ -102,7 +102,9 @@ export default async function TiendaPage({
         tags: s.tags || [],
         priceCOP: Number(s.price_cop) || 45000,
         priceUSD: Number(s.price_usd) || 12,
-        previewPages: s.preview_images || [],
+        previewPages: (Array.isArray(s.preview_images) ? s.preview_images : (typeof s.preview_images === "string" ? [s.preview_images] : []))
+          .map((url: string) => resolveMediaUrl(url))
+          .filter(Boolean),
         description: s.description_es || s.description || "Edición filológica y digital de alta calidad con licencias oficiales.",
         description_es: s.description_es || s.description,
         description_en: s.description_en || null,
