@@ -27,7 +27,7 @@ export interface CmsStatsResponse {
 
 function getPgClient() {
   return new Client({
-    connectionString: process.env.DATABASE_URL || "postgres://postgres:Alex%242020@localhost:5432/piano_colombia_db",
+    connectionString: process.env.DATABASE_URL || "postgres://postgres:Colombia-93@localhost:5432/piano_colombia_db",
   })
 }
 

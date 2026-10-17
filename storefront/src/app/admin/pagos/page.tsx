@@ -276,17 +276,48 @@ const MEDUSA_URL = process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL || "http://localho
                 </p>
               </div>
             ) : filteredPayouts.length === 0 ? (
-              <div className="py-16 text-center space-y-3">
-                <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center mx-auto">
-                  <span className="material-symbols-outlined text-2xl">check_circle</span>
+              payouts.length > 0 ? (
+                <div className="py-16 text-center space-y-4 max-w-md mx-auto">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto">
+                    <span className="material-symbols-outlined text-2xl">search_off</span>
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-bold font-montserrat text-[#111C2D]">
+                      Sin coincidencias en liquidaciones pendientes
+                    </h4>
+                    {searchTerm.trim() && (
+                      <div className="pt-1">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#0071BC]/10 text-[#0071BC] text-[11px] font-bold">
+                          Búsqueda: "{searchTerm.trim()}"
+                        </span>
+                      </div>
+                    )}
+                    <p className="text-xs text-[#4C4546] leading-relaxed pt-1">
+                      Hay {payouts.length} liquidación{payouts.length > 1 ? "es" : ""} pendiente{payouts.length > 1 ? "s" : ""} registrada{payouts.length > 1 ? "s" : ""}, pero ninguna coincide con el término buscado.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm("")}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0071BC] hover:bg-[#005a96] text-white font-bold text-xs font-montserrat transition cursor-pointer shadow-2xs active:scale-95"
+                  >
+                    <span className="material-symbols-outlined text-sm">restart_alt</span>
+                    <span>Limpiar búsqueda ({payouts.length})</span>
+                  </button>
                 </div>
-                <h4 className="text-sm font-bold font-montserrat text-[#111C2D]">
-                  No hay saldos pendientes por dispersar
-                </h4>
-                <p className="text-xs text-[#4C4546] max-w-sm mx-auto">
-                  Todas las compras registradas han sido dispersadas o aún no hay nuevas ventas pendientes de liquidación.
-                </p>
-              </div>
+              ) : (
+                <div className="py-16 text-center space-y-3">
+                  <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center mx-auto">
+                    <span className="material-symbols-outlined text-2xl">check_circle</span>
+                  </div>
+                  <h4 className="text-sm font-bold font-montserrat text-[#111C2D]">
+                    No hay saldos pendientes por dispersar
+                  </h4>
+                  <p className="text-xs text-[#4C4546] max-w-sm mx-auto">
+                    Todas las compras registradas han sido dispersadas o aún no hay nuevas ventas pendientes de liquidación.
+                  </p>
+                </div>
+              )
             ) : (
               <table className="w-full text-left border-collapse">
                 <thead>

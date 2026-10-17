@@ -61,15 +61,20 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       })
     }
 
+    const { remember_me } = (req.body as any) || {}
+    const sessionDuration = remember_me ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000
+    const expires_at = Date.now() + sessionDuration
+
     const token = generateSessionToken({
       id: composer.id,
       email: composer.email,
       role: "composer",
-    })
+    }, sessionDuration)
 
     return res.status(200).json({
       success: true,
       token,
+      expires_at,
       composer: {
         id: composer.id,
         email: composer.email,

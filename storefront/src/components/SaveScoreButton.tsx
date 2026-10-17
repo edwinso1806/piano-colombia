@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSavedScores } from "@/context/SavedScoresContext";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
+import { useAlert } from "@/context/AlertContext";
 
 interface SaveScoreButtonProps {
   score: {
@@ -31,8 +32,9 @@ export default function SaveScoreButton({
 }: SaveScoreButtonProps) {
   const router = useRouter();
   const { customer } = useAuth();
-  const { isSaved, toggleSaveScore } = useSavedScores();
+  const { isSaved, removeSavedScore, openSaveModal } = useSavedScores();
   const { language } = useLanguage();
+  const { showInfo } = useAlert();
   const isEn = language === "en";
 
   const isLoggedIn = Boolean(customer?.email);
@@ -55,7 +57,18 @@ export default function SaveScoreButton({
       return;
     }
 
-    toggleSaveScore(score);
+    if (saved) {
+      // Si ya está guardada, al hacer clic se retira de la lista con notificación
+      removeSavedScore(score);
+      showInfo(
+        isEn
+          ? `Removed "${score.title}" from your saved scores.`
+          : `Se quitó "${score.title}" de tus partituras guardadas.`
+      );
+    } else {
+      // Abrir modal global sin anidar dentro de la partitura
+      openSaveModal(score);
+    }
   };
 
   const getTitle = () => {
@@ -64,7 +77,7 @@ export default function SaveScoreButton({
     }
     return saved
       ? (isEn ? "Remove from my favorite scores" : "Quitar de mis partituras favoritas")
-      : (isEn ? "Save to favorites" : "Guardar en favoritos");
+      : (isEn ? "Save to collections" : "Guardar en colecciones");
   };
 
   if (variant === "button") {
@@ -90,7 +103,7 @@ export default function SaveScoreButton({
         <span>
           {saved
             ? (isEn ? "Score Saved" : "Partitura Guardada")
-            : (isEn ? "Save to Favorites" : "Guardar en Favoritos")}
+            : (isEn ? "Save to Collection" : "Guardar en Colección")}
         </span>
       </button>
     );
@@ -123,7 +136,6 @@ export default function SaveScoreButton({
     );
   }
 
-  // Default "icon" variant
   return (
     <button
       type="button"

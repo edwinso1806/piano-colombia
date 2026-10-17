@@ -18,7 +18,7 @@ interface HeaderProps {
 export default function Header({ activePage }: HeaderProps) {
   const router = useRouter();
   const { totalItems } = useCart();
-  const { customer, logoutCustomer } = useAuth();
+  const { customer, logoutCustomer, composer, logoutComposer } = useAuth();
   const { savedScores } = useSavedScores();
   const { t } = useLanguage();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -188,14 +188,29 @@ export default function Header({ activePage }: HeaderProps) {
           )}
 
           {/* Portal Compositor (Escritorio) */}
-          <Link
-            href="/compositor/login"
-            className="hidden md:flex px-4 py-2 text-xs font-extrabold uppercase tracking-wider bg-[#FBB03B] text-[#111C2D] rounded-xl hover:bg-[#e09b2d] transition shadow-md font-montserrat items-center gap-1.5"
-            title="Acceder al Portal del Compositor"
-          >
-            <span className="material-symbols-outlined text-sm">music_note</span>
-            <span>{t("nav.composer_portal", "Portal Compositor")}</span>
-          </Link>
+          {composer ? (
+            <Link
+              href={composer.status === "APPROVED" ? "/compositor/dashboard" : "/compositor/dashboard/perfil"}
+              className="hidden md:flex px-3.5 py-2 text-xs font-extrabold uppercase tracking-wider bg-[#FBB03B] text-[#111C2D] rounded-xl hover:bg-[#e09b2d] transition shadow-md font-montserrat items-center gap-2 border border-[#FBB03B]"
+              title={`Panel del Compositor: ${composer.artistic_name || composer.email}`}
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-600"></span>
+              </span>
+              <span className="material-symbols-outlined text-sm">music_note</span>
+              <span className="max-w-[140px] truncate">{composer.artistic_name || t("nav.composer_portal", "Portal Compositor")}</span>
+            </Link>
+          ) : (
+            <Link
+              href="/compositor/login"
+              className="hidden md:flex px-4 py-2 text-xs font-extrabold uppercase tracking-wider bg-[#FBB03B] text-[#111C2D] rounded-xl hover:bg-[#e09b2d] transition shadow-md font-montserrat items-center gap-1.5"
+              title="Acceder al Portal del Compositor"
+            >
+              <span className="material-symbols-outlined text-sm">music_note</span>
+              <span>{t("nav.composer_portal", "Portal Compositor")}</span>
+            </Link>
+          )}
         </div>
       </header>
 
@@ -356,33 +371,68 @@ export default function Header({ activePage }: HeaderProps) {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-[#FBB03B]">
                 <span className="material-symbols-outlined text-xl">music_note</span>
-                <span className="text-xs font-black uppercase tracking-wider">{t("nav.composer_portal", "Portal Compositor")}</span>
+                <span className="text-xs font-black uppercase tracking-wider">
+                  {composer ? (composer.artistic_name || t("nav.composer_portal", "Portal Compositor")) : t("nav.composer_portal", "Portal Compositor")}
+                </span>
               </div>
-              <span className="text-[9px] px-2 py-0.5 rounded-full bg-[#FBB03B]/20 text-[#FBB03B] font-bold border border-[#FBB03B]/30 uppercase">
-                Wompi API
-              </span>
+              {composer ? (
+                <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold border border-emerald-500/30 uppercase flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  Sesión Activa
+                </span>
+              ) : (
+                <span className="text-[9px] px-2 py-0.5 rounded-full bg-[#FBB03B]/20 text-[#FBB03B] font-bold border border-[#FBB03B]/30 uppercase">
+                  Wompi API
+                </span>
+              )}
             </div>
 
             <p className="text-[11px] text-slate-300 leading-relaxed font-normal">
-              {t("auth.composer_subtitle", "Publica tus partituras, gestiona derechos de autor y recibe pagos de regalías directo a tu banco.")}
+              {composer
+                ? (composer.status === "APPROVED"
+                    ? "Tu cuenta de compositor está verificada y activa. Ingresa a tu panel para publicar obras y gestionar liquidaciones."
+                    : "Tu cuenta de compositor está en revisión. Ingresa a tu perfil para verificar o actualizar tus datos.")
+                : t("auth.composer_subtitle", "Publica tus partituras, gestiona derechos de autor y recibe pagos de regalías directo a tu banco.")}
             </p>
 
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              <Link
-                href="/compositor/login"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="py-2.5 bg-[#FBB03B] hover:bg-[#e09b2d] text-[#111C2D] text-[11px] font-extrabold uppercase tracking-wider rounded-xl transition text-center shadow-xs block"
-              >
-                {t("nav.login", "Ingresar")}
-              </Link>
-              <Link
-                href="/compositor/registro"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="py-2.5 bg-white/10 hover:bg-white/20 text-white border border-white/20 text-[11px] font-bold uppercase tracking-wider rounded-xl transition text-center block"
-              >
-                {t("footer.composer_register", "Registrarme")}
-              </Link>
-            </div>
+            {composer ? (
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <Link
+                  href={composer.status === "APPROVED" ? "/compositor/dashboard" : "/compositor/dashboard/perfil"}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="py-2.5 bg-[#FBB03B] hover:bg-[#e09b2d] text-[#111C2D] text-[11px] font-extrabold uppercase tracking-wider rounded-xl transition text-center shadow-xs block"
+                >
+                  Mi Panel
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    logoutComposer();
+                  }}
+                  className="py-2.5 bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-500/30 text-[11px] font-bold uppercase tracking-wider rounded-xl transition text-center block cursor-pointer"
+                >
+                  Cerrar Sesión
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <Link
+                  href="/compositor/login"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="py-2.5 bg-[#FBB03B] hover:bg-[#e09b2d] text-[#111C2D] text-[11px] font-extrabold uppercase tracking-wider rounded-xl transition text-center shadow-xs block"
+                >
+                  {t("nav.login", "Ingresar")}
+                </Link>
+                <Link
+                  href="/compositor/registro"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="py-2.5 bg-white/10 hover:bg-white/20 text-white border border-white/20 text-[11px] font-bold uppercase tracking-wider rounded-xl transition text-center block"
+                >
+                  {t("footer.composer_register", "Registrarme")}
+                </Link>
+              </div>
+            )}
           </div>
 
           {/* Configuración Adicional & Soporte */}

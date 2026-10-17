@@ -145,26 +145,27 @@ export default async function TiendaPage({
     return cSlug === activeCategorySlug || cTitle === activeCategorySlug;
   });
 
+  const slugify = (text: string) =>
+    (text || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .replace(/\s+/g, "-");
+
   // Filtrar partituras si hay categoría activa o niveles de dificultad
   const filteredScores = allScores.filter((score: any) => {
-    // 1. Filtro por categoría
+    // 1. Filtro estricto por categoría (Exact Match)
     if (activeCategorySlug && activeCategorySlug !== "todas") {
-      let matchesCat = false;
-      if (activeCategory) {
-        const catTitleLower = activeCategory.title.toLowerCase();
-        const scoreCatLower = (score.category || "").toLowerCase();
-        const matching = (activeCategory.matching_genres || [activeCategory.title]).map((m: string) => m.toLowerCase());
+      const scoreCatSlug = slugify(score.category || "");
+      const targetCatSlug = slugify(activeCategory ? activeCategory.title : activeCategorySlug);
+      const targetDirectSlug = slugify(activeCategorySlug);
+      const activeObjSlug = activeCategory?.slug ? slugify(activeCategory.slug) : "";
 
-        matchesCat = (
-          scoreCatLower === catTitleLower ||
-          scoreCatLower.includes(catTitleLower) ||
-          catTitleLower.includes(scoreCatLower) ||
-          matching.some((mg: string) => scoreCatLower === mg || scoreCatLower.includes(mg) || mg.includes(scoreCatLower))
-        );
-      } else {
-        const scoreGenreSlug = (score.category || "").toLowerCase().replace(/\s+/g, "-");
-        matchesCat = scoreGenreSlug.includes(activeCategorySlug) || activeCategorySlug.includes(scoreGenreSlug);
-      }
+      const matchesCat =
+        scoreCatSlug === targetCatSlug ||
+        scoreCatSlug === targetDirectSlug ||
+        (activeObjSlug !== "" && scoreCatSlug === activeObjSlug);
 
       if (!matchesCat) return false;
     }

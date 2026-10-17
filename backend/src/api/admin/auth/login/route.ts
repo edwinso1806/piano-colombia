@@ -8,7 +8,7 @@ const adminPasswordChangeTimestamps = new Map<string, number>()
 
 function getPgClient() {
   return new Client({
-    connectionString: process.env.DATABASE_URL || "postgres://postgres:Alex%242020@localhost:5432/piano_colombia_db"
+    connectionString: process.env.DATABASE_URL || "postgres://postgres:Colombia-93@localhost:5432/piano_colombia_db"
   })
 }
 
@@ -122,14 +122,18 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       })
     }
 
+    const sessionDuration = 8 * 60 * 60 * 1000 // 8 horas para administración
+    const expires_at = Date.now() + sessionDuration
+
     const token = generateSessionToken({
       email: normalizedEmail,
       role: matchedRole,
-    })
+    }, sessionDuration)
 
     return res.status(200).json({
       success: true,
       token,
+      expires_at,
       admin: {
         email: normalizedEmail,
         role: matchedRole,

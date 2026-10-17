@@ -14,7 +14,25 @@ function AdminLoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectPath = searchParams.get("redirect") || "/admin/dashboard";
-  const { loginAdmin } = useAuth();
+  const { loginAdmin, admin, isLoaded } = useAuth();
+
+  // Redirección si la sesión administrativa ya se encuentra activa
+  useEffect(() => {
+    if (!isLoaded) return;
+    if (admin && admin.email) {
+      router.replace(redirectPath);
+    }
+  }, [admin, isLoaded, redirectPath, router]);
+
+  // Mensaje cuando la sesión administrativa ha expirado
+  useEffect(() => {
+    if (searchParams.get("expired") === "true") {
+      setNotification({
+        type: "warning",
+        message: "Tu sesión administrativa ha expirado por políticas de seguridad institucional (8 horas). Por favor ingresa tus credenciales.",
+      });
+    }
+  }, [searchParams]);
 
   const [mode, setMode] = useState<"login" | "forgot_email" | "forgot_otp" | "expired_password">("login");
 
@@ -96,6 +114,9 @@ function AdminLoginForm() {
         email: res.admin.email,
         role: res.admin.role,
         name: res.admin.name,
+      }, {
+        token: res.token,
+        expires_at: res.expires_at,
       });
 
       let destination = redirectPath;
@@ -231,6 +252,18 @@ function AdminLoginForm() {
       setIsSubmitting(false);
     }
   };
+
+  if (isLoaded && admin && admin.email) {
+    return (
+      <div className="w-full max-w-md py-16 text-center font-montserrat space-y-4">
+        <div className="w-12 h-12 border-4 border-[#0071BC] border-t-transparent rounded-full animate-spin mx-auto" />
+        <h2 className="text-base font-extrabold text-[#111C2D]">
+          Sesión institucional activa. Redirigiendo a consola...
+        </h2>
+        <p className="text-xs text-slate-500">{admin.email}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-md space-y-8">

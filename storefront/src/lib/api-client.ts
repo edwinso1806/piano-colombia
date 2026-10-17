@@ -524,6 +524,35 @@ export async function loginWithGoogleApi(payload: {
   }
 }
 
+export async function loginWithGoogleComposerApi(payload: {
+  email: string
+  name: string
+  googleId?: string
+  picture?: string
+}) {
+  try {
+    const res = await fetch(`${MEDUSA_URL}/store/auth/composer/google`, {
+      method: "POST",
+      headers: defaultHeaders,
+      body: JSON.stringify({
+        email: payload.email,
+        name: payload.name,
+        google_id: payload.googleId,
+        picture: payload.picture,
+        lang: getCurrentLanguage(),
+      }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(data.message || (getCurrentLanguage() === "en" ? "Error authenticating composer with Google" : "Error en autenticación de compositor con Google"))
+    return data
+  } catch (err: any) {
+    if (err.message === "Failed to fetch" || err.message?.includes("fetch") || err.name === "TypeError") {
+      throw new Error(getCurrentLanguage() === "en" ? "Could not connect to the server. Please try again." : "No se pudo conectar con el servidor de autenticación. Por favor intenta de nuevo.")
+    }
+    throw err
+  }
+}
+
 export async function registerCustomerApi(payload: {
   fullName: string
   email: string
@@ -638,6 +667,39 @@ export async function loginAdminApi(email: string, password: string, role?: stri
       throw new Error("No se pudo conectar con el servidor. Por favor intenta de nuevo.")
     }
     throw err
+  }
+}
+
+export async function validateSessionApi(payload: {
+  token?: string
+  role: "composer" | "customer" | "admin" | "editor" | "moderator" | "payouts"
+  email?: string
+  id?: string
+}): Promise<{
+  valid: boolean
+  expired?: boolean
+  suspended?: boolean
+  reason?: string
+  expires_at?: number
+  composer?: any
+  customer?: any
+  admin?: any
+}> {
+  try {
+    const res = await fetch(`${MEDUSA_URL}/store/auth/validate-session`, {
+      method: "POST",
+      headers: {
+        ...getApiHeaders(),
+        ...(payload.token ? { Authorization: `Bearer ${payload.token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      return { valid: false, reason: "Error al comunicar con el servidor de validación" }
+    }
+    return await res.json()
+  } catch (err: any) {
+    return { valid: false, reason: err.message || "Error al verificar sesión" }
   }
 }
 
@@ -1441,18 +1503,33 @@ export async function chargeWompiCardDirectly(payload: {
   customer_legal_id_type?: string
   score_slug?: string
   score_id?: string
+  items?: any[]
+  quantity?: number
   lang?: "es" | "en"
 }) {
-  const res = await fetch(`${MEDUSA_URL}/store/wompi/charge`, {
-    method: "POST",
-    headers: defaultHeaders,
-    body: JSON.stringify({ lang: payload.lang || getCurrentLanguage(), ...payload }),
-  })
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok || !data.success) {
-    throw new Error(data.message || "Failed to process card payment with Wompi.")
+  try {
+    const res = await fetch(`${MEDUSA_URL}/store/wompi/charge`, {
+      method: "POST",
+      headers: defaultHeaders,
+      body: JSON.stringify({ lang: payload.lang || getCurrentLanguage(), ...payload }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok || !data.success) {
+      return {
+        success: false,
+        status: data?.status || "DECLINED",
+        message: data?.message || "La transacción no pudo ser aprobada por la entidad financiera.",
+        details: data,
+      }
+    }
+    return data
+  } catch (err: any) {
+    return {
+      success: false,
+      status: "ERROR",
+      message: err?.message || "Error al comunicarse con la pasarela de pagos.",
+    }
   }
-  return data
 }
 
 export async function confirmWompiTransaction(payload: any) {

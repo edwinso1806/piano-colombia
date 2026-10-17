@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useLanguage } from "@/context/LanguageContext";
+import { useAuth } from "@/context/AuthContext";
 
 export default function Footer() {
   const { t } = useLanguage();
+  const { composer } = useAuth();
 
   return (
     <footer className="border-t border-black/5 bg-white py-12 px-4 sm:px-6 w-full max-w-full overflow-hidden">
@@ -53,7 +55,14 @@ export default function Footer() {
           </h4>
           <ul className="space-y-2 text-xs text-[#4C4546] font-medium">
             <li><Link href="/compositor/registro" className="hover:text-[#0071BC] transition">{t("footer.composer_register", "Registrarme como Compositor")}</Link></li>
-            <li><Link href="/compositor/login" className="hover:text-[#0071BC] transition">{t("footer.composer_login", "Iniciar Sesión Portal")}</Link></li>
+            <li>
+              <Link
+                href={composer ? (composer.status === "APPROVED" ? "/compositor/dashboard" : "/compositor/dashboard/perfil") : "/compositor/login"}
+                className="hover:text-[#0071BC] transition"
+              >
+                {composer ? "Mi Portal de Compositor" : t("footer.composer_login", "Iniciar Sesión Portal")}
+              </Link>
+            </li>
             <li><a href="#" className="hover:text-[#0071BC] transition">{t("footer.terms", "Términos y Condiciones")}</a></li>
           </ul>
         </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useLanguage } from "@/context/LanguageContext";
 import SaveScoreButton from "@/components/SaveScoreButton";
@@ -33,6 +34,8 @@ export default function TiendaClient({
 }: TiendaClientProps) {
   const { t, language } = useLanguage();
   const isEn = language === "en";
+
+  const [searchQuery, setSearchQuery] = useState("");
 
   const getFilterUrl = (options: {
     categorySlug?: string | null;
@@ -70,24 +73,45 @@ export default function TiendaClient({
     return qs ? `/tienda?${qs}` : "/tienda";
   };
 
-  const filteredScores = allScores.filter((score: any) => {
-    if (activeCategorySlug && activeCategorySlug !== "todas") {
-      let matchesCat = false;
-      if (activeCategory) {
-        const catTitleLower = activeCategory.title.toLowerCase();
-        const scoreCatLower = (score.category || "").toLowerCase();
-        const matching = (activeCategory.matching_genres || [activeCategory.title]).map((m: string) => m.toLowerCase());
+  const slugify = (text: string) =>
+    (text || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .replace(/\s+/g, "-");
 
-        matchesCat = (
-          scoreCatLower === catTitleLower ||
-          scoreCatLower.includes(catTitleLower) ||
-          catTitleLower.includes(scoreCatLower) ||
-          matching.some((mg: string) => scoreCatLower === mg || scoreCatLower.includes(mg) || mg.includes(scoreCatLower))
-        );
-      } else {
-        const scoreGenreSlug = (score.category || "").toLowerCase().replace(/\s+/g, "-");
-        matchesCat = scoreGenreSlug.includes(activeCategorySlug) || activeCategorySlug.includes(scoreGenreSlug);
-      }
+  const filteredScores = allScores.filter((score: any) => {
+    // 0. Filtro por término de búsqueda en tiempo real
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      const title = (score.title || "").toLowerCase();
+      const composer = (score.composer || score.composerName || score.composer_name || "").toLowerCase();
+      const category = (score.category || "").toLowerCase();
+      const genre = (score.genre || "").toLowerCase();
+      const key = (score.keySignature || score.key || "").toLowerCase();
+
+      const matchesSearch =
+        title.includes(q) ||
+        composer.includes(q) ||
+        category.includes(q) ||
+        genre.includes(q) ||
+        key.includes(q);
+
+      if (!matchesSearch) return false;
+    }
+
+    // 1. Filtro estricto por categoría (Exact Match)
+    if (activeCategorySlug && activeCategorySlug !== "todas") {
+      const scoreCatSlug = slugify(score.category || "");
+      const targetCatSlug = slugify(activeCategory ? activeCategory.title : activeCategorySlug);
+      const targetDirectSlug = slugify(activeCategorySlug);
+      const activeObjSlug = activeCategory?.slug ? slugify(activeCategory.slug) : "";
+
+      const matchesCat =
+        scoreCatSlug === targetCatSlug ||
+        scoreCatSlug === targetDirectSlug ||
+        (activeObjSlug !== "" && scoreCatSlug === activeObjSlug);
 
       if (!matchesCat) return false;
     }
@@ -101,7 +125,7 @@ export default function TiendaClient({
     return true;
   });
 
-  const hasActiveFilters = Boolean(activeCategorySlug) || activeLevels.length > 0;
+  const hasActiveFilters = Boolean(activeCategorySlug) || activeLevels.length > 0 || Boolean(searchQuery.trim());
 
   return (
     <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-10 flex flex-col md:flex-row gap-8 min-w-0">
@@ -268,6 +292,22 @@ export default function TiendaClient({
                   {isEn ? "Active filters:" : "Filtrado activo:"}
                 </span>
 
+                {/* Tag búsqueda */}
+                {searchQuery.trim() && (
+                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#0071BC]/10 text-[#0071BC] text-xs font-bold font-montserrat border border-[#0071BC]/20">
+                    <span className="material-symbols-outlined text-sm">search</span>
+                    <span>{isEn ? "Search:" : "Búsqueda:"} "{searchQuery.trim()}"</span>
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery("")}
+                      className="hover:text-rose-600 transition ml-1 inline-flex items-center cursor-pointer"
+                      title={isEn ? "Clear search" : "Quitar filtro de búsqueda"}
+                    >
+                      <span className="material-symbols-outlined text-xs">close</span>
+                    </button>
+                  </span>
+                )}
+
                 {/* Tag categoría */}
                 {activeCategory && (
                   <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#0071BC]/10 text-[#0071BC] text-xs font-bold font-montserrat border border-[#0071BC]/20">
@@ -306,9 +346,10 @@ export default function TiendaClient({
                 })}
 
                 {/* Botón limpiar todos */}
-                {((Boolean(activeCategory) && activeLevels.length > 0) || activeLevels.length > 1) && (
+                {hasActiveFilters && (
                   <Link
                     href="/tienda"
+                    onClick={() => setSearchQuery("")}
                     className="text-[11px] text-rose-600 hover:underline font-bold font-montserrat ml-1"
                   >
                     {isEn ? "Reset all" : "Limpiar todos"}
@@ -324,6 +365,30 @@ export default function TiendaClient({
               ? (isEn ? "score available" : "partitura disponible")
               : (isEn ? "scores available" : "partituras disponibles")}
           </span>
+        </div>
+
+        {/* Buscador de Partituras en Tiempo Real */}
+        <div className="relative mb-6">
+          <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[#4C4546] text-lg pointer-events-none">
+            search
+          </span>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={t("store.search_placeholder", isEn ? "Search by title, composer, genre, or key..." : "Buscar por título, compositor, género o tonalidad...")}
+            className="w-full pl-10 pr-10 py-3 bg-white border border-black/5 rounded-2xl text-xs sm:text-sm text-[#111C2D] placeholder-[#4C4546]/60 shadow-[0_10px_30px_rgba(0,0,0,0.03)] focus:outline-none focus:ring-2 focus:ring-[#0071BC] transition"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 transition"
+              title={isEn ? "Clear search" : "Borrar búsqueda"}
+            >
+              <span className="material-symbols-outlined text-base">close</span>
+            </button>
+          )}
         </div>
 
         {/* Product Cards Grid */}
@@ -405,30 +470,83 @@ export default function TiendaClient({
               </div>
             ))}
           </div>
+        ) : allScores.length > 0 ? (
+          /* Filtros activos o búsqueda sin resultados pero el catálogo sí tiene obras */
+          <div className="bg-white rounded-3xl border border-black/5 p-12 sm:p-16 text-center max-w-xl mx-auto space-y-5 shadow-xs animate-in fade-in duration-200">
+            <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto">
+              <span className="material-symbols-outlined text-3xl">search_off</span>
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-xl font-black font-montserrat text-[#111C2D]">
+                {isEn ? "No sheet music matches your search criteria" : "Sin coincidencias para los filtros aplicados"}
+              </h3>
+
+              {/* Badges de filtros activos */}
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-1 pb-1">
+                {searchQuery.trim() && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#0071BC]/10 text-[#0071BC] text-xs font-bold font-montserrat border border-[#0071BC]/20">
+                    <span className="material-symbols-outlined text-sm">search</span>
+                    <span>{isEn ? "Search:" : "Búsqueda:"} "{searchQuery.trim()}"</span>
+                  </span>
+                )}
+                {activeCategory && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FBB03B]/20 text-[#111C2D] text-xs font-bold font-montserrat border border-[#FBB03B]/40">
+                    <span className="material-symbols-outlined text-sm">{activeCategory.icon || "piano"}</span>
+                    <span>{isEn ? "Category:" : "Categoría:"} {activeCategory.title}</span>
+                  </span>
+                )}
+                {activeLevels.map((lvl) => {
+                  const originalName = DIFFICULTY_LEVELS.find((d) => d.toLowerCase() === lvl) || lvl;
+                  const displayName = isEn ? (DIFFICULTY_EN_MAP[originalName as DifficultyLevel] || originalName) : originalName;
+                  return (
+                    <span
+                      key={lvl}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FBB03B]/20 text-[#111C2D] text-xs font-bold font-montserrat border border-[#FBB03B]/40"
+                    >
+                      <span className="material-symbols-outlined text-sm">signal_cellular_alt</span>
+                      <span>{isEn ? "Level:" : "Nivel:"} {displayName}</span>
+                    </span>
+                  );
+                })}
+              </div>
+
+              <p className="text-xs sm:text-sm text-[#4C4546] leading-relaxed max-w-md mx-auto">
+                {isEn
+                  ? `There are ${allScores.length} score${allScores.length > 1 ? "s" : ""} available in our catalog, but none match the current search or filters. Try adjusting your query or reset the filters.`
+                  : `Contamos con ${allScores.length} partitura${allScores.length > 1 ? "s" : ""} disponible${allScores.length > 1 ? "s" : ""} en el catálogo general, pero ninguna coincide con la búsqueda o filtros aplicados. Intenta con otro término o limpia los filtros.`}
+              </p>
+            </div>
+
+            <div className="pt-2">
+              <Link
+                href="/tienda"
+                onClick={() => setSearchQuery("")}
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#0071BC] hover:bg-[#005a96] text-white font-extrabold text-xs uppercase tracking-wider font-montserrat shadow-md transition cursor-pointer active:scale-95"
+              >
+                <span className="material-symbols-outlined text-base">restart_alt</span>
+                <span>
+                  {isEn
+                    ? `Clear filters and view all (${allScores.length})`
+                    : `Limpiar filtros y ver todas (${allScores.length})`}
+                </span>
+              </Link>
+            </div>
+          </div>
         ) : (
+          /* Catálogo completamente vacío en BD */
           <div className="p-12 text-center bg-white rounded-2xl border border-black/5 shadow-sm space-y-4">
             <div className="w-16 h-16 rounded-full bg-[#F0F3FF] text-[#0071BC] flex items-center justify-center mx-auto">
-              <span className="material-symbols-outlined text-3xl">
-                {activeCategory?.icon || "music_note"}
-              </span>
+              <span className="material-symbols-outlined text-3xl">music_note</span>
             </div>
             <h3 className="text-base font-bold font-montserrat text-[#111C2D]">
-              {isEn
-                ? "No sheet music available with the selected filters"
-                : "No hay partituras disponibles con los filtros seleccionados"}
+              {isEn ? "No sheet music in the catalog yet" : "Catálogo en proceso de curaduría"}
             </h3>
             <p className="text-xs text-[#4C4546] max-w-md mx-auto leading-relaxed">
               {isEn
-                ? "Try changing or resetting your category or difficulty filters."
-                : "Prueba cambiando o limpiando los filtros de categoría o nivel de dificultad."}
+                ? "Scores are currently being edited and verified. Check back soon!"
+                : "Actualmente se están preparando y verificando las ediciones Urtext. ¡Vuelve pronto!"}
             </p>
-            <Link
-              href="/tienda"
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0071BC] text-white text-xs font-bold rounded-xl hover:bg-[#005a96] transition font-montserrat"
-            >
-              <span>{isEn ? "View entire available catalog" : "Ver todo el catálogo disponible"}</span>
-              <span className="material-symbols-outlined text-sm">east</span>
-            </Link>
           </div>
         )}
       </section>

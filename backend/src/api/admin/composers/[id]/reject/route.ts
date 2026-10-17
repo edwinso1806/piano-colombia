@@ -10,7 +10,7 @@ import {
 
 function getPgClient() {
   return new Client({
-    connectionString: process.env.DATABASE_URL || "postgres://postgres:Alex%242020@localhost:5432/piano_colombia_db"
+    connectionString: process.env.DATABASE_URL || "postgres://postgres:Colombia-93@localhost:5432/piano_colombia_db"
   })
 }
 
@@ -92,7 +92,7 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       is_permanent_block: !!is_permanent_block,
       message: is_permanent_block 
         ? "Compositor bloqueado definitivamente. Se le ha notificado por correo electrónico."
-        : "Solicitud rechazada con observaciones. Se ha notificado al compositor con las pautas para su corrección.",
+        : "Sugerencias y observaciones enviadas al compositor exitosamente. Se ha habilitado su botón para volver a enviar a revisión.",
     })
   } catch (error: any) {
     return res.status(500).json({

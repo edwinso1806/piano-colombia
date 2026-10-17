@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useLanguage } from "@/context/LanguageContext";
 import { useCart } from "@/context/CartContext";
+import { useAlert } from "@/context/AlertContext";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SaveScoreButton from "@/components/SaveScoreButton";
@@ -105,10 +106,74 @@ function formatDifficulty(diff?: string, isEn?: boolean): string {
 export default function PartituraDetailClient({ score }: PartituraDetailClientProps) {
   const { t, language } = useLanguage();
   const isEn = language === "en";
-  const { addToCart } = useCart();
+  const { addToCart, cart } = useCart();
+  const { showAlert } = useAlert();
   const [selectedPageIndex, setSelectedPageIndex] = useState(0);
-  const [addedToCart, setAddedToCart] = useState(false);
+  const [isAddingToCart, setIsAddingToCart] = useState(false);
+  const [isAlertActive, setIsAlertActive] = useState(false);
   const [clientTranslatedDesc, setClientTranslatedDesc] = useState<string | null>(null);
+
+  const alertTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (alertTimerRef.current) {
+        clearTimeout(alertTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleAddToCart = async () => {
+    if (isAddingToCart || isAlertActive) return;
+    setIsAddingToCart(true);
+
+    await new Promise((resolve) => setTimeout(resolve, 350));
+
+    addToCart({
+      id: score.id,
+      title: score.title,
+      composer: composerName,
+      composerId: score.composer?.id || "",
+      category: (score.genre || score.category || "Piano Solo") as any,
+      level: (score.difficulty || score.level || "Intermedio") as any,
+      priceCOP: score.priceCOP || 45000,
+      priceUSD: score.priceUSD || 12,
+      slug: score.slug || score.id,
+      previewPages: previews,
+      mediaUrl: score.audio_sample_url || "",
+      description: score.description || "",
+      tags: [],
+    });
+
+    setIsAddingToCart(false);
+    setIsAlertActive(true);
+
+    const alertDuration = 3500;
+
+    showAlert({
+      type: "success",
+      title: isEn ? "Item Added" : "Añadido al Carrito",
+      message: isEn
+        ? `"${score.title}" has been added to your cart.`
+        : `"${score.title}" ha sido agregada exitosamente a tu carrito de compras.`,
+      duration: alertDuration,
+      onClose: () => {
+        if (alertTimerRef.current) clearTimeout(alertTimerRef.current);
+        setIsAlertActive(false);
+      },
+      action: {
+        label: isEn ? "View Cart" : "Ver Carrito",
+        onClick: () => {
+          window.location.href = "/carrito";
+        },
+      },
+    });
+
+    if (alertTimerRef.current) clearTimeout(alertTimerRef.current);
+    alertTimerRef.current = setTimeout(() => {
+      setIsAlertActive(false);
+    }, alertDuration + 50);
+  };
 
   useEffect(() => {
     if (isEn && !score.description_en && (score.description_es || score.description)) {
@@ -332,39 +397,32 @@ export default function PartituraDetailClient({ score }: PartituraDetailClientPr
             <div className="space-y-3 pt-2">
               <button
                 type="button"
-                onClick={() => {
-                  addToCart({
-                    id: score.id,
-                    title: score.title,
-                    composer: composerName,
-                    composerId: score.composer?.id || "",
-                    category: (score.genre || score.category || "Piano Solo") as any,
-                    level: (score.difficulty || score.level || "Intermedio") as any,
-                    priceCOP: score.priceCOP || 45000,
-                    priceUSD: score.priceUSD || 12,
-                    slug: score.slug || score.id,
-                    previewPages: previews,
-                    mediaUrl: score.audio_sample_url || "",
-                    description: score.description || "",
-                    tags: [],
-                  });
-                  setAddedToCart(true);
-                  setTimeout(() => setAddedToCart(false), 2500);
-                }}
-                className={`w-full py-3.5 text-center font-extrabold text-xs uppercase tracking-wider rounded-xl transition shadow-sm font-montserrat flex items-center justify-center gap-2 cursor-pointer border ${
-                  addedToCart
-                    ? "bg-emerald-600 text-white border-emerald-600"
-                    : "bg-[#0071BC] hover:bg-[#005a96] text-white border-[#0071BC]"
+                disabled={isAddingToCart || isAlertActive}
+                onClick={handleAddToCart}
+                className={`w-full py-3.5 text-center font-extrabold text-xs uppercase tracking-wider rounded-xl transition-all duration-300 shadow-sm font-montserrat flex items-center justify-center gap-2 border ${
+                  isAlertActive
+                    ? "bg-emerald-600 text-white border-emerald-600 opacity-95 cursor-not-allowed scale-[0.99]"
+                    : isAddingToCart
+                    ? "bg-[#0071BC] text-white border-[#0071BC] opacity-85 cursor-wait"
+                    : "bg-[#0071BC] hover:bg-[#005a96] text-white border-[#0071BC] cursor-pointer active:scale-95"
                 }`}
               >
-                <span className="material-symbols-outlined text-base">
-                  {addedToCart ? "check_circle" : "add_shopping_cart"}
-                </span>
-                <span>
-                  {addedToCart
-                    ? t("catalog.added_to_cart_success", "¡Agregado al Carrito!")
-                    : t("catalog.add_to_cart", "Añadir al Carrito")}
-                </span>
+                {isAddingToCart ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    <span>{isEn ? "Adding to Cart..." : "Agregando al Carrito..."}</span>
+                  </>
+                ) : isAlertActive ? (
+                  <>
+                    <span className="material-symbols-outlined text-base">check_circle</span>
+                    <span>{isEn ? "Added to Cart" : "Agregado al Carrito"}</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-base">add_shopping_cart</span>
+                    <span>{t("catalog.add_to_cart", "Añadir al Carrito")}</span>
+                  </>
+                )}
               </button>
 
               <Link

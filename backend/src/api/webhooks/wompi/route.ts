@@ -46,7 +46,7 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       let maxDownloadsAllowed = 5
       try {
         const pgClient = new Client({
-          connectionString: process.env.DATABASE_URL || "postgres://postgres:Alex%242020@localhost:5432/piano_colombia_db"
+          connectionString: process.env.DATABASE_URL || "postgres://postgres:Colombia-93@localhost:5432/piano_colombia_db"
         })
         await pgClient.connect()
         const limitRes = await pgClient.query("SELECT value FROM platform_settings WHERE key = 'max_downloads_per_purchase' LIMIT 1;")
@@ -60,52 +60,95 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
 
       const buyerLang = (payload?.lang || payload?.language || payload?.customer_language || extractLanguage(req)) as "es" | "en"
 
-      // Registrar descarga protegida en PostgreSQL
-      const downloadRecord = await downloadModuleService.createCustomerDownloads({
-        order_id: reference,
-        customer_id: customerEmail,
-        score_id: score?.id || "score_default",
-        score_title: score?.title || "Partitura Piano Colombia",
-        composer_name: composerName,
-        download_token: downloadToken,
-        download_count: 0,
-        max_downloads: maxDownloadsAllowed,
-        wompi_transaction_id: transaction?.id || reference,
-        buyer_name: customerName,
-        buyer_email: customerEmail,
-        buyer_tax_id: transaction?.customer_data?.legal_id || null,
-        language: buyerLang,
-        watermark_text: buyerLang === "en"
-          ? `Official License Piano Colombia · Buyer: ${customerName} · Ref: ${reference}`
-          : `Licencia Oficial Piano Colombia · Comprador: ${customerName} · Ref: ${reference}`,
-        expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 días
-      })
+      // Procesar todos los items del carrito o score individual
+      const rawItems = Array.isArray(payload?.items) && payload.items.length > 0
+        ? payload.items
+        : [{
+            score_slug: scoreSlug,
+            score_id: payload?.score_id || "",
+            quantity: Number(payload?.quantity) || 1,
+            title: "Partitura Piano Colombia",
+          }]
+
+      let primaryDownloadToken = ""
+      let primaryScoreTitle = "Partitura Piano Colombia"
+      let primaryComposerName = "Maestro Colombiano"
+
+      for (const item of rawItems) {
+        const itemSlug = item.score_slug || scoreSlug
+        const itemId = item.score_id || payload?.score_id || ""
+        const qty = Math.max(1, Number(item.quantity) || 1)
+
+        // Buscar partitura y compositor
+        const scores = await scoreModuleService.listScores({ slug: itemSlug }, { take: 1 })
+        const score = scores && scores.length > 0 ? scores[0] : null
+        let composerName = "Maestro Colombiano"
+
+        if (score?.composer_id) {
+          const composers = await composerModuleService.listComposers({ id: score.composer_id }, { take: 1 })
+          if (composers && composers.length > 0) {
+            composerName = composers[0].artistic_name || `${composers[0].first_name} ${composers[0].last_name}`
+          }
+        }
+
+        if (!primaryScoreTitle || primaryScoreTitle === "Partitura Piano Colombia") {
+          primaryScoreTitle = score?.title || item.title || "Partitura Piano Colombia"
+          primaryComposerName = composerName
+        }
+
+        for (let q = 0; q < qty; q++) {
+          const downloadToken = crypto.randomUUID()
+          if (!primaryDownloadToken) {
+            primaryDownloadToken = downloadToken
+          }
+
+          // Registrar descarga protegida en PostgreSQL
+          await downloadModuleService.createCustomerDownloads({
+            order_id: reference,
+            customer_id: customerEmail,
+            score_id: score?.id || itemId || "score_default",
+            score_title: score?.title || item.title || "Partitura Piano Colombia",
+            composer_name: composerName,
+            download_token: downloadToken,
+            download_count: 0,
+            max_downloads: maxDownloadsAllowed,
+            wompi_transaction_id: transaction?.id || reference,
+            buyer_name: customerName,
+            buyer_email: customerEmail,
+            buyer_tax_id: transaction?.customer_data?.legal_id || null,
+            language: buyerLang,
+            watermark_text: buyerLang === "en"
+              ? `Official License Piano Colombia · Buyer: ${customerName} · Ref: ${reference}`
+              : `Licencia Oficial Piano Colombia · Comprador: ${customerName} · Ref: ${reference}`,
+            expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 días
+          })
+        }
+      }
 
       // Enviar correo de confirmación de compra y descarga nominativa
-      const downloadUrl = `http://localhost:3000/mi-cuenta/descargas?token=${downloadToken}`
+      const downloadUrl = `http://localhost:3000/mi-cuenta/descargas?token=${primaryDownloadToken}`
       const purchaseHTML = generateBuyerPurchaseHTML({
         buyerName: customerName,
-        scoreTitle: score?.title || "Partitura Piano Colombia",
-        composerName,
+        scoreTitle: primaryScoreTitle,
+        composerName: primaryComposerName,
         downloadUrl,
-        token: downloadToken,
+        token: primaryDownloadToken,
         priceCop: Math.round(amountInCents / 100),
         lang: buyerLang,
       })
 
       await sendEmail({
         to: customerEmail,
-        subject: EMAIL_SUBJECTS.buyerPurchase[buyerLang](score?.title || (buyerLang === "en" ? "Urtext Sheet Music" : "Partitura Urtext")),
+        subject: EMAIL_SUBJECTS.buyerPurchase[buyerLang](primaryScoreTitle || (buyerLang === "en" ? "Urtext Sheet Music" : "Partitura Urtext")),
         html: purchaseHTML,
       })
 
       return res.status(200).json({
         received: true,
         status: "APPROVED",
-        download_token: downloadToken,
-        download_id: downloadRecord.id,
+        download_token: primaryDownloadToken,
         download_url: downloadUrl,
-        message: "Pago procesado, descarga legal estampada y correo de confirmación enviado con éxito.",
+        message: "Pago procesado, descargas legales estampadas y correo de confirmación enviado con éxito.",
       })
     }
 

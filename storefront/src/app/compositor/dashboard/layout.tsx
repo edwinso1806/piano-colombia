@@ -33,6 +33,10 @@ export default function CompositorDashboardLayout({
       try {
         const freshData = await getComposerProfileApi(targetId);
         if (freshData && isMounted) {
+          if (freshData.status === "SUSPENDED") {
+            logoutComposer({ reason: "expired" });
+            return;
+          }
           if (
             freshData.status !== currentComposer.status ||
             freshData.rejection_reason !== currentComposer.rejection_reason ||

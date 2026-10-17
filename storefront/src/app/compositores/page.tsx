@@ -10,10 +10,11 @@ export default async function CompositoresPage() {
   const composers = Array.isArray(liveComposers)
     ? liveComposers.map((c: any) => ({
         id: c.id,
-        name: c.artistic_name || `${c.first_name} ${c.last_name}`,
+        name: c.artistic_name || `${c.first_name || ""} ${c.last_name || ""}`.trim() || "Compositor Colombiano",
         slug: c.slug,
-        country: "Colombia",
-        city: c.region || "Colombia",
+        country: c.country || "Colombia",
+        region: c.region || c.department || "",
+        city: c.city || c.region || "Colombia",
         photoUrl: c.photo_url || null,
         shortBio: c.bio_es ? c.bio_es.substring(0, 120) + "..." : "Compositor colombiano para piano.",
         shortBioEn: c.bio_en ? c.bio_en.substring(0, 120) + "..." : "Colombian piano composer.",

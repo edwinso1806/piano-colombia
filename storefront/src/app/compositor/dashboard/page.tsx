@@ -21,6 +21,7 @@ import {
 function CompositorDashboardContent() {
   const { composer } = useAuth();
   const { t, language } = useLanguage();
+  const isEn = language === "en";
   const searchParams = useSearchParams();
 
   const [activeMainTab, setActiveMainTab] = useState<"metricas" | "partituras">("metricas");
@@ -528,7 +529,7 @@ function CompositorDashboardContent() {
           {/* Toolbar de Búsqueda y Filtros */}
           <div className="p-4 bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
             <div className="relative flex-1">
-              <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[#4C4546] text-lg">
+              <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[#4C4546] text-lg pointer-events-none">
                 search
               </span>
               <input
@@ -536,8 +537,18 @@ function CompositorDashboardContent() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={t("dashboard.search_scores", "Buscar por título, género o clave...")}
-                className="w-full pl-10 pr-4 py-2.5 text-xs bg-[#F0F3FF] border border-black/5 rounded-xl text-[#111C2D] placeholder-[#4C4546]/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                className="w-full pl-10 pr-10 py-2.5 text-xs bg-[#F0F3FF] border border-black/5 rounded-xl text-[#111C2D] placeholder-[#4C4546]/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC] transition"
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 transition"
+                  title={isEn ? "Clear search" : "Borrar búsqueda"}
+                >
+                  <span className="material-symbols-outlined text-base">close</span>
+                </button>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
@@ -594,27 +605,90 @@ function CompositorDashboardContent() {
                 </p>
               </div>
             ) : filteredScores.length === 0 ? (
-              <div className="p-12 text-center space-y-4">
-                <div className="w-16 h-16 rounded-full bg-[#F0F3FF] text-[#0071BC] flex items-center justify-center mx-auto text-3xl">
-                  <span className="material-symbols-outlined">library_music</span>
+              scores.length > 0 ? (
+                /* Búsqueda o filtro activo sin resultados pero el compositor sí tiene partituras */
+                <div className="p-12 sm:p-16 text-center space-y-5 animate-in fade-in duration-200">
+                  <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto">
+                    <span className="material-symbols-outlined text-3xl">search_off</span>
+                  </div>
+
+                  <div className="space-y-2">
+                    <h3 className="font-montserrat font-black text-xl text-[#111C2D]">
+                      {isEn ? "No scores match your search or filter" : "No se encontraron obras con los filtros aplicados"}
+                    </h3>
+
+                    {/* Badges de filtros activos */}
+                    <div className="flex flex-wrap items-center justify-center gap-2 pt-1 pb-1">
+                      {searchQuery.trim() && (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#0071BC]/10 text-[#0071BC] text-xs font-bold font-montserrat border border-[#0071BC]/20">
+                          <span className="material-symbols-outlined text-sm">search</span>
+                          <span>{isEn ? "Search:" : "Búsqueda:"} "{searchQuery.trim()}"</span>
+                        </span>
+                      )}
+                      {scoreFilter !== "todas" && (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FBB03B]/20 text-[#111C2D] text-xs font-bold font-montserrat border border-[#FBB03B]/40">
+                          <span className="material-symbols-outlined text-sm">filter_alt</span>
+                          <span>
+                            {isEn ? "Status:" : "Estado:"}{" "}
+                            {scoreFilter === "publicadas"
+                              ? (isEn ? "Published" : "Publicadas")
+                              : scoreFilter === "revision"
+                              ? (isEn ? "In Review" : "En Revisión")
+                              : (isEn ? "With Observations" : "Con Observaciones")}
+                          </span>
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="text-xs sm:text-sm text-[#4C4546] max-w-md mx-auto leading-relaxed">
+                      {isEn
+                        ? `You have ${scores.length} score${scores.length > 1 ? "s" : ""} registered in your catalog, but none match the current search or status filter. Try clearing your filters.`
+                        : `Tienes ${scores.length} obra${scores.length > 1 ? "s" : ""} registrada${scores.length > 1 ? "s" : ""} en tu catálogo, pero ninguna coincide con los filtros aplicados. Prueba con otro término o limpia los filtros.`}
+                    </p>
+                  </div>
+
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchQuery("");
+                        setScoreFilter("todas");
+                      }}
+                      className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#0071BC] hover:bg-[#005a96] text-white font-extrabold text-xs uppercase tracking-wider font-montserrat shadow-md transition cursor-pointer active:scale-95"
+                    >
+                      <span className="material-symbols-outlined text-base">restart_alt</span>
+                      <span>
+                        {isEn
+                          ? `Clear filters and show all (${scores.length})`
+                          : `Limpiar filtros y ver todas (${scores.length})`}
+                      </span>
+                    </button>
+                  </div>
                 </div>
-                <h3 className="font-montserrat font-black text-lg text-[#111C2D]">
-                  {t("dashboard.no_scores_title", "Aún no tienes partituras registradas")}
-                </h3>
-                <p className="text-xs text-[#4C4546] max-w-md mx-auto leading-relaxed">
-                  {t(
-                    "dashboard.no_scores_desc",
-                    "Sube tu primera obra en formato PDF de alta resolución con vistas previas automáticas."
-                  )}
-                </p>
-                <Link
-                  href="/compositor/dashboard/partituras/nueva"
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-[#0071BC] hover:bg-[#005a96] text-white font-bold text-xs rounded-xl shadow-md transition font-montserrat"
-                >
-                  <span className="material-symbols-outlined text-base">cloud_upload</span>
-                  {t("dashboard.upload_score_btn", "Subir Nueva Partitura")}
-                </Link>
-              </div>
+              ) : (
+                /* Compositor sin ninguna partitura registrada en el sistema */
+                <div className="p-12 text-center space-y-4">
+                  <div className="w-16 h-16 rounded-full bg-[#F0F3FF] text-[#0071BC] flex items-center justify-center mx-auto text-3xl">
+                    <span className="material-symbols-outlined">library_music</span>
+                  </div>
+                  <h3 className="font-montserrat font-black text-lg text-[#111C2D]">
+                    {t("dashboard.no_scores_title", "Aún no tienes partituras registradas")}
+                  </h3>
+                  <p className="text-xs text-[#4C4546] max-w-md mx-auto leading-relaxed">
+                    {t(
+                      "dashboard.no_scores_desc",
+                      "Sube tu primera obra en formato PDF de alta resolución con vistas previas automáticas."
+                    )}
+                  </p>
+                  <Link
+                    href="/compositor/dashboard/partituras/nueva"
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-[#0071BC] hover:bg-[#005a96] text-white font-bold text-xs rounded-xl shadow-md transition font-montserrat"
+                  >
+                    <span className="material-symbols-outlined text-base">cloud_upload</span>
+                    {t("dashboard.upload_score_btn", "Subir Nueva Partitura")}
+                  </Link>
+                </div>
+              )
             ) : (
               <div className="w-full overflow-x-auto overscroll-x-contain">
                 <table className="w-full text-left border-collapse">

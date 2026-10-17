@@ -5,7 +5,7 @@ const DEFAULT_PUBLISHABLE_KEY = process.env.MEDUSA_PUBLISHABLE_KEY || "pk_0372bd
 function customCorsMiddleware(req: MedusaRequest, res: MedusaResponse, next: MedusaNextFunction) {
   res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "http://localhost:3000")
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-publishable-api-key")
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-publishable-api-key, x-language, x-lang, Accept-Language")
   res.setHeader("Access-Control-Allow-Credentials", "true")
 
   if (req.method === "OPTIONS") {

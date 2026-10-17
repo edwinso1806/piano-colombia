@@ -1,7 +1,7 @@
 const { Client } = require('pg');
 
 const client = new Client({
-  connectionString: 'postgres://postgres:Alex%242020@localhost:5432/piano_colombia_db'
+  connectionString: 'postgres://postgres:Colombia-93@localhost:5432/piano_colombia_db'
 });
 
 async function run() {

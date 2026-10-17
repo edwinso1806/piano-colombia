@@ -554,9 +554,63 @@ export default function AdminUsuariosPage() {
               <tbody className="divide-y divide-black/5 text-xs text-[#111C2D]">
                 {filteredUsers.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-[#4C4546]">
-                      <span className="material-symbols-outlined text-4xl block mb-2 opacity-50">group_off</span>
-                      <p className="font-montserrat font-bold">No se encontraron usuarios con los filtros seleccionados.</p>
+                    <td colSpan={6} className="py-12 px-6 text-center text-[#4C4546]">
+                      <div className="max-w-md mx-auto space-y-3">
+                        <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto">
+                          <span className="material-symbols-outlined text-2xl">search_off</span>
+                        </div>
+                        <h4 className="font-montserrat font-bold text-sm text-[#111C2D]">
+                          No se encontraron usuarios con los filtros seleccionados
+                        </h4>
+                        <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+                          {searchTerm.trim() && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#0071BC]/10 text-[#0071BC] text-[11px] font-bold">
+                              Búsqueda: "{searchTerm.trim()}"
+                            </span>
+                          )}
+                          {roleFilter !== "all" && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#FBB03B]/20 text-[#111C2D] text-[11px] font-bold">
+                              Rol: {
+                                roleFilter === "super_admin"
+                                  ? "Super Admin"
+                                  : roleFilter === "editor_cms"
+                                  ? "Editor de Contenido"
+                                  : roleFilter === "moderador"
+                                  ? "Moderador de Partituras"
+                                  : roleFilter === "tesorero"
+                                  ? "Tesorero / Pagos"
+                                  : roleFilter
+                              }
+                            </span>
+                          )}
+                          {statusFilter !== "all" && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[11px] font-bold">
+                              Estado: {statusFilter}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-[#4C4546] leading-relaxed">
+                          {users.length > 0
+                            ? `Existen ${users.length} administradores en la plataforma, pero ninguno coincide con los criterios aplicados.`
+                            : "Aún no hay administradores registrados en la plataforma."}
+                        </p>
+                        {users.length > 0 && (
+                          <div className="pt-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSearchTerm("");
+                                setRoleFilter("all");
+                                setStatusFilter("all");
+                              }}
+                              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0071BC] hover:bg-[#005a96] text-white font-bold text-xs font-montserrat transition cursor-pointer shadow-2xs active:scale-95"
+                            >
+                              <span className="material-symbols-outlined text-sm">restart_alt</span>
+                              <span>Limpiar filtros ({users.length})</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ) : (

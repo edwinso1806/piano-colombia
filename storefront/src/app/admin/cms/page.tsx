@@ -26,6 +26,7 @@ import {
   CmsWhatsAppSettings,
   DEFAULT_CMS_WHATSAPP_SETTINGS,
 } from "@/lib/api-client";
+import { useAlert } from "@/context/AlertContext";
 
 type CmsTabId = "hero" | "featured_score" | "featured_scores_home" | "stats" | "categories" | "featured_composers" | "blog" | "metadata" | "legals" | "whatsapp";
 
@@ -52,6 +53,7 @@ const CMS_TABS_CONFIG: CmsTabConfig[] = [
 ];
 
 export default function AdminCMSPage() {
+  const { showAlert, showConfirm } = useAlert();
   const [activeTab, setActiveTab] = useState<CmsTabId>("hero");
   const [tabGroupFilter, setTabGroupFilter] = useState<"all" | "home" | "catalog_legal">("all");
   const tabsContainerRef = useRef<HTMLDivElement>(null);
@@ -812,16 +814,31 @@ export default function AdminCMSPage() {
 
   const handleDeleteCategory = (idx: number) => {
     const cat = cmsCategories[idx];
-    if (confirm(`¿Seguro que deseas eliminar la categoría "${cat.title}"?`)) {
-      const updated = cmsCategories.filter((_, i) => i !== idx);
-      setCmsCategories(updated);
-    }
+    if (!cat) return;
+    showConfirm({
+      title: "Eliminar Categoría",
+      message: `¿Estás seguro de que deseas eliminar la categoría "${cat.title}"?`,
+      confirmText: "Eliminar",
+      cancelText: "Cancelar",
+      danger: true,
+      onConfirm: () => {
+        const updated = cmsCategories.filter((_, i) => i !== idx);
+        setCmsCategories(updated);
+        showAlert({
+          type: "info",
+          message: `Categoría "${cat.title}" eliminada de la configuración.`
+        });
+      }
+    });
   };
 
   const handleAddCategorySubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCatTitle.trim()) {
-      alert("Por favor ingresa un título para la nueva categoría");
+      showAlert({
+        type: "warning",
+        message: "Por favor ingresa un título para la nueva categoría"
+      });
       return;
     }
 
@@ -922,7 +939,10 @@ export default function AdminCMSPage() {
         const currentIds = Array.isArray(t.composer_ids) ? t.composer_ids : [];
         if (currentIds.includes(composerId)) return t;
         if (currentIds.length >= 8) {
-          alert("Máximo 8 compositores permitidos en esta pestaña.");
+          showAlert({
+            type: "warning",
+            message: "Máximo 8 compositores permitidos en esta pestaña."
+          });
           return t;
         }
         return { ...t, composer_ids: [...currentIds, composerId] };

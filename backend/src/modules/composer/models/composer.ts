@@ -2,6 +2,7 @@ import { model } from "@medusajs/framework/utils"
 import { ComposerBankAccount } from "./composer-bank-account"
 
 export const ComposerStatus = {
+  DRAFT: "DRAFT",
   PENDING_APPROVAL: "PENDING_APPROVAL",
   APPROVED: "APPROVED",
   REJECTED: "REJECTED",
@@ -20,9 +21,10 @@ export const Composer = model.define("composer", {
   region: model.text().nullable(),
   era: model.text().nullable(),
   photo_url: model.text().nullable(),
-  status: model.enum(Object.values(ComposerStatus)).default(ComposerStatus.PENDING_APPROVAL),
+  status: model.enum(Object.values(ComposerStatus)).default(ComposerStatus.DRAFT),
   rejection_reason: model.text().nullable(),
-  approval_attempts: model.number().default(1),
+  approval_attempts: model.number().default(0),
+  submitted_at: model.dateTime().nullable(),
   user_id: model.text().nullable(), // Reference to Auth / Customer ID
   email: model.text(),
   phone: model.text().nullable(),

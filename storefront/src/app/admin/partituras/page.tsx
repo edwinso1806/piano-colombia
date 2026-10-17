@@ -243,13 +243,35 @@ export default function AdminPartiturasPage() {
           Cargando cola de partituras de la base de datos...
         </div>
       ) : filteredScores.length === 0 ? (
-        <div className="bg-white rounded-2xl p-12 text-center border border-black/5 shadow-2xs space-y-3">
-          <span className="material-symbols-outlined text-4xl text-slate-300">library_music</span>
-          <h3 className="text-sm font-bold text-slate-700 font-montserrat">No hay partituras en esta categoría</h3>
-          <p className="text-xs text-slate-400 max-w-sm mx-auto">
-            Cuando los compositores registren obras o se apliquen filtros, aparecerán aquí para su inspección técnica.
-          </p>
-        </div>
+        scores.length > 0 ? (
+          <div className="bg-white rounded-3xl p-12 text-center border border-black/5 shadow-xs space-y-4 max-w-lg mx-auto animate-in fade-in duration-200">
+            <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto">
+              <span className="material-symbols-outlined text-3xl">filter_alt_off</span>
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-base font-bold text-[#111C2D] font-montserrat">No hay partituras con el estado seleccionado</h3>
+              <p className="text-xs text-[#4C4546] max-w-sm mx-auto leading-relaxed">
+                Hay {scores.length} obras registradas en total en la plataforma, pero ninguna se encuentra actualmente con el filtro {activeTab === "IN_REVIEW" ? "«Pendientes de Revisión»" : activeTab === "APPROVED" ? "«Aprobadas / En Catálogo»" : activeTab === "REJECTED" ? "«Rechazadas con Observaciones»" : ""}.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab("ALL")}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#0071BC] hover:bg-[#005a96] text-white text-xs font-bold font-montserrat transition cursor-pointer shadow-2xs active:scale-95"
+            >
+              <span className="material-symbols-outlined text-sm">restart_alt</span>
+              <span>Ver todas las partituras ({scores.length})</span>
+            </button>
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl p-12 text-center border border-black/5 shadow-2xs space-y-3">
+            <span className="material-symbols-outlined text-4xl text-slate-300">library_music</span>
+            <h3 className="text-sm font-bold text-slate-700 font-montserrat">No hay partituras registradas</h3>
+            <p className="text-xs text-slate-400 max-w-sm mx-auto">
+              Cuando los compositores registren obras, aparecerán aquí para su inspección técnica.
+            </p>
+          </div>
+        )
       ) : (
         <div className="space-y-6">
           {filteredScores.map((s) => {

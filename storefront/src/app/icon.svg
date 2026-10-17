@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <style>
+    @media (prefers-color-scheme: dark) {
+      .dark-key { fill: #F8FAFC !important; stroke: transparent !important; }
+    }
+  </style>
+  <rect class="dark-key" x="8" y="12" width="7" height="40" rx="3.5" fill="#111C2D" stroke="rgba(255,255,255,0.4)" stroke-width="0.8"/>
+  <rect x="19" y="5" width="7" height="54" rx="3.5" fill="#FBB03B"/>
+  <rect x="30" y="15" width="7" height="34" rx="3.5" fill="#0071BC"/>
+  <rect class="dark-key" x="41" y="8" width="7" height="48" rx="3.5" fill="#111C2D" stroke="rgba(255,255,255,0.4)" stroke-width="0.8"/>
+  <rect x="52" y="17" width="7" height="30" rx="3.5" fill="#C1272D"/>
+</svg>

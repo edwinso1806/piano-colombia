@@ -109,7 +109,8 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       photo_url: body.photo_url || null,
       password_hash: password_hash || null,
       salt: salt || null,
-      status: "PENDING_APPROVAL",
+      status: "DRAFT",
+      approval_attempts: 0,
     })
 
     if (body.bank_account) {

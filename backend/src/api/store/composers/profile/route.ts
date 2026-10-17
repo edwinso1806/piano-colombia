@@ -7,7 +7,7 @@ export const AUTHENTICATE = false
 
 function getPgClient() {
   return new Client({
-    connectionString: process.env.DATABASE_URL || "postgres://postgres:Alex%242020@localhost:5432/piano_colombia_db"
+    connectionString: process.env.DATABASE_URL || "postgres://postgres:Colombia-93@localhost:5432/piano_colombia_db"
   })
 }
 
@@ -30,7 +30,7 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
       SELECT 
         c.id, c.first_name, c.last_name, c.artistic_name, c.slug, c.email, c.phone,
         c.region, c.era, c.bio_es, c.bio_en, c.photo_url, c.status, c.rejection_reason,
-        c.approval_attempts, c.commission_percentage, c.created_at, c.updated_at,
+        c.approval_attempts, c.commission_percentage, c.created_at, c.updated_at, c.submitted_at,
         b.bank_name, b.account_type, b.account_number, b.holder_name,
         b.document_type, b.document_number, b.bank_code
       FROM composer c
@@ -63,7 +63,9 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
       photo_url: row.photo_url,
       status: row.status,
       rejection_reason: row.rejection_reason,
-      approval_attempts: row.approval_attempts ? Number(row.approval_attempts) : 1,
+      approval_attempts: row.approval_attempts !== null ? Number(row.approval_attempts) : 0,
+      submitted_at: row.submitted_at || null,
+      has_submitted: row.status === "PENDING_APPROVAL" || row.status === "APPROVED" || (row.approval_attempts && Number(row.approval_attempts) > 0) || !!row.submitted_at,
       commission_percentage: row.commission_percentage !== null ? Number(row.commission_percentage) : null,
       created_at: row.created_at,
       updated_at: row.updated_at,
@@ -164,7 +166,7 @@ export async function PUT(req: MedusaRequest, res: MedusaResponse) {
     ]
 
     if (submit_for_review) {
-      statusUpdateClause = ", status = 'PENDING_APPROVAL', rejection_reason = NULL, approval_attempts = COALESCE(approval_attempts, 1) + 1"
+      statusUpdateClause = ", status = 'PENDING_APPROVAL', rejection_reason = NULL, approval_attempts = COALESCE(approval_attempts, 0) + 1, submitted_at = NOW()"
     }
 
     const updateQuery = `
@@ -308,6 +310,10 @@ export async function PUT(req: MedusaRequest, res: MedusaResponse) {
         bio_en: updatedRow.bio_en,
         photo_url: updatedRow.photo_url,
         status: updatedRow.status,
+        approval_attempts: updatedRow.approval_attempts !== null ? Number(updatedRow.approval_attempts) : 0,
+        rejection_reason: updatedRow.rejection_reason,
+        submitted_at: updatedRow.submitted_at || null,
+        has_submitted: updatedRow.status === "PENDING_APPROVAL" || updatedRow.status === "APPROVED" || (updatedRow.approval_attempts && Number(updatedRow.approval_attempts) > 0) || !!updatedRow.submitted_at,
       }
     })
   } catch (error: any) {

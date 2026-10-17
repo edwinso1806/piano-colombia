@@ -17,12 +17,14 @@ import {
   confirmWompiTransaction,
 } from "@/lib/api-client";
 import { localizeAuthMessage } from "@/lib/localize-messages";
+import { useAlert } from "@/context/AlertContext";
 
 export default function CheckoutPage() {
   const router = useRouter();
   const { cart, totalCOP, totalUSD, clearCart } = useCart();
   const { customer, composer, loginCustomer } = useAuth();
   const { language } = useLanguage();
+  const { showAlert } = useAlert();
 
   const isEn = language === "en";
 
@@ -55,11 +57,81 @@ export default function CheckoutPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [downloadToken, setDownloadToken] = useState<string | null>(null);
   const [lastReference, setLastReference] = useState<string>("");
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
 
   const showToast = (message: string, type: "success" | "error" | "info" = "error") => {
     setToast({ message: localizeAuthMessage(message, isEn), type });
     setTimeout(() => setToast(null), 6000);
+  };
+
+  const handleDownloadFromCheckout = async () => {
+    if (!downloadToken) {
+      showAlert({
+        type: "warning",
+        title: isEn ? "Download Pending" : "Descarga Pendiente",
+        message: isEn
+          ? "We are finishing generating your digital security stamp. Please wait a moment or check My Downloads."
+          : "Estamos finalizando la generación de tu estampa digital de seguridad. Por favor espera un momento o revisa Mis Descargas.",
+      });
+      return;
+    }
+
+    setIsDownloadingPdf(true);
+    try {
+      const res = await fetch(`/api/downloads/${downloadToken}`, {
+        method: "GET",
+      });
+
+      if (res.status === 403) {
+        const errData = await res.json().catch(() => ({}));
+        showAlert({
+          type: "warning",
+          title: isEn ? "Download Limit Exceeded" : "Límite de Descargas Excedido",
+          message:
+            errData.message ||
+            (isEn
+              ? "You have reached the maximum limit of 5 downloads permitted for this purchase license."
+              : "Has alcanzado el límite máximo de 5 descargas permitidas para esta licencia de compra."),
+        });
+        return;
+      }
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(
+          errData.message ||
+            (isEn ? `Error downloading score (${res.status})` : `Error al descargar la partitura (${res.status})`)
+        );
+      }
+
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const tempLink = document.createElement("a");
+      tempLink.href = blobUrl;
+      tempLink.download = `PianoColombia_Partitura_Estampada.pdf`;
+      document.body.appendChild(tempLink);
+      tempLink.click();
+      document.body.removeChild(tempLink);
+      window.URL.revokeObjectURL(blobUrl);
+
+      showAlert({
+        type: "success",
+        title: isEn ? "Download Complete" : "Descarga Completa",
+        message: isEn
+          ? "Your legally stamped sheet music has been downloaded successfully!"
+          : "¡Tu partitura con estampa legal ha sido descargada con éxito!",
+      });
+    } catch (err: any) {
+      console.error("Error al descargar desde checkout:", err);
+      showAlert({
+        type: "error",
+        title: isEn ? "Download Error" : "Error en Descarga",
+        message: err.message || (isEn ? "Error processing your download" : "Error al procesar tu descarga"),
+      });
+    } finally {
+      setIsDownloadingPdf(false);
+    }
   };
 
   // Cargar SDK de Wompi Widget oficial en el navegador
@@ -116,6 +188,21 @@ export default function CheckoutPage() {
   const displayTotalCOP = totalCOP > 0 ? totalCOP : defaultScore.priceCOP;
   const displayTotalUSD = totalUSD > 0 ? totalUSD : defaultScore.priceUSD;
   const activeItem = cart.length > 0 && cart[0]?.score ? cart[0].score : defaultScore;
+
+  // Items del carrito con cantidades para emitir licencias individuales
+  const cartItemsPayload = cart.length > 0
+    ? cart.map((item) => ({
+        score_id: item.score.id,
+        score_slug: item.score.slug,
+        title: item.score.title,
+        quantity: Math.max(1, item.quantity || 1),
+      }))
+    : [{
+        score_id: defaultScore.id,
+        score_slug: defaultScore.slug,
+        title: defaultScore.title,
+        quantity: 1,
+      }];
 
   // Validar datos antes del pago
   const validateForm = () => {
@@ -251,6 +338,8 @@ export default function CheckoutPage() {
         customer_legal_id_type: customerLegalIdType,
         score_slug: activeItem.slug || "pasillo-colombiano-no-1",
         score_id: activeItem.id,
+        items: cartItemsPayload,
+        lang: isEn ? "en" : "es",
       });
 
       if (chargeResult.success) {
@@ -258,19 +347,40 @@ export default function CheckoutPage() {
         setDownloadToken(chargeResult.download_token);
         clearCart();
         setIsSuccess(true);
-        showToast(
-          isEn ? "Payment approved! Your official Urtext score is ready." : "¡Pago aprobado con éxito! Tu partitura oficial está lista.",
-          "success"
-        );
+        showAlert({
+          type: "success",
+          title: isEn ? "Payment Approved" : "¡Pago Aprobado con Éxito!",
+          message: isEn
+            ? "Your payment was approved! Your official Urtext sheet music is ready for download."
+            : "¡Pago aprobado con éxito! Tu partitura oficial Urtext está lista para descargar.",
+        });
       } else {
-        throw new Error(chargeResult.message || "Payment declined");
+        const isSandbox = (process.env.NEXT_PUBLIC_WOMPI_PUBLIC_KEY || "pub_test").includes("test");
+        const declineMsg = chargeResult.message || (isEn
+          ? "The transaction was declined by the issuing financial institution."
+          : "La transacción fue rechazada por la entidad financiera emisora.");
+
+        showAlert({
+          type: "warning",
+          title: isEn ? "Payment Declined" : "Transacción Rechazada",
+          message: isSandbox
+            ? (isEn
+                ? `${declineMsg} (Sandbox Mode: Please click 'Fill Test Card' to use Wompi's approved test card 4242 4242 4242 4242).`
+                : `${declineMsg} (Modo Pruebas: Haz clic en '⚡ Llenar de Prueba' para usar la tarjeta autorizada de Wompi 4242 4242 4242 4242).`)
+            : declineMsg,
+        });
       }
     } catch (err: any) {
-      console.error("Error in direct card payment:", err);
-      showToast(
-        err.message || (isEn ? "Transaction declined by issuing bank." : "Transacción rechazada por el banco emisor."),
-        "error"
-      );
+      console.warn("Direct card payment notice:", err?.message || err);
+      showAlert({
+        type: "error",
+        title: isEn ? "Payment Error" : "Error en el Pago",
+        message:
+          err.message ||
+          (isEn
+            ? "Could not complete card payment. Please verify your card details or try another method."
+            : "No se pudo completar el pago con tarjeta. Por favor verifica los datos o intenta con otro método."),
+      });
     } finally {
       setIsProcessing(false);
     }
@@ -308,6 +418,7 @@ export default function CheckoutPage() {
         customer_legal_id_type: customerLegalIdType,
         score_slug: activeItem.slug || "pasillo-colombiano-no-1",
         score_id: activeItem.id,
+        items: cartItemsPayload,
       });
 
       setLastReference(session.reference);
@@ -344,10 +455,13 @@ export default function CheckoutPage() {
             // Confirmar transacción aprobada
             await handleFinishPayment(session.reference, transaction.id);
           } else if (transaction?.status === "DECLINED") {
-            showToast(
-              isEn ? "The transaction was declined by the bank." : "La transacción fue declinada por la entidad bancaria.",
-              "error"
-            );
+            showAlert({
+              type: "warning",
+              title: isEn ? "Payment Declined" : "Transacción Rechazada",
+              message: isEn
+                ? "The transaction was declined by the bank. Please verify your payment details or try another method."
+                : "La transacción fue rechazada por la entidad bancaria. Por favor verifica los datos o intenta con otro método.",
+            });
           }
         });
       } else {
@@ -389,6 +503,7 @@ export default function CheckoutPage() {
       customer_phone: customerPhone.trim(),
       customer_tax_id: customerLegalId.trim(),
       score_slug: activeItem.slug || "pasillo-colombiano-no-1",
+      items: cartItemsPayload,
       data: {
         transaction: {
           id: transactionId,
@@ -502,15 +617,24 @@ export default function CheckoutPage() {
               >
                 📥 {isEn ? "Go to My Downloaded Scores" : "Ir a Mis Partituras Compradas"}
               </Link>
-              <a
-                href={downloadToken ? `/api/downloads/${downloadToken}` : "#"}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-4 bg-white text-[#111C2D] border border-black/10 font-bold rounded-xl hover:bg-[#F0F3FF] transition font-montserrat text-xs uppercase tracking-wider text-center flex items-center justify-center gap-2"
+              <button
+                type="button"
+                onClick={handleDownloadFromCheckout}
+                disabled={isDownloadingPdf}
+                className="w-full py-4 bg-white text-[#111C2D] border border-black/10 font-bold rounded-xl hover:bg-[#F0F3FF] transition font-montserrat text-xs uppercase tracking-wider text-center flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 shadow-xs"
               >
-                <span className="material-symbols-outlined text-base text-[#0071BC]">download</span>
-                <span>{isEn ? "Download Official Stamped PDF" : "Descargar PDF Estampado Oficial"}</span>
-              </a>
+                {isDownloadingPdf ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-[#0071BC] border-t-transparent rounded-full animate-spin"></span>
+                    <span>{isEn ? "Applying License..." : "Estampando Licencia Legal..."}</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-base text-[#0071BC]">download</span>
+                    <span>{isEn ? "Download Official Stamped PDF" : "Descargar PDF Estampado Oficial"}</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         ) : (

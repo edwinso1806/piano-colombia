@@ -42,3 +42,9 @@ Thumbs.db
 .vscode/
 *.tsbuildinfo
 scratch/
+*.sql
+*.zip
+*.pptx
+*.pdf
+extracted_pptx/
+

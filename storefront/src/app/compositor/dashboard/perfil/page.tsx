@@ -4,18 +4,19 @@ import Link from "next/link";
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
+import { useAlert } from "@/context/AlertContext";
 import { getComposerProfileApi, updateComposerProfileApi, uploadFileApi } from "@/lib/api-client";
 
 export default function CompositorPerfilPage() {
   const { composer, loginComposer } = useAuth();
   const { t, language } = useLanguage();
+  const { showAlert } = useAlert();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [activeTab, setActiveTab] = useState<"es" | "en">("es");
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
-  const [notification, setNotification] = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   // Form States
@@ -27,9 +28,9 @@ export default function CompositorPerfilPage() {
   const [photoUrl, setPhotoUrl] = useState("");
   const [bioEs, setBioEs] = useState("");
   const [bioEn, setBioEn] = useState("");
-  const [status, setStatus] = useState<string>("PENDING_APPROVAL");
+  const [status, setStatus] = useState<string>("DRAFT");
   const [rejectionReason, setRejectionReason] = useState<string | null>(null);
-  const [approvalAttempts, setApprovalAttempts] = useState<number>(1);
+  const [approvalAttempts, setApprovalAttempts] = useState<number>(0);
 
   // Bank Account States
   const [bankName, setBankName] = useState("Bancolombia");
@@ -59,9 +60,9 @@ export default function CompositorPerfilPage() {
           setPhotoUrl(data.photo_url || "");
           setBioEs(data.bio_es || "");
           setBioEn(data.bio_en || "");
-          setStatus(data.status || "PENDING_APPROVAL");
+          setStatus(data.status || "DRAFT");
           setRejectionReason(data.rejection_reason || null);
-          setApprovalAttempts(data.approval_attempts ? Number(data.approval_attempts) : 1);
+          setApprovalAttempts(data.approval_attempts !== undefined ? Number(data.approval_attempts) : 0);
 
           if (data.bank_account) {
             setBankName(data.bank_account.bank_name || "Bancolombia");
@@ -90,6 +91,14 @@ export default function CompositorPerfilPage() {
     }
 
     loadProfile();
+
+    const onFocus = () => {
+      loadProfile();
+    };
+    window.addEventListener("focus", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+    };
   }, [composer?.id, composer?.email]);
 
   // Sincronizar pestaña de biografía activa con el selector de idioma global
@@ -103,17 +112,16 @@ export default function CompositorPerfilPage() {
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      setNotification({ type: "error", message: "Por favor selecciona un archivo de imagen válido (JPG, PNG o WebP)." });
+      showAlert({ type: "error", title: "Formato no válido", message: "Por favor selecciona un archivo de imagen válido (JPG, PNG o WebP)." });
       return;
     }
 
     if (file.size > 25 * 1024 * 1024) {
-      setNotification({ type: "error", message: "La imagen no debe superar los 25MB." });
+      showAlert({ type: "error", title: "Archivo demasiado pesado", message: "La imagen no debe superar los 25MB." });
       return;
     }
 
     setIsUploadingPhoto(true);
-    setNotification(null);
 
     try {
       // Optimización en cliente para carga ultrarrápida a Cloudflare R2
@@ -162,14 +170,14 @@ export default function CompositorPerfilPage() {
 
             if (uploadRes && uploadRes.url) {
               setPhotoUrl(uploadRes.url);
-              setNotification({
+              showAlert({
                 type: "success",
                 message: "¡Fotografía oficial subida a Cloudflare R2 exitosamente! Recuerda guardar tu perfil para confirmar los cambios.",
               });
             }
           } catch (uploadErr: any) {
             console.error("Error al subir a Cloudflare R2:", uploadErr);
-            setNotification({ type: "error", message: "Error al guardar imagen en Cloudflare R2: " + (uploadErr.message || "Error desconocido") });
+            showAlert({ type: "error", message: "Error al guardar imagen en Cloudflare R2: " + (uploadErr.message || "Error desconocido") });
           } finally {
             setIsUploadingPhoto(false);
           }
@@ -185,13 +193,13 @@ export default function CompositorPerfilPage() {
             });
             if (uploadRes && uploadRes.url) {
               setPhotoUrl(uploadRes.url);
-              setNotification({
+              showAlert({
                 type: "success",
                 message: "¡Fotografía subida a Cloudflare R2 exitosamente!",
               });
             }
           } catch (errFallback: any) {
-            setNotification({ type: "error", message: "Error al guardar imagen en Cloudflare R2: " + errFallback.message });
+            showAlert({ type: "error", message: "Error al guardar imagen en Cloudflare R2: " + errFallback.message });
           } finally {
             setIsUploadingPhoto(false);
           }
@@ -199,14 +207,13 @@ export default function CompositorPerfilPage() {
       };
     } catch (err: any) {
       setIsUploadingPhoto(false);
-      setNotification({ type: "error", message: "Error al procesar el archivo: " + err.message });
+      showAlert({ type: "error", title: "Error al procesar", message: "Error al procesar el archivo: " + err.message });
     }
   };
 
   // Ejecución real del guardado de perfil
   const executeSaveProfile = async (submitForReview = false) => {
     setIsSaving(true);
-    setNotification(null);
 
     try {
       const payload = {
@@ -248,19 +255,44 @@ export default function CompositorPerfilPage() {
           bio_es: res.composer.bio_es,
           bio_en: res.composer.bio_en,
         });
+        if (res.composer.status) {
+          setStatus(res.composer.status);
+        }
+        if (res.composer.approval_attempts !== undefined) {
+          setApprovalAttempts(Number(res.composer.approval_attempts));
+        }
+        if (res.composer.rejection_reason !== undefined) {
+          setRejectionReason(res.composer.rejection_reason);
+        }
       }
 
-      setNotification({
+      if (submitForReview) {
+        setStatus("PENDING_APPROVAL");
+        setRejectionReason(null);
+      }
+
+      const alertMsg = res.message || (submitForReview
+        ? (language === "en"
+            ? "Your information was submitted successfully for review. The curation team will evaluate your profile."
+            : "Tu información fue enviada exitosamente a revisión técnica por el comité de Piano Colombia.")
+        : (language === "en"
+            ? "Profile changes saved successfully in the database."
+            : "Borrador de perfil guardado correctamente en la base de datos."));
+
+      showAlert({
         type: res.was_approved ? "warning" : "success",
-        message: res.message || (submitForReview
-          ? "✅ ¡Tu perfil y fotografía oficial han sido enviados a revisión técnica por Piano Colombia!"
-          : "✅ Borrador de perfil guardado correctamente en la base de datos."),
+        title: submitForReview
+          ? (language === "en" ? "Profile in Review" : "Solicitud Enviada a Revisión")
+          : (language === "en" ? "Changes Saved" : "Cambios Guardados"),
+        message: alertMsg,
+        duration: 5000,
       });
     } catch (err: any) {
       console.error("Error al guardar perfil:", err);
-      setNotification({
+      showAlert({
         type: "error",
-        message: err.message || "Ocurrió un error al guardar los cambios.",
+        title: language === "en" ? "Error Saving Profile" : "Error al Guardar Perfil",
+        message: err.message || (language === "en" ? "An error occurred while saving profile." : "Ocurrió un error al guardar los cambios."),
       });
     } finally {
       setIsSaving(false);
@@ -268,6 +300,29 @@ export default function CompositorPerfilPage() {
   };
 
   const handleSaveProfile = (submitForReview = false) => {
+    if (submitForReview) {
+      if (!bioEs.trim()) {
+        showAlert({
+          type: "warning",
+          title: language === "en" ? "Biography Required" : "Biografía Requerida",
+          message: language === "en"
+            ? "Please write your biography in Spanish before submitting for review."
+            : "Por favor redacta tu biografía en español antes de enviar a revisión.",
+        });
+        return;
+      }
+      if (!bankName.trim() || !accountNumber.trim() || !documentNumber.trim()) {
+        showAlert({
+          type: "warning",
+          title: language === "en" ? "Bank Details Incomplete" : "Datos Bancarios Incompletos",
+          message: language === "en"
+            ? "Please complete your bank account details for royalty payouts before submitting for review."
+            : "Por favor completa tus datos bancarios para la liquidación de regalías antes de enviar a revisión.",
+        });
+        return;
+      }
+    }
+
     const isCurrentlyApproved = composer?.status === "APPROVED";
     if (submitForReview && isCurrentlyApproved) {
       setShowConfirmModal(true);
@@ -304,18 +359,30 @@ export default function CompositorPerfilPage() {
               ? "bg-rose-950 text-white border border-rose-800"
               : status === "REJECTED"
               ? "bg-amber-100 text-amber-950 border border-amber-300"
-              : "bg-blue-50 text-[#0071BC] border border-blue-200"
+              : status === "PENDING_APPROVAL"
+              ? "bg-blue-50 text-[#0071BC] border border-blue-200"
+              : "bg-slate-100 text-slate-700 border border-slate-300"
           }`}>
             <span className="material-symbols-outlined text-sm">
-              {status === "APPROVED" ? "verified" : status === "BLOCKED" ? "block" : status === "REJECTED" ? "edit_note" : "hourglass_top"}
+              {status === "APPROVED" 
+                ? "verified" 
+                : status === "BLOCKED" 
+                ? "block" 
+                : status === "REJECTED" 
+                ? "edit_note" 
+                : status === "PENDING_APPROVAL" 
+                ? "hourglass_top" 
+                : "edit_document"}
             </span>
             {status === "APPROVED" 
               ? t("profile.status_approved", "Compositor Aprobado") 
               : status === "BLOCKED"
               ? t("profile.status_blocked", "Acceso Bloqueado")
               : status === "REJECTED"
-              ? t("profile.status_rejected", "Requiere Corrección")
-              : `${t("profile.status_in_review", "En Revisión")} (${t("profile.attempt", "Intento")} #${approvalAttempts})`}
+              ? `${t("profile.status_rejected", "Requiere Corrección")} (${t("profile.attempt", "Intento")} #${approvalAttempts})`
+              : status === "PENDING_APPROVAL"
+              ? `${t("profile.status_in_review", "En Revisión")} (${t("profile.attempt", "Intento")} #${approvalAttempts})`
+              : t("profile.status_draft", "Borrador (No Enviado)")}
           </span>
         </div>
       </div>
@@ -343,23 +410,23 @@ export default function CompositorPerfilPage() {
         </div>
       )}
 
-      {/* Banner de Observaciones de Moderación cuando fue Rechazado */}
+      {/* Banner de Sugerencias y Observaciones de Moderación */}
       {status === "REJECTED" && (
         <div className="p-6 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-950 shadow-sm space-y-3 animate-in fade-in duration-200">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <span className="material-symbols-outlined text-2xl text-amber-700">warning</span>
+              <span className="material-symbols-outlined text-2xl text-amber-700">edit_note</span>
               <h2 className="text-sm font-black font-montserrat uppercase tracking-wider text-amber-950">
-                {t("profile.rejected_banner_title", "Observaciones del Administrador / Moderador")}
+                {t("profile.rejected_banner_title", "Sugerencias y Observaciones del Administrador / Moderador")}
               </h2>
             </div>
             <span className="text-[11px] font-mono font-bold bg-amber-200/80 px-2.5 py-1 rounded-full text-amber-900 border border-amber-300">
-              {t("profile.rejected_banner_subtitle", "Postulación Anterior: Intento #")}{approvalAttempts}
+              {t("profile.rejected_banner_subtitle", "Revisión Anterior: Intento #")}{approvalAttempts}
             </span>
           </div>
 
           <p className="text-xs text-amber-900 leading-relaxed font-medium">
-            {t("profile.rejected_banner_desc", "El comité curatorial revisó tu información y solicita que organices los siguientes puntos para poder aprobar tu perfil en el catálogo:")}
+            {t("profile.rejected_banner_desc", "El equipo curatorial y administrativo evaluó tu postulación y solicita que atiendas las siguientes sugerencias para habilitar tu catálogo oficial:")}
           </p>
 
           <div className="p-4 bg-white rounded-xl border border-amber-300 text-xs font-semibold text-rose-900 italic leading-relaxed shadow-2xs">
@@ -369,7 +436,22 @@ export default function CompositorPerfilPage() {
           <div className="p-3 bg-amber-100/70 rounded-xl text-[11px] text-amber-950 flex items-center gap-2">
             <span className="material-symbols-outlined text-base text-amber-700">info</span>
             <span>
-              {t("profile.rejected_what_to_do", "¿Qué debes hacer? Modifica los campos señalados abajo y haz clic en \"Guardar y Enviar a Revisión\". Los administradores y moderadores recibirán una notificación para reevaluar tu perfil.")}
+              {t("profile.rejected_what_to_do", "Se ha vuelto a habilitar tu botón para enviar de nuevo a revisión. Modifica los campos señalados y haz clic abajo en \"Guardar y Enviar a Revisión\" para registrar el Intento #")}{approvalAttempts + 1}. Tu perfil se bloqueará nuevamente en revisión solo hasta la acción del administrador.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Banner de Perfil en Borrador (Aún no enviado a revisión) */}
+      {status === "DRAFT" && (
+        <div className="p-5 rounded-2xl bg-[#FFF9ED] border-2 border-[#FBB03B]/40 text-amber-950 flex items-start gap-3.5 shadow-xs animate-in fade-in duration-200">
+          <span className="material-symbols-outlined text-2xl text-[#e09b2e] shrink-0 mt-0.5">draw</span>
+          <div className="text-xs space-y-1">
+            <strong className="block font-montserrat uppercase tracking-wider text-[11px] text-[#111C2D]">
+              {t("profile.draft_banner_title", "Perfil en Borrador • Completa tu Información para Solicitar Aprobación")}
+            </strong>
+            <span className="text-[#4C4546] font-medium block leading-relaxed">
+              {t("profile.draft_banner_desc", "¡Bienvenido a Piano Colombia! Para que tu perfil sea evaluado por los curadores y habilitar la publicación de tus obras en el catálogo, sube tu fotografía de retrato oficial, redacta tu biografía y verifica tus datos bancarios para regalías. Cuando todo esté completo, haz clic abajo en \"Guardar y Enviar a Revisión\".")}
             </span>
           </div>
         </div>
@@ -405,23 +487,7 @@ export default function CompositorPerfilPage() {
         </div>
       )}
 
-      {/* Notificación de Estado */}
-      {notification && (
-        <div
-          className={`p-4 rounded-2xl flex items-center gap-3 text-xs font-bold font-montserrat shadow-xs animate-in fade-in duration-200 ${
-            notification.type === "success"
-              ? "bg-emerald-50 border border-emerald-200 text-emerald-800"
-              : notification.type === "warning"
-              ? "bg-amber-50 border border-amber-300 text-amber-900"
-              : "bg-rose-50 border border-rose-200 text-rose-800"
-          }`}
-        >
-          <span className="material-symbols-outlined text-lg shrink-0">
-            {notification.type === "success" ? "check_circle" : notification.type === "warning" ? "warning" : "error"}
-          </span>
-          <span className="leading-relaxed">{notification.message}</span>
-        </div>
-      )}
+      {/* Estado de carga */}
 
       {loadingProfile ? (
         <div className="p-12 text-center bg-white rounded-2xl border border-black/5 shadow-xs">
@@ -591,12 +657,21 @@ export default function CompositorPerfilPage() {
                   <label className="text-xs font-bold text-[#111C2D] font-montserrat flex items-center gap-1">
                     <span>{t("profile.bio_es_label", "Biografía en Español")}</span> <span className="text-[#C1272D]">*</span>
                   </label>
-                  <span className="text-[11px] text-[#4C4546]">{bioEs.length} {t("profile.characters", "caracteres")}</span>
+                  <span className={`text-[11px] font-bold font-montserrat px-2 py-0.5 rounded-md transition ${
+                    bioEs.length >= 1500
+                      ? "text-red-700 bg-red-50 border border-red-200"
+                      : bioEs.length > 1200
+                      ? "text-amber-700 bg-amber-50 border border-amber-200"
+                      : "text-[#4C4546] bg-[#F0F3FF]"
+                  }`}>
+                    {bioEs.length} / 1500 {t("profile.characters", "caracteres")}
+                  </span>
                 </div>
                 <textarea
                   rows={6}
+                  maxLength={1500}
                   value={bioEs}
-                  onChange={(e) => setBioEs(e.target.value)}
+                  onChange={(e) => setBioEs(e.target.value.slice(0, 1500))}
                   placeholder="Describe tu formación musical, trayectoria artística, obras principales, influencias y estilo de composición..."
                   className="w-full p-4 rounded-xl bg-[#F0F3FF]/50 border border-black/5 text-xs text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC] transition-all resize-none shadow-2xs leading-relaxed"
                 />
@@ -607,12 +682,21 @@ export default function CompositorPerfilPage() {
                   <label className="text-xs font-bold text-[#111C2D] font-montserrat flex items-center gap-1">
                     <span>{t("profile.bio_en_label", "Biografía en Inglés (Conservatorios & Academias)")}</span> <span className="text-[#0071BC]">*</span>
                   </label>
-                  <span className="text-[11px] text-[#4C4546]">{bioEn.length} {t("profile.characters", "characters")}</span>
+                  <span className={`text-[11px] font-bold font-montserrat px-2 py-0.5 rounded-md transition ${
+                    bioEn.length >= 1500
+                      ? "text-red-700 bg-red-50 border border-red-200"
+                      : bioEn.length > 1200
+                      ? "text-amber-700 bg-amber-50 border border-amber-200"
+                      : "text-[#4C4546] bg-[#F0F3FF]"
+                  }`}>
+                    {bioEn.length} / 1500 {t("profile.characters", "characters")}
+                  </span>
                 </div>
                 <textarea
                   rows={6}
+                  maxLength={1500}
                   value={bioEn}
-                  onChange={(e) => setBioEn(e.target.value)}
+                  onChange={(e) => setBioEn(e.target.value.slice(0, 1500))}
                   placeholder="Provide an English summary of your musical background, catalogue, and piano repertoire..."
                   className="w-full p-4 rounded-xl bg-[#F0F3FF]/50 border border-black/5 text-xs text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC] transition-all resize-none shadow-2xs leading-relaxed"
                 />
@@ -724,13 +808,19 @@ export default function CompositorPerfilPage() {
                   ? t("profile.status_blocked", "Acceso Bloqueado") 
                   : status === "REJECTED" 
                   ? t("profile.ready_resubmit_title", "¿Listo para reenviar tus correcciones?") 
+                  : status === "PENDING_APPROVAL"
+                  ? t("profile.pending_review_title", "Solicitud en proceso de moderación")
                   : t("profile.ready_submit_title", "¿Todo listo para la aprobación de tu cuenta?")}
               </span>
               <p className="text-xs text-[#4C4546] leading-relaxed">
                 {status === "BLOCKED"
                   ? t("profile.blocked_no_resubmit", "Esta postulación no admite reenvíos por resolución administrativa definitiva.")
                   : status === "REJECTED"
-                  ? t("profile.ready_resubmit_desc", "Al reenviar, se notificará a los administradores y moderadores que actualizaste tu información para ser aceptado.")
+                  ? (language === "en"
+                      ? `When you resubmit, review attempt #${approvalAttempts + 1} will be registered and the button will lock again until the administrator approves or sends further suggestions.`
+                      : `Al reenviar, se registrará el nuevo intento de revisión (Intento #${approvalAttempts + 1}) y el botón se bloqueará de nuevo en espera de la evaluación final del administrador.`)
+                  : status === "PENDING_APPROVAL"
+                  ? t("profile.pending_review_desc", "Tu postulación se encuentra en lista de espera de revisión técnica por los administradores y curadores de Piano Colombia.")
                   : t("profile.ready_submit_desc", "Al enviar a revisión, el administrador podrá validar tu fotografía en R2, tus datos biográficos y habilitar tu catálogo.")}
               </p>
             </div>
@@ -749,21 +839,36 @@ export default function CompositorPerfilPage() {
                 <button
                   type="button"
                   onClick={() => handleSaveProfile(true)}
-                  disabled={isSaving}
-                  className={`w-full sm:w-auto px-6 py-3 text-xs font-extrabold uppercase tracking-wider rounded-xl transition shadow-md font-montserrat flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer whitespace-nowrap shrink-0 ${
-                    status === "REJECTED"
-                      ? "bg-[#0071BC] hover:bg-[#005c99] text-white"
-                      : "bg-[#FBB03B] hover:bg-[#e09b2e] text-[#111C2D]"
-                  }`}
+                  disabled={isSaving || status === "PENDING_APPROVAL"}
+                  title={
+                    status === "PENDING_APPROVAL"
+                      ? (language === "en"
+                          ? "Your profile is currently under review by Piano Colombia administration"
+                          : "Tu solicitud se encuentra actualmente en proceso de revisión por los administradores")
+                      : undefined
+                  }
+                  className={`w-full sm:w-auto px-6 py-3 text-xs font-extrabold uppercase tracking-wider rounded-xl transition shadow-md font-montserrat flex items-center justify-center gap-2 whitespace-nowrap shrink-0 ${
+                    status === "PENDING_APPROVAL"
+                      ? "bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed shadow-none"
+                      : status === "REJECTED"
+                      ? "bg-[#0071BC] hover:bg-[#005c99] text-white cursor-pointer"
+                      : "bg-[#FBB03B] hover:bg-[#e09b2e] text-[#111C2D] cursor-pointer"
+                  } disabled:opacity-60`}
                 >
                   <span className="material-symbols-outlined text-base shrink-0">
-                    {status === "REJECTED" ? "published_with_changes" : "send"}
+                    {status === "PENDING_APPROVAL"
+                      ? "hourglass_top"
+                      : status === "REJECTED"
+                      ? "published_with_changes"
+                      : "send"}
                   </span>
                   <span className="whitespace-nowrap">
                     {isSaving
                       ? t("profile.saving", "Guardando...")
+                      : status === "PENDING_APPROVAL"
+                      ? (language === "en" ? "In Review by Administration" : "En Revisión por Administración")
                       : status === "REJECTED"
-                      ? t("profile.save_resubmit_btn", "Guardar y Reenviar a Revisión")
+                      ? `${t("profile.save_resubmit_btn", "Guardar y Enviar a Revisión")} (${t("profile.attempt", "Intento")} #${approvalAttempts + 1})`
                       : t("profile.save_review_btn", "Guardar y Enviar a Revisión")}
                   </span>
                 </button>

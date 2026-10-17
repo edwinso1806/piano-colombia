@@ -1,18 +1,37 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { useAuth } from "@/context/AuthContext";
 import { useSavedScores } from "@/context/SavedScoresContext";
 import { useLanguage } from "@/context/LanguageContext";
+import { useAlert } from "@/context/AlertContext";
+
+function formatCategoryName(cat: string): string {
+  if (!cat) return "Piano Solo";
+  const trimmed = cat.trim();
+  const lower = trimmed.toLowerCase();
+  if (lower === "bambuco") return "Bambuco";
+  if (lower === "pasillo") return "Pasillo";
+  if (lower === "danza") return "Danza";
+  if (lower === "guabina") return "Guabina";
+  if (lower === "joropo") return "Joropo";
+  if (lower === "clasico" || lower === "clásico") return "Clásico";
+  if (lower === "contemporaneo" || lower === "contemporáneo") return "Contemporáneo";
+  if (lower === "piano solo" || lower === "solo") return "Piano Solo";
+  if (lower === "piano a 4 manos" || lower === "piano 4 manos" || lower === "4 manos") return "Piano a 4 Manos";
+  if (lower === "camara" || lower === "cámara") return "Cámara";
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+}
 
 export default function MisDescargasPage() {
   const { customer, logoutCustomer, isLoaded } = useAuth();
   const { t, language } = useLanguage();
   const isEn = language === "en";
+  const { showAlert, showConfirm } = useAlert();
 
   const {
     savedScores,
@@ -35,11 +54,13 @@ export default function MisDescargasPage() {
 
   const handleDownloadPdf = async (score: any) => {
     if (score.downloadsLeft <= 0) {
-      alert(
-        isEn
+      showAlert({
+        type: "warning",
+        title: isEn ? "Download Limit Reached" : "Límite de Descargas Alcanzado",
+        message: isEn
           ? `You have reached the maximum limit of ${score.downloadsTotal} downloads permitted for this digital license.`
-          : `Has alcanzado el límite máximo de ${score.downloadsTotal} descargas permitidas para esta licencia digital.`
-      );
+          : `Has alcanzado el límite máximo de ${score.downloadsTotal} descargas permitidas para esta licencia digital.`,
+      });
       return;
     }
 
@@ -54,12 +75,15 @@ export default function MisDescargasPage() {
 
       if (res.status === 403) {
         const errData = await res.json().catch(() => ({}));
-        alert(
-          errData.message ||
+        showAlert({
+          type: "warning",
+          title: isEn ? "Download Limit Reached" : "Límite de Descargas Alcanzado",
+          message:
+            errData.message ||
             (isEn
               ? `You have reached the maximum limit of downloads (${score.downloadsTotal}) permitted for this license.`
-              : `Has alcanzado el límite máximo de descargas (${score.downloadsTotal}) permitidas para esta licencia.`)
-        );
+              : `Has alcanzado el límite máximo de descargas (${score.downloadsTotal}) permitidas para esta licencia.`),
+        });
         setScoresList((prev) =>
           prev.map((s) => (s.id === score.id ? { ...s, downloadsLeft: 0, progressPercent: 0 } : s))
         );
@@ -110,21 +134,24 @@ export default function MisDescargasPage() {
         })
       );
 
-      setDownloadFeedback({
-        token: score.token,
+      showAlert({
         type: "success",
+        title: isEn ? "Download Successful" : "Descarga Exitosa",
         message: isEn
           ? `Sheet music downloaded successfully! You have ${nextRemaining} downloads remaining.`
           : `¡Partitura descargada con éxito! Te quedan ${nextRemaining} descargas disponibles.`,
       });
     } catch (err: any) {
       console.error("Error al descargar:", err);
-      alert(
-        err.message ||
+      showAlert({
+        type: "error",
+        title: isEn ? "Download Error" : "Error en Descarga",
+        message:
+          err.message ||
           (isEn
             ? "Error generating your legally stamped score. Please try again."
-            : "Error al generar tu partitura con estampa legal. Por favor intenta de nuevo.")
-      );
+            : "Error al generar tu partitura con estampa legal. Por favor intenta de nuevo."),
+      });
     } finally {
       setDownloadingToken(null);
     }
@@ -169,6 +196,52 @@ export default function MisDescargasPage() {
   const [newColName, setNewColName] = useState("");
   const [newColDesc, setNewColDesc] = useState("");
 
+  // Categorías dinámicas disponibles en las descargas del usuario con su conteo
+  const availableCategories = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const s of scoresList) {
+      const cat = s.category || "Piano Solo";
+      counts.set(cat, (counts.get(cat) || 0) + 1);
+    }
+    return Array.from(counts.entries()).map(([name, count]) => ({
+      name,
+      count,
+    }));
+  }, [scoresList]);
+
+  // Consolidar compras repetidas de una misma partitura sumando cantidades y licencias
+  const consolidatedPurchases = useMemo(() => {
+    const map = new Map<string, any>();
+    for (const s of scoresList) {
+      const key = (s.title || s.id).trim().toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, {
+          ...s,
+          quantity: 1,
+          tokens: [s.token],
+          downloadsLeft: s.downloadsLeft !== undefined ? s.downloadsLeft : 5,
+          downloadsTotal: s.downloadsTotal || 5,
+          activeScores: [s],
+        });
+      } else {
+        const existing = map.get(key);
+        existing.quantity += 1;
+        existing.tokens.push(s.token);
+        existing.downloadsTotal += (s.downloadsTotal || 5);
+        existing.downloadsLeft += (s.downloadsLeft !== undefined ? s.downloadsLeft : 5);
+        existing.activeScores.push(s);
+
+        // Si la ficha activa no tiene descargas pero otra de las compras sí tiene, usar su token para el botón de descarga
+        const validScore = existing.activeScores.find((item: any) => item.downloadsLeft > 0);
+        if (validScore) {
+          existing.token = validScore.token;
+          existing.id = validScore.id;
+        }
+      }
+    }
+    return Array.from(map.values());
+  }, [scoresList]);
+
   useEffect(() => {
     if (!customer?.email) {
       setLoading(false);
@@ -191,12 +264,13 @@ export default function MisDescargasPage() {
               token: d.download_token,
               title: d.score_title,
               composer: d.composer_name,
-              category: "Piano Solo",
+              category: formatCategoryName(d.category || d.genre || "Piano Solo"),
               format: "Formato A4 Urtext",
               ismn: "979-0-901314-02-1",
               license: "Licencia Activa",
               userStamp: `${d.buyer_name || customer!.fullName} (${d.buyer_email || customer!.email})`,
               copies: "1 Copia Impresa Autorizada",
+              audioUrl: d.audio_sample_url || d.audio_url || d.audioUrl || null,
               downloadsLeft: Math.max(0, (d.max_downloads || 5) - (d.download_count || 0)),
               downloadsTotal: d.max_downloads || 5,
               progressPercent: (((d.max_downloads || 5) - (d.download_count || 0)) / (d.max_downloads || 5)) * 100,
@@ -244,8 +318,7 @@ export default function MisDescargasPage() {
       score.composer.toLowerCase().includes(searchFilter.toLowerCase());
     const matchesCat =
       categoryFilter === "todas" ||
-      (categoryFilter === "solo" && score.category.includes("Piano Solo")) ||
-      (categoryFilter === "camara" && (score.category.includes("Trío") || score.category.includes("Cámara")));
+      score.category.toLowerCase().trim() === categoryFilter.toLowerCase().trim();
     return matchesSearch && matchesCat;
   });
 
@@ -453,9 +526,10 @@ export default function MisDescargasPage() {
                     />
                   </div>
 
-                  <div className="flex items-center gap-2 text-xs font-semibold">
+                  <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
                     <span className="text-[#4C4546] hidden sm:inline">{isEn ? "Filter:" : "Filtrar:"}</span>
                     <button
+                      type="button"
                       onClick={() => setCategoryFilter("todas")}
                       className={`px-3.5 py-2 rounded-xl text-xs font-montserrat font-bold transition cursor-pointer ${
                         categoryFilter === "todas"
@@ -465,16 +539,23 @@ export default function MisDescargasPage() {
                     >
                       {isEn ? `All (${scoresList.length})` : `Todas (${scoresList.length})`}
                     </button>
-                    <button
-                      onClick={() => setCategoryFilter("solo")}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-montserrat font-bold transition cursor-pointer ${
-                        categoryFilter === "solo"
-                          ? "bg-[#111C2D] text-white shadow-2xs"
-                          : "bg-[#F0F3FF] text-[#4C4546] hover:text-[#111C2D]"
-                      }`}
-                    >
-                      Piano Solo
-                    </button>
+                    {availableCategories.map((cat) => {
+                      const isActive = categoryFilter.toLowerCase().trim() === cat.name.toLowerCase().trim();
+                      return (
+                        <button
+                          key={cat.name}
+                          type="button"
+                          onClick={() => setCategoryFilter(cat.name)}
+                          className={`px-3.5 py-2 rounded-xl text-xs font-montserrat font-bold transition cursor-pointer ${
+                            isActive
+                              ? "bg-[#111C2D] text-white shadow-2xs"
+                              : "bg-[#F0F3FF] text-[#4C4546] hover:text-[#111C2D]"
+                          }`}
+                        >
+                          {cat.name} ({cat.count})
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -524,7 +605,9 @@ export default function MisDescargasPage() {
                           <div className="flex flex-wrap items-center gap-2 text-xs text-[#4C4546] font-medium">
                             <span>{isEn ? "Composer:" : "Compositor:"} <strong className="text-[#111C2D] font-bold">{score.composer}</strong></span>
                             <span>•</span>
-                            <span className="px-2 py-0.5 bg-[#F0F3FF] text-[#111C2D] rounded font-bold text-[10px]">{score.category}</span>
+                            <span className="px-2.5 py-0.5 bg-[#0071BC]/10 text-[#0071BC] border border-[#0071BC]/20 rounded-md font-bold text-[10px] tracking-wide font-montserrat">
+                              {score.category}
+                            </span>
                             <span>•</span>
                             <span className="text-[11px]">{isEn ? "Urtext A4 Format" : score.format}</span>
                           </div>
@@ -563,13 +646,17 @@ export default function MisDescargasPage() {
                         </div>
 
                         <div className="flex flex-col sm:flex-row items-stretch gap-2.5">
-                          <button
-                            onClick={() => alert(isEn ? `Playing reference audio for ${score.title}...` : `Reproduciendo audio de referencia de ${score.title}...`)}
-                            className="px-3.5 py-2.5 text-xs font-bold text-[#111C2D] bg-[#F0F3FF] hover:bg-slate-200/60 rounded-xl flex items-center justify-center gap-1.5 transition font-montserrat border border-black/5 cursor-pointer"
-                          >
-                            <span className="material-symbols-outlined text-base text-[#0071BC]">play_circle</span>
-                            {isEn ? "Reference Audio" : "Audio Referencia"}
-                          </button>
+                          {score.audioUrl ? (
+                            <button
+                              type="button"
+                              onClick={() => window.open(score.audioUrl, "_blank", "noopener,noreferrer")}
+                              className="px-3.5 py-2.5 text-xs font-bold text-[#111C2D] bg-[#F0F3FF] hover:bg-slate-200/60 rounded-xl flex items-center justify-center gap-1.5 transition font-montserrat border border-black/5 cursor-pointer"
+                              title={isEn ? "Open reference audio in new tab" : "Abrir audio de referencia en nueva pestaña"}
+                            >
+                              <span className="material-symbols-outlined text-base text-[#0071BC]">open_in_new</span>
+                              {isEn ? "Reference Audio" : "Audio Referencia"}
+                            </button>
+                          ) : null}
 
                           {score.downloadsLeft > 0 ? (
                             <button
@@ -612,7 +699,57 @@ export default function MisDescargasPage() {
                   </article>
                 ))}
               </div>
+            ) : scoresList.length > 0 ? (
+              /* BÚSQUEDA ACTIVA SIN RESULTADOS PERO EL USUARIO SÍ TIENE PARTITURAS */
+              <div className="bg-white rounded-3xl border border-black/5 p-12 sm:p-16 text-center max-w-xl mx-auto space-y-5 shadow-xs animate-in fade-in duration-200">
+                <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto">
+                  <span className="material-symbols-outlined text-3xl">search_off</span>
+                </div>
+                
+                <div className="space-y-2">
+                  <h3 className="text-xl font-black font-montserrat text-[#111C2D]">
+                    {isEn ? "No purchased scores match your search" : "No se encontraron coincidencias en tus partituras"}
+                  </h3>
+                  
+                  {/* Badges estructurados con los filtros activos */}
+                  <div className="flex flex-wrap items-center justify-center gap-2 pt-1 pb-1">
+                    {searchFilter.trim() && (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#0071BC]/10 text-[#0071BC] text-xs font-bold font-montserrat border border-[#0071BC]/20">
+                        <span className="material-symbols-outlined text-sm">search</span>
+                        <span>{isEn ? "Search:" : "Búsqueda:"} "{searchFilter.trim()}"</span>
+                      </span>
+                    )}
+                    {categoryFilter !== "todas" && (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FBB03B]/20 text-[#111C2D] text-xs font-bold font-montserrat border border-[#FBB03B]/40">
+                        <span className="material-symbols-outlined text-sm">filter_alt</span>
+                        <span>{isEn ? "Category:" : "Categoría:"} {categoryFilter}</span>
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-xs sm:text-sm text-[#4C4546] leading-relaxed max-w-md mx-auto">
+                    {isEn
+                      ? `You have ${scoresList.length} purchased score${scoresList.length > 1 ? "s" : ""} in your account, but none match the current filter criteria. Try adjusting your search term or clear the filters.`
+                      : `Tienes ${scoresList.length} partitura${scoresList.length > 1 ? "s" : ""} adquirida${scoresList.length > 1 ? "s" : ""} en tu cuenta, pero ninguna coincide con los filtros aplicados. Prueba ajustando el término de búsqueda o limpia los filtros.`}
+                  </p>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchFilter("");
+                      setCategoryFilter("todas");
+                    }}
+                    className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#0071BC] hover:bg-[#005a96] text-white font-extrabold text-xs uppercase tracking-wider font-montserrat shadow-md transition cursor-pointer active:scale-95"
+                  >
+                    <span className="material-symbols-outlined text-base">restart_alt</span>
+                    <span>{isEn ? `Clear filters and show all (${scoresList.length})` : `Limpiar filtros y ver todas (${scoresList.length})`}</span>
+                  </button>
+                </div>
+              </div>
             ) : (
+              /* BASE DE DATOS SIN PARTITURAS COMPRADAS (USUARIO NUNCA HA COMPRADO) */
               <div className="bg-white rounded-3xl border border-black/5 p-12 text-center space-y-4 shadow-xs">
                 <div className="w-16 h-16 rounded-2xl bg-[#F0F3FF] text-[#0071BC] flex items-center justify-center mx-auto">
                   <span className="material-symbols-outlined text-3xl">library_music</span>
@@ -713,59 +850,112 @@ export default function MisDescargasPage() {
               </p>
             </div>
 
-            {scoresList.length > 0 ? (
+            {consolidatedPurchases.length > 0 ? (
               <div className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] overflow-hidden">
                 <div className="p-6 border-b border-black/5 flex items-center justify-between">
                   <h3 className="text-base font-bold font-montserrat text-[#111C2D]">
                     {isEn ? "Purchases Log" : "Registro de Compras"}
                   </h3>
-                  <span className="text-xs text-[#0071BC] font-bold font-montserrat">
-                    {scoresList.length} {isEn ? "Transactions" : "Transacciones"}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-[#0071BC] font-bold font-montserrat">
+                      {consolidatedPurchases.length} {isEn ? "Unique Scores" : "Obras Adquiridas"}
+                    </span>
+                    <span className="text-[11px] text-[#4C4546] font-semibold">
+                      ({scoresList.length} {isEn ? "Total Licenses" : "Licencias Totales"})
+                    </span>
+                  </div>
                 </div>
 
                 <div className="w-full overflow-x-auto overscroll-x-contain">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-[#F0F3FF] text-[#4C4546] font-montserrat text-[11px] font-extrabold uppercase tracking-wider border-b border-black/5">
-                        <th className="py-3 px-6">{isEn ? "Download ID" : "ID Descarga"}</th>
+                        <th className="py-3 px-6">{isEn ? "License ID" : "ID Licencia"}</th>
                         <th className="py-3 px-6">{isEn ? "Purchased Piece" : "Obra Adquirida"}</th>
+                        <th className="py-3 px-6 text-center">{isEn ? "Purchases / Licenses" : "Compras Realizadas"}</th>
+                        <th className="py-3 px-6 text-center">{isEn ? "Available Downloads" : "Descargas Disponibles"}</th>
                         <th className="py-3 px-6">{isEn ? "Composer" : "Compositor"}</th>
                         <th className="py-3 px-6">{isEn ? "Status" : "Estado"}</th>
                         <th className="py-3 px-6 text-right">{isEn ? "Download" : "Descarga"}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-black/5 text-xs text-[#111C2D]">
-                      {scoresList.map((score) => (
-                        <tr key={score.id} className="hover:bg-[#F0F3FF]/40 transition">
-                          <td className="py-4 px-6 font-mono font-bold">
-                            <div className="text-[#111C2D]">{score.id}</div>
-                          </td>
-                          <td className="py-4 px-6 font-bold font-montserrat max-w-xs">
-                            {score.title}
-                          </td>
-                          <td className="py-4 px-6 font-medium text-[#4C4546]">
-                            {score.composer}
-                          </td>
-                          <td className="py-4 px-6">
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-extrabold font-montserrat border border-emerald-200">
-                              <span className="material-symbols-outlined text-xs">check_circle</span>
-                              {isEn ? "Approved by Wompi" : "Aprobado por Wompi"}
-                            </span>
-                          </td>
-                          <td className="py-4 px-6 text-right">
-                            <a
-                              href={`/api/downloads/${score.token}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="px-3 py-1.5 bg-[#F0F3FF] hover:bg-slate-200/60 text-[#0071BC] rounded-xl font-extrabold text-xs transition font-montserrat inline-flex items-center gap-1 border border-black/5"
-                            >
-                              <span className="material-symbols-outlined text-sm">download</span>
-                              PDF
-                            </a>
-                          </td>
-                        </tr>
-                      ))}
+                      {consolidatedPurchases.map((score) => {
+                        const hasDownloads = (score.downloadsLeft || 0) > 0;
+                        const totalAllowed = score.downloadsTotal || ((score.quantity || 1) * 5);
+                        const progress = totalAllowed > 0 ? Math.min(100, Math.max(0, ((score.downloadsLeft || 0) / totalAllowed) * 100)) : 0;
+
+                        return (
+                          <tr key={score.id} className="hover:bg-[#F0F3FF]/40 transition">
+                            <td className="py-4 px-6 font-mono font-bold">
+                              <div className="text-[#111C2D] text-xs">{score.id}</div>
+                            </td>
+                            <td className="py-4 px-6 font-bold font-montserrat max-w-xs">
+                              {score.title}
+                            </td>
+                            <td className="py-4 px-6 text-center">
+                              <span className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 text-[#0071BC] rounded-full text-xs font-black font-montserrat border border-blue-200 shadow-2xs">
+                                <span className="material-symbols-outlined text-xs">local_mall</span>
+                                {score.quantity} {score.quantity === 1 ? (isEn ? "Purchase" : "Compra") : (isEn ? "Compras" : "Compras")}
+                              </span>
+                            </td>
+                            <td className="py-4 px-6 text-center">
+                              <div className="inline-flex flex-col items-center gap-1">
+                                <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold font-montserrat ${
+                                  hasDownloads 
+                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200" 
+                                    : "bg-slate-100 text-slate-500 border border-slate-200"
+                                }`}>
+                                  {score.downloadsLeft || 0} {isEn ? "of" : "de"} {totalAllowed} {isEn ? "allowed" : "permitidas"}
+                                </span>
+                                <div className="w-24 h-1.5 bg-[#F0F3FF] rounded-full overflow-hidden border border-black/5">
+                                  <div 
+                                    className={`h-full rounded-full transition-all duration-300 ${hasDownloads ? "bg-emerald-500" : "bg-slate-300"}`}
+                                    style={{ width: `${progress}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-4 px-6 font-medium text-[#4C4546]">
+                              {score.composer}
+                            </td>
+                            <td className="py-4 px-6">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-extrabold font-montserrat border border-emerald-200">
+                                <span className="material-symbols-outlined text-xs">check_circle</span>
+                                {isEn ? "Approved by Wompi" : "Aprobado por Wompi"}
+                              </span>
+                            </td>
+                            <td className="py-4 px-6 text-right">
+                              {hasDownloads ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDownloadPdf(score)}
+                                  disabled={downloadingToken === score.token}
+                                  className="px-3.5 py-1.5 bg-[#F0F3FF] hover:bg-slate-200/60 text-[#0071BC] rounded-xl font-extrabold text-xs transition font-montserrat inline-flex items-center gap-1.5 border border-black/5 cursor-pointer disabled:opacity-60 shadow-2xs active:scale-95"
+                                  title={isEn ? "Download official stamped PDF" : "Descargar PDF estampado oficial"}
+                                >
+                                  {downloadingToken === score.token ? (
+                                    <span className="w-3.5 h-3.5 border-2 border-[#0071BC] border-t-transparent rounded-full animate-spin"></span>
+                                  ) : (
+                                    <span className="material-symbols-outlined text-sm">download</span>
+                                  )}
+                                  <span>PDF</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled
+                                  className="px-3.5 py-1.5 bg-slate-100 text-slate-400 rounded-xl font-bold text-xs font-montserrat inline-flex items-center gap-1.5 border border-slate-200 cursor-not-allowed opacity-60"
+                                  title={isEn ? "Downloads exhausted (0 allowed)" : "Descargas agotadas (0 permitidas)"}
+                                >
+                                  <span className="material-symbols-outlined text-sm">lock</span>
+                                  <span>PDF</span>
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -875,6 +1065,22 @@ export default function MisDescargasPage() {
               </div>
             )}
 
+            {/* Toolbar de Búsqueda de Guardadas */}
+            {savedScores.length > 0 && (
+              <div className="p-4 bg-white rounded-2xl border border-black/5 shadow-2xs">
+                <div className="relative w-full">
+                  <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[#4C4546] text-lg">search</span>
+                  <input
+                    type="search"
+                    value={savedSearchQuery}
+                    onChange={(e) => setSavedSearchQuery(e.target.value)}
+                    placeholder={isEn ? "Search in your saved scores..." : "Buscar en tus partituras guardadas..."}
+                    className="w-full pl-10 pr-4 py-2.5 text-xs bg-[#F0F3FF] border border-black/5 rounded-xl text-[#111C2D] placeholder-[#4C4546]/60 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0071BC]"
+                  />
+                </div>
+              </div>
+            )}
+
             {/* Filtros de Colecciones y Acciones */}
             <div className="flex flex-wrap items-center justify-between gap-3 pt-1 pb-1">
               <div className="flex flex-wrap items-center gap-2">
@@ -911,13 +1117,19 @@ export default function MisDescargasPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          const confirmMsg = isEn
-                            ? `Do you want to delete the collection "${col.name}"?`
-                            : `¿Deseas eliminar la colección "${col.name}"?`;
-                          if (confirm(confirmMsg)) {
-                            deleteCollection(col.id);
-                            if (collectionFilter === col.id) setCollectionFilter("todas");
-                          }
+                          showConfirm({
+                            title: isEn ? "Delete Collection" : "Eliminar Colección",
+                            message: isEn
+                              ? `Are you sure you want to delete the collection "${col.name}"?`
+                              : `¿Deseas eliminar la colección "${col.name}"?`,
+                            confirmText: isEn ? "Yes, Delete" : "Sí, eliminar",
+                            cancelText: isEn ? "Cancel" : "Cancelar",
+                            type: "danger",
+                            onConfirm: () => {
+                              deleteCollection(col.id);
+                              if (collectionFilter === col.id) setCollectionFilter("todas");
+                            },
+                          });
                         }}
                         title={isEn ? "Delete collection" : "Eliminar colección"}
                         className="pr-2.5 pl-1 py-2 text-xs opacity-60 hover:opacity-100 hover:text-red-300 transition cursor-pointer"
@@ -933,14 +1145,18 @@ export default function MisDescargasPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    const confirmMsg = isEn
-                      ? "Are you sure you want to remove all scores from your saved list?"
-                      : "¿Estás seguro de que deseas eliminar todas las partituras de tu lista de guardadas?";
-                    if (confirm(confirmMsg)) {
-                      clearAllSavedScores();
-                    }
+                    showConfirm({
+                      title: isEn ? "Clear All Saved Scores" : "Vaciar Obras Guardadas",
+                      message: isEn
+                        ? "Are you sure you want to remove all scores from your saved list?"
+                        : "¿Estás seguro de que deseas eliminar todas las partituras de tu lista de guardadas?",
+                      confirmText: isEn ? "Yes, Clear All" : "Sí, vaciar todas",
+                      cancelText: isEn ? "Cancel" : "Cancelar",
+                      type: "danger",
+                      onConfirm: () => clearAllSavedScores(),
+                    });
                   }}
-                  className="px-3.5 py-2 rounded-xl text-xs font-montserrat font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition flex items-center gap-1.5 cursor-pointer shrink-0"
+                  className="px-3.5 py-2 rounded-xl text-xs font-montserrat font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition flex items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs active:scale-95"
                   title={isEn ? "Delete all saved scores" : "Eliminar todas las obras guardadas"}
                 >
                   <span className="material-symbols-outlined text-base">delete_sweep</span>
@@ -1044,21 +1260,76 @@ export default function MisDescargasPage() {
                   </div>
                 ))}
               </div>
+            ) : savedScores.length > 0 ? (
+              /* BÚSQUEDA O FILTRO ACTIVO EN GUARDADAS SIN RESULTADOS PERO EL USUARIO SÍ TIENE GUARDADAS */
+              <div className="bg-white rounded-3xl border border-black/5 p-12 sm:p-16 text-center max-w-xl mx-auto space-y-5 shadow-xs animate-in fade-in duration-200">
+                <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto">
+                  <span className="material-symbols-outlined text-3xl">search_off</span>
+                </div>
+
+                <div className="space-y-2">
+                  <h3 className="text-xl font-black font-montserrat text-[#111C2D]">
+                    {isEn ? "No saved scores match your search" : "No se encontraron coincidencias en tus guardadas"}
+                  </h3>
+
+                  {/* Badges estructurados con los filtros activos */}
+                  <div className="flex flex-wrap items-center justify-center gap-2 pt-1 pb-1">
+                    {savedSearchQuery.trim() && (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#0071BC]/10 text-[#0071BC] text-xs font-bold font-montserrat border border-[#0071BC]/20">
+                        <span className="material-symbols-outlined text-sm">search</span>
+                        <span>{isEn ? "Search:" : "Búsqueda:"} "{savedSearchQuery.trim()}"</span>
+                      </span>
+                    )}
+                    {collectionFilter !== "todas" && (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FBB03B]/20 text-[#111C2D] text-xs font-bold font-montserrat border border-[#FBB03B]/40">
+                        <span className="material-symbols-outlined text-sm">folder</span>
+                        <span>
+                          {isEn ? "Collection:" : "Colección:"}{" "}
+                          {collections.find((c) => c.id === collectionFilter)?.name || collectionFilter}
+                        </span>
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-xs sm:text-sm text-[#4C4546] leading-relaxed max-w-md mx-auto">
+                    {isEn
+                      ? `You have ${savedScores.length} saved score${savedScores.length > 1 ? "s" : ""} in your library, but none match the current filters. Try adjusting your search term or clear the filters.`
+                      : `Tienes ${savedScores.length} partitura${savedScores.length > 1 ? "s" : ""} guardada${savedScores.length > 1 ? "s" : ""} en tu biblioteca, pero ninguna coincide con los filtros aplicados. Prueba con otro término o limpia los filtros.`}
+                  </p>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSavedSearchQuery("");
+                      setCollectionFilter("todas");
+                    }}
+                    className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#0071BC] hover:bg-[#005a96] text-white font-extrabold text-xs uppercase tracking-wider font-montserrat shadow-md transition cursor-pointer active:scale-95"
+                  >
+                    <span className="material-symbols-outlined text-base">restart_alt</span>
+                    <span>
+                      {isEn
+                        ? `Clear filters and show all (${savedScores.length})`
+                        : `Limpiar filtros y ver todas (${savedScores.length})`}
+                    </span>
+                  </button>
+                </div>
+              </div>
             ) : (
+              /* BASE DE DATOS SIN NINGUNA PARTITURA GUARDADA */
               <div className="bg-white rounded-3xl border border-black/5 p-12 text-center space-y-4 shadow-xs">
                 <div className="w-16 h-16 rounded-2xl bg-[#F0F3FF] text-[#0071BC] flex items-center justify-center mx-auto">
                   <span className="material-symbols-outlined text-3xl">bookmark_border</span>
                 </div>
                 <div className="space-y-1">
                   <h3 className="text-xl font-bold font-montserrat text-[#111C2D]">
-                    {collectionFilter !== "todas"
-                      ? (isEn ? "No sheet music in this collection" : "No hay partituras en esta colección")
-                      : (isEn ? "You have no saved scores yet" : "Aún no tienes partituras guardadas")}
+                    {isEn ? "You have no saved scores yet" : "Aún no tienes partituras guardadas"}
                   </h3>
                   <p className="text-xs sm:text-sm text-[#4C4546] max-w-md mx-auto leading-relaxed">
-                    {collectionFilter !== "todas"
-                      ? (isEn ? "Assign sheet music to this folder by selecting it on the score card." : "Asigna partituras a esta carpeta seleccionándola en la tarjeta de cada obra.")
-                      : (isEn ? "Explore the store and click the bookmark icon on any sheet music to save it to your customer library." : "Explora la tienda y haz clic en el ícono de marcador en cualquier partitura para guardarla en tu perfil de cliente.")}
+                    {isEn
+                      ? "Explore the store and click the bookmark icon on any sheet music to save it to your customer library."
+                      : "Explora la tienda y haz clic en el ícono de marcador en cualquier partitura para guardarla en tu perfil de cliente."}
                   </p>
                 </div>
                 <div className="pt-2">

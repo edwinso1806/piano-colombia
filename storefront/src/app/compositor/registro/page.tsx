@@ -2,9 +2,12 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { useLanguage } from "@/context/LanguageContext";
+import { useAuth } from "@/context/AuthContext";
+import { useAlert } from "@/context/AlertContext";
 import {
   sendComposerOtpApi,
   verifyComposerOtpApi,
@@ -76,8 +79,20 @@ function translateBackendError(msg: string, isEn: boolean): string {
 }
 
 export default function CompositorRegistroPage() {
+  const router = useRouter();
+  const { loginComposer, composer, isLoaded } = useAuth();
+  const { showAlert } = useAlert();
   const { t, language } = useLanguage();
   const isEn = language === "en";
+
+  // Redirección si la sesión del compositor ya se encuentra abierta
+  useEffect(() => {
+    if (!isLoaded) return;
+    if (composer && (composer.email || composer.id)) {
+      const target = composer.status === "APPROVED" ? "/compositor/dashboard" : "/compositor/dashboard/perfil";
+      router.replace(target);
+    }
+  }, [composer, isLoaded, router]);
 
   const [stepMode, setStepMode] = useState<"form" | "otp" | "submitted">("form");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -387,12 +402,46 @@ export default function CompositorRegistroPage() {
     setIsSubmitting(true);
 
     try {
-      await verifyComposerOtpApi({
+      const res = await verifyComposerOtpApi({
         email: email.trim(),
         code: otpCode.trim(),
       });
 
+      if (res.composer) {
+        loginComposer({
+          id: res.composer.id,
+          artistic_name: res.composer.artistic_name,
+          email: res.composer.email,
+          first_name: res.composer.first_name,
+          last_name: res.composer.last_name,
+          phone: res.composer.phone,
+          region: res.composer.region,
+          status: res.composer.status,
+          photo_url: res.composer.photo_url,
+          bio_es: res.composer.bio_es,
+          bio_en: res.composer.bio_en,
+        }, {
+          token: res.token,
+          rememberMe: true,
+          expires_at: res.expires_at,
+        });
+      }
+
+      showAlert({
+        type: "success",
+        title: isEn ? "Account Verified!" : "¡Cuenta Verificada!",
+        message: isEn
+          ? "Your composer account was verified successfully. Redirecting automatically to your Composer Portal..."
+          : "Tu cuenta de compositor ha sido verificada con éxito. Redirigiendo automáticamente a tu Portal del Compositor...",
+        duration: 3500,
+      });
+
       setStepMode("submitted");
+
+      // Redirigir automáticamente al portal (home) del compositor
+      setTimeout(() => {
+        router.push("/compositor/dashboard");
+      }, 1200);
     } catch (err: any) {
       console.error("Error al verificar código OTP de compositor:", err);
       setValidationError(

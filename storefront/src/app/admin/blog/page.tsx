@@ -13,6 +13,7 @@ import {
   uploadFileToCloudflareR2,
 } from "@/lib/api-client";
 import { autoTranslateBlogDraft, translateBlogCategory } from "@/lib/localize-messages";
+import { useAlert } from "@/context/AlertContext";
 
 interface BlogPostItem {
   id: string;
@@ -43,6 +44,7 @@ interface BlogCategoryItem {
 }
 
 export default function AdminBlogPage() {
+  const { showAlert, showConfirm } = useAlert();
   const [posts, setPosts] = useState<BlogPostItem[]>([]);
   const [categories, setCategories] = useState<BlogCategoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -371,15 +373,29 @@ export default function AdminBlogPage() {
   };
 
   // Eliminar categoría
-  const handleDeleteCategory = async (catId: string, catName: string) => {
-    if (!confirm(`¿Eliminar la categoría "${catName}"?`)) return;
-    try {
-      await deleteAdminBlogCategory(catId);
-      setCategories((prev) => prev.filter((c) => c.id !== catId));
-      showToast(`Categoría "${catName}" eliminada.`, "info");
-    } catch (err: any) {
-      showToast(err.message || "Error al eliminar categoría", "error");
-    }
+  const handleDeleteCategory = (catId: string, catName: string) => {
+    showConfirm({
+      title: "Eliminar Categoría",
+      message: `¿Estás seguro de que deseas eliminar la categoría "${catName}"? Esta acción no se puede deshacer.`,
+      confirmText: "Eliminar",
+      cancelText: "Cancelar",
+      danger: true,
+      onConfirm: async () => {
+        try {
+          await deleteAdminBlogCategory(catId);
+          setCategories((prev) => prev.filter((c) => c.id !== catId));
+          showAlert({
+            type: "info",
+            message: `Categoría "${catName}" eliminada correctamente.`
+          });
+        } catch (err: any) {
+          showAlert({
+            type: "error",
+            message: err.message || "Error al eliminar categoría"
+          });
+        }
+      }
+    });
   };
 
   // Filtrado de publicaciones
@@ -547,21 +563,66 @@ export default function AdminBlogPage() {
           <span className="text-sm font-medium">Cargando publicaciones...</span>
         </div>
       ) : filteredPosts.length === 0 ? (
-        <div className="py-16 text-center bg-white rounded-3xl border border-black/5 p-8 space-y-3">
-          <span className="material-symbols-outlined text-5xl text-slate-300">post_add</span>
-          <h3 className="text-lg font-bold font-montserrat text-[#111C2D]">No se encontraron artículos</h3>
-          <p className="text-xs text-[#4C4546] max-w-md mx-auto">
-            {searchQuery || selectedCategoryFilter !== "all" || selectedStatusFilter !== "all"
-              ? "Prueba ajustando los filtros de búsqueda o categoría."
-              : "Aún no has creado artículos en la bitácora. ¡Comienza haciendo clic en 'Nuevo Artículo'!"}
-          </p>
-          <button
-            onClick={handleOpenNewPost}
-            className="mt-2 px-5 py-2.5 rounded-xl bg-[#FBB03B] text-[#111C2D] font-extrabold text-xs uppercase tracking-wider font-montserrat hover:bg-[#e09b2d] transition"
-          >
-            Redactar Primer Artículo
-          </button>
-        </div>
+        posts.length > 0 ? (
+          <div className="py-16 text-center bg-white rounded-3xl border border-black/5 p-8 sm:p-12 space-y-4 max-w-lg mx-auto shadow-xs animate-in fade-in duration-200">
+            <div className="w-16 h-16 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto">
+              <span className="material-symbols-outlined text-3xl">search_off</span>
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-lg font-black font-montserrat text-[#111C2D]">
+                No se encontraron artículos con los filtros aplicados
+              </h3>
+              <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+                {searchQuery.trim() && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#0071BC]/10 text-[#0071BC] text-[11px] font-bold">
+                    Búsqueda: "{searchQuery.trim()}"
+                  </span>
+                )}
+                {selectedCategoryFilter !== "all" && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#FBB03B]/20 text-[#111C2D] text-[11px] font-bold">
+                    Categoría: {categories.find((c) => c.slug === selectedCategoryFilter)?.name || selectedCategoryFilter}
+                  </span>
+                )}
+                {selectedStatusFilter !== "all" && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[11px] font-bold">
+                    Estado: {selectedStatusFilter === "active" ? "Solo Activos" : "Solo Inactivos"}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-[#4C4546] leading-relaxed max-w-sm mx-auto">
+                Tienes {posts.length} artículo{posts.length > 1 ? "s" : ""} en la bitácora, pero ninguno coincide con los criterios de búsqueda o filtrado.
+              </p>
+            </div>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("");
+                  setSelectedCategoryFilter("all");
+                  setSelectedStatusFilter("all");
+                }}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#0071BC] hover:bg-[#005a96] text-white font-extrabold text-xs uppercase tracking-wider font-montserrat shadow-md transition cursor-pointer active:scale-95"
+              >
+                <span className="material-symbols-outlined text-base">restart_alt</span>
+                <span>Limpiar filtros ({posts.length})</span>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="py-16 text-center bg-white rounded-3xl border border-black/5 p-8 space-y-3">
+            <span className="material-symbols-outlined text-5xl text-slate-300">post_add</span>
+            <h3 className="text-lg font-bold font-montserrat text-[#111C2D]">No se encontraron artículos</h3>
+            <p className="text-xs text-[#4C4546] max-w-md mx-auto">
+              Aún no has creado artículos en la bitácora. ¡Comienza haciendo clic en 'Nuevo Artículo'!
+            </p>
+            <button
+              onClick={handleOpenNewPost}
+              className="mt-2 px-5 py-2.5 rounded-xl bg-[#FBB03B] text-[#111C2D] font-extrabold text-xs uppercase tracking-wider font-montserrat hover:bg-[#e09b2d] transition"
+            >
+              Redactar Primer Artículo
+            </button>
+          </div>
+        )
       ) : (
         <div className="bg-white rounded-3xl border border-black/5 shadow-xs overflow-hidden">
           <div className="overflow-x-auto">

@@ -3,7 +3,7 @@ import { COMPOSER_MODULE } from "../../../../../modules/composer"
 import { verifyComposerRegistrationOtp } from "../../../../../lib/otp-service"
 import { hashPassword } from "../../../../../lib/auth-security"
 import { getAdminAndModeratorEmailsFromDB } from "../../../../../lib/admin-recipient-service"
-import { sendEmail, generateNewComposerAdminNotificationHTML, extractLanguage } from "../../../../../lib/resend-mailer"
+import { sendEmail, generateWelcomeEmailHTML, generateNewComposerAdminNotificationHTML, extractLanguage } from "../../../../../lib/resend-mailer"
 
 export async function POST(req: MedusaRequest, res: MedusaResponse) {
   try {
@@ -76,7 +76,7 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       .replace(/^-|-$/g, "")
     const uniqueSlug = `${baseSlug}-${Date.now().toString().slice(-4)}`
 
-    // 3. Crear perfil de compositor en PostgreSQL DB
+    // 3. Crear perfil de compositor en PostgreSQL DB en estado DRAFT (Borrador inicial)
     const composer = await composerModuleService.createComposers({
       first_name: data.first_name,
       last_name: data.last_name || "",
@@ -88,7 +88,8 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       password_hash: password_hash || null,
       salt: salt || null,
       preferred_language: data.preferred_language || lang,
-      status: "PENDING_APPROVAL",
+      status: "DRAFT",
+      approval_attempts: 0,
     })
 
     // 4. Crear cuenta bancaria vinculada
@@ -100,45 +101,31 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       })
     }
 
-    console.log(`✅ [COMPOSER VERIFIED] Solicitud de compositor verificada y guardada para ${normalizedEmail}`)
+    console.log(`✅ [COMPOSER VERIFIED] Cuenta de compositor creada en estado DRAFT para ${normalizedEmail}`)
 
-    // 5. Consultar DINÁMICAMENTE los correos de Super Administradores y Moderadores desde la BD
+    // 5. Enviar correo de bienvenida al compositor
     try {
-      const adminRecipients = await getAdminAndModeratorEmailsFromDB(req)
       const composerFullName = `${data.first_name} ${data.last_name || ""}`.trim()
-      const artisticName = data.artistic_name || composerFullName
-
-      console.log(`📧 Enviando notificaciones a ${adminRecipients.length} casillas administrativas/moderadoras de la BD...`)
-
-      for (const recipient of adminRecipients) {
-        await sendEmail({
-          to: recipient.email,
-          subject: `🚨 Nueva Solicitud de Compositor Pendiente de Aprobación - ${artisticName}`,
-          html: generateNewComposerAdminNotificationHTML({
-            adminName: recipient.name,
-            composerName: composerFullName,
-            artisticName,
-            email: normalizedEmail,
-            phone: data.phone,
-            region: data.region,
-            documentType: data.bank_account?.document_type,
-            documentNumber: data.bank_account?.document_number,
-            bankName: data.bank_account?.bank_name,
-            accountType: data.bank_account?.account_type,
-            accountNumber: data.bank_account?.account_number,
-          }),
-        })
-      }
+      await sendEmail({
+        to: normalizedEmail,
+        subject: lang === "en"
+          ? "Welcome to Piano Colombia - Composer Portal"
+          : "¡Bienvenido a Piano Colombia - Portal de Compositores!",
+        html: generateWelcomeEmailHTML({
+          userName: composerFullName,
+          lang,
+        }),
+      })
     } catch (emailErr) {
-      console.warn("⚠️ Advertencia notificando a los administradores por correo:", emailErr)
+      console.warn("⚠️ Advertencia enviando correo de bienvenida al compositor:", emailErr)
     }
 
     return res.status(201).json({
       success: true,
       composer,
       message: lang === "en"
-        ? "Email successfully verified! Your composer registration request has been submitted for moderation."
-        : "¡Correo electrónico verificado exitosamente! Tu solicitud de registro de compositor ha sido ingresada para moderación.",
+        ? "Email successfully verified! Your composer profile has been created. Please complete your profile and submit it for review."
+        : "¡Correo electrónico verificado exitosamente! Tu cuenta de compositor ha sido creada. Ahora puedes completar tu biografía y fotografía y enviarla a revisión.",
     })
   } catch (error: any) {
     const lang = extractLanguage(req)

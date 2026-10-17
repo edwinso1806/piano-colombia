@@ -8,6 +8,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import {
   loginComposerApi,
+  loginWithGoogleComposerApi,
   requestPasswordResetApi,
   confirmPasswordResetApi,
 } from "@/lib/api-client";
@@ -15,7 +16,7 @@ import { localizeAuthMessage } from "@/lib/localize-messages";
 
 export default function CompositorLoginPage() {
   const router = useRouter();
-  const { composer, loginComposer, logoutComposer } = useAuth();
+  const { composer, loginComposer, logoutComposer, isLoaded } = useAuth();
   const { t, language } = useLanguage();
   const isEn = language === "en";
   const [viewMode, setViewMode] = useState<"login" | "forgot_email" | "forgot_otp">("login");
@@ -27,6 +28,212 @@ export default function CompositorLoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Redirección automática si la sesión del compositor ya se encuentra abierta
+  useEffect(() => {
+    if (!isLoaded) return;
+    if (composer && (composer.email || composer.id)) {
+      const targetUrl = composer.status === "APPROVED" ? "/compositor/dashboard" : "/compositor/dashboard/perfil";
+      router.replace(targetUrl);
+    }
+  }, [composer, isLoaded, router]);
+
+  // Mensaje cuando la sesión ha expirado automáticamente
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("expired") === "true") {
+        setErrorMessage(
+          isEn
+            ? "Your composer session has expired for security reasons. Please sign in again."
+            : "Tu sesión de compositor ha expirado por motivos de seguridad. Por favor ingresa nuevamente."
+        );
+      }
+    }
+  }, [isEn]);
+
+  // Google OAuth States
+  const [googleClientId, setGoogleClientId] = useState<string>(
+    process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ""
+  );
+  const [isGoogleSubmitting, setIsGoogleSubmitting] = useState(false);
+  const [isGsiLoaded, setIsGsiLoaded] = useState(false);
+  const [showGoogleConfigModal, setShowGoogleConfigModal] = useState(false);
+  const [customClientIdInput, setCustomClientIdInput] = useState("");
+
+  // Cargar Google Identity Services Script
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    if ((window as any).google?.accounts) {
+      setIsGsiLoaded(true);
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      setIsGsiLoaded(true);
+    };
+    script.onerror = () => {
+      console.warn("No se pudo cargar el script de Google Identity Services.");
+    };
+    document.body.appendChild(script);
+  }, []);
+
+  const triggerGoogleOAuth = (clientIdToUse: string) => {
+    if (typeof window === "undefined" || !(window as any).google?.accounts?.oauth2) {
+      setErrorMessage(
+        isEn
+          ? "Google authentication service is still loading. Please try again in a moment."
+          : "El servicio de autenticación de Google aún está cargando. Por favor intenta de nuevo en un segundo."
+      );
+      setIsGoogleSubmitting(false);
+      return;
+    }
+
+    try {
+      const handleWindowFocus = () => {
+        setTimeout(() => {
+          setIsGoogleSubmitting((prev) => (prev ? false : prev));
+          window.removeEventListener("focus", handleWindowFocus);
+        }, 1200);
+      };
+      window.addEventListener("focus", handleWindowFocus);
+
+      const tokenClient = (window as any).google.accounts.oauth2.initTokenClient({
+        client_id: clientIdToUse,
+        scope: "email profile openid",
+        error_callback: (err: any) => {
+          console.warn("Google OAuth popup cerrado o cancelado por el usuario:", err);
+          setIsGoogleSubmitting(false);
+          window.removeEventListener("focus", handleWindowFocus);
+        },
+        callback: async (tokenResponse: any) => {
+          window.removeEventListener("focus", handleWindowFocus);
+
+          if (tokenResponse.error) {
+            console.error("Error en Google OAuth:", tokenResponse.error);
+            setIsGoogleSubmitting(false);
+            setErrorMessage(
+              isEn
+                ? `Error authenticating with Google: ${tokenResponse.error_description || tokenResponse.error}`
+                : `Error al autenticar con Google: ${tokenResponse.error_description || tokenResponse.error}`
+            );
+            return;
+          }
+
+          try {
+            // Obtener perfil verificado del usuario desde Google API
+            const userinfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+              headers: {
+                Authorization: `Bearer ${tokenResponse.access_token}`,
+              },
+            });
+
+            if (!userinfoRes.ok) {
+              throw new Error(
+                isEn
+                  ? "Could not retrieve Google profile information."
+                  : "No se pudo obtener la información de perfil de Google."
+              );
+            }
+
+            const googleUser = await userinfoRes.json();
+            const googleEmail = googleUser.email;
+            const googleName = googleUser.name || googleUser.given_name || googleEmail.split("@")[0];
+            const googleId = googleUser.sub;
+            const googlePicture = googleUser.picture;
+
+            // Enviar al backend de Medusa / PostgreSQL para compositores
+            const res = await loginWithGoogleComposerApi({
+              email: googleEmail,
+              name: googleName,
+              googleId,
+              picture: googlePicture,
+            });
+
+            loginComposer({
+              id: res.composer.id,
+              artistic_name: res.composer.artistic_name,
+              email: res.composer.email,
+              first_name: res.composer.first_name,
+              last_name: res.composer.last_name,
+              phone: res.composer.phone,
+              region: res.composer.region,
+              status: res.composer.status,
+              photo_url: res.composer.photo_url,
+              bio_es: res.composer.bio_es,
+              bio_en: res.composer.bio_en,
+              rejection_reason: res.composer.rejection_reason,
+            }, {
+              token: res.token,
+              rememberMe: true,
+              expires_at: res.expires_at,
+            });
+
+            setSuccessMessage(
+              res.isNew
+                ? (isEn
+                    ? `Welcome ${googleName}! Your composer account was created successfully.`
+                    : `¡Bienvenido ${googleName}! Tu cuenta de compositor fue creada con éxito.`)
+                : (isEn
+                    ? `Welcome back ${googleName}! Successfully signed in with Google.`
+                    : `¡Hola de nuevo ${googleName}! Inicio de sesión con Google exitoso.`)
+            );
+
+            setShowGoogleConfigModal(false);
+
+            setTimeout(() => {
+              if (res.composer.status !== "APPROVED") {
+                router.push("/compositor/dashboard/perfil");
+              } else {
+                router.push("/compositor/dashboard");
+              }
+            }, 700);
+          } catch (err: any) {
+            console.error("Error procesando datos de Google:", err);
+            setErrorMessage(
+              localizeAuthMessage(err.message, isEn) ||
+                (isEn
+                  ? "Error synchronizing your Google account with Piano Colombia."
+                  : (err.message || "Error al sincronizar tu cuenta de Google con Piano Colombia."))
+            );
+          } finally {
+            setIsGoogleSubmitting(false);
+          }
+        },
+      });
+
+      tokenClient.requestAccessToken({ prompt: "select_account" });
+    } catch (err: any) {
+      console.error("Error inicializando cliente Google:", err);
+      setIsGoogleSubmitting(false);
+      setErrorMessage(
+        isEn
+          ? "Error opening Google Sign-In window."
+          : (err.message || "Error al abrir la ventana de Google Sign-In.")
+      );
+    }
+  };
+
+  const handleGoogleAuth = () => {
+    setIsGoogleSubmitting(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    const activeClientId = googleClientId.trim();
+
+    if (!activeClientId) {
+      setIsGoogleSubmitting(false);
+      setShowGoogleConfigModal(true);
+      return;
+    }
+
+    triggerGoogleOAuth(activeClientId);
+  };
 
   // Password Reset States
   const [forgotEmail, setForgotEmail] = useState("");
@@ -94,6 +301,10 @@ export default function CompositorLoginPage() {
         bio_es: res.composer.bio_es,
         bio_en: res.composer.bio_en,
         rejection_reason: res.composer.rejection_reason,
+      }, {
+        token: res.token,
+        rememberMe,
+        expires_at: res.expires_at,
       });
 
       // Si no está aprobado, se conduce directamente a completar su perfil
@@ -239,6 +450,20 @@ export default function CompositorLoginPage() {
       setIsSubmitting(false);
     }
   };
+
+  if (isLoaded && composer && (composer.email || composer.id)) {
+    return (
+      <div className="min-h-screen bg-[#F9F9FF] flex flex-col items-center justify-center p-6 text-center font-montserrat">
+        <div className="w-12 h-12 border-4 border-[#FBB03B] border-t-transparent rounded-full animate-spin mb-4" />
+        <h2 className="text-base font-extrabold text-[#111C2D]">
+          {isEn ? "Session active. Redirecting to your panel..." : "Sesión activa. Accediendo a tu panel de compositor..."}
+        </h2>
+        <p className="text-xs text-slate-500 mt-1">
+          {composer.artistic_name || composer.email}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-800 font-inter antialiased relative flex flex-col justify-between overflow-x-hidden selection:bg-[#fbb03b] selection:text-slate-900">
@@ -536,7 +761,50 @@ export default function CompositorLoginPage() {
               /* =========================================================
                    VISTA 3: LOGIN DE COMPOSITOR
                  ========================================================= */
-              <form onSubmit={handleLogin} className="space-y-5">
+              <div className="space-y-6">
+                {/* Botón Google OAuth */}
+                <button
+                  type="button"
+                  onClick={handleGoogleAuth}
+                  disabled={isGoogleSubmitting || isSubmitting}
+                  className="w-full py-3.5 px-4 bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs rounded-xl border border-slate-200/90 shadow-2xs hover:shadow-sm hover:border-slate-300 transition-all duration-200 font-montserrat flex items-center justify-center gap-3 cursor-pointer disabled:opacity-50"
+                >
+                  {isGoogleSubmitting ? (
+                    <span className="w-4 h-4 border-2 border-slate-900 border-t-transparent rounded-full animate-spin"></span>
+                  ) : (
+                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                      <path
+                        fill="#4285F4"
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                      />
+                      <path
+                        fill="#EA4335"
+                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                      />
+                    </svg>
+                  )}
+                  <span>
+                    {t("auth.continue_with_google", isEn ? "Continue with Google" : "Continuar con Google")}
+                  </span>
+                </button>
+
+                {/* Divisor "o con credenciales" */}
+                <div className="relative flex items-center justify-center">
+                  <div className="w-full border-t border-slate-200"></div>
+                  <span className="absolute bg-white px-3 text-[11px] font-bold text-slate-400 uppercase tracking-wider font-montserrat">
+                    {t("auth.or_with_credentials", isEn ? "or with credentials" : "o con credenciales")}
+                  </span>
+                </div>
+
+                <form onSubmit={handleLogin} className="space-y-5">
                 
                 {/* Campo Correo */}
                 <div>
@@ -637,6 +905,7 @@ export default function CompositorLoginPage() {
                 </button>
 
               </form>
+              </div>
             )}
 
             {/* Footer de la Card */}
@@ -661,6 +930,84 @@ export default function CompositorLoginPage() {
           </div>
 
         </div>
+
+      {/* Modal de Configuración Google OAuth de Respaldo */}
+      {showGoogleConfigModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border border-black/10 space-y-5 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center border border-amber-200">
+                  <span className="material-symbols-outlined text-xl">vpn_key</span>
+                </div>
+                <div>
+                  <h3 className="font-montserrat font-black text-lg text-[#111C2D]">
+                    {isEn ? "Configure Google OAuth Client ID" : "Configurar Google OAuth Client ID"}
+                  </h3>
+                  <p className="text-xs text-[#64748b]">
+                    {isEn ? "Google Cloud Console credentials" : "Credenciales de Google Cloud Console"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowGoogleConfigModal(false)}
+                className="text-slate-400 hover:text-slate-700 p-1"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs text-[#334155] leading-relaxed">
+              <p>
+                {isEn
+                  ? "To enable Google Sign-In, enter your Google OAuth 2.0 Client ID from Google Cloud Console:"
+                  : "Para activar el inicio de sesión con Google, ingresa tu Google OAuth 2.0 Client ID de Google Cloud Console:"}
+              </p>
+
+              <div>
+                <label className="block text-xs font-bold text-[#111C2D] mb-1.5 font-montserrat">
+                  {isEn ? "Paste your Google Client ID:" : "Pega tu Google Client ID:"}
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej: 123456789-abcdef.apps.googleusercontent.com"
+                  value={customClientIdInput}
+                  onChange={(e) => setCustomClientIdInput(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-black/10 rounded-xl text-xs font-mono text-[#111C2D] focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <p className="text-[11px] text-[#64748b]">
+                💡 Tip: {isEn ? "Save it permanently in" : "Puedes guardarlo permanentemente en"} <code className="font-mono font-bold text-[#111C2D]">storefront/.env.local</code> {isEn ? "as" : "como"} <code className="font-mono font-bold text-amber-600">NEXT_PUBLIC_GOOGLE_CLIENT_ID=tu_id</code>.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-black/5">
+              <button
+                type="button"
+                onClick={() => setShowGoogleConfigModal(false)}
+                className="px-4 py-2.5 rounded-xl border border-black/10 text-xs font-bold text-[#4C4546] hover:bg-slate-50 font-montserrat"
+              >
+                {isEn ? "Cancel" : "Cancelar"}
+              </button>
+              <button
+                type="button"
+                disabled={!customClientIdInput.trim()}
+                onClick={() => {
+                  const cleanedId = customClientIdInput.trim();
+                  setGoogleClientId(cleanedId);
+                  triggerGoogleOAuth(cleanedId);
+                }}
+                className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 text-xs font-extrabold rounded-xl shadow-md transition font-montserrat flex items-center gap-2 cursor-pointer"
+              >
+                <span>{isEn ? "Connect with Google" : "Conectar con Google"}</span>
+                <span className="material-symbols-outlined text-sm">open_in_new</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       </main>
 
       {/* Footer Minimalista */}

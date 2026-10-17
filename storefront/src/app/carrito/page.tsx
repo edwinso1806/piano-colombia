@@ -6,10 +6,12 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { useCart } from "@/context/CartContext";
 import { useLanguage } from "@/context/LanguageContext";
+import { useAlert } from "@/context/AlertContext";
 
 export default function CarritoPage() {
   const { cart, removeFromCart, updateQuantity, totalCOP, totalUSD, clearCart } = useCart();
   const { t, language } = useLanguage();
+  const { showConfirm } = useAlert();
   const [couponCode, setCouponCode] = useState("");
   const [discount, setDiscount] = useState(0); // percentage
   const [couponMessage, setCouponMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
@@ -85,13 +87,17 @@ export default function CarritoPage() {
               <button
                 type="button"
                 onClick={() => {
-                  const confirmMsg =
-                    language === "en"
-                      ? "¿Are you sure you want to empty your shopping cart?"
-                      : "¿Estás seguro de que deseas vaciar todos los elementos de tu carrito?";
-                  if (window.confirm(confirmMsg)) {
-                    clearCart();
-                  }
+                  showConfirm({
+                    title: language === "en" ? "Empty Cart" : "Vaciar Carrito",
+                    message:
+                      language === "en"
+                        ? "Are you sure you want to empty all items from your shopping cart?"
+                        : "¿Estás seguro de que deseas vaciar todos los elementos de tu carrito?",
+                    confirmText: language === "en" ? "Yes, Empty Cart" : "Sí, vaciar carrito",
+                    cancelText: language === "en" ? "Cancel" : "Cancelar",
+                    type: "danger",
+                    onConfirm: () => clearCart(),
+                  });
                 }}
                 className="text-xs font-montserrat font-bold text-[#C1272D] hover:text-[#931D21] bg-red-50 hover:bg-red-100/80 border border-red-200 px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-2xs active:scale-95"
                 title={t("cart.clear_btn", "Vaciar Carrito")}

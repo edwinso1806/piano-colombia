@@ -80,8 +80,8 @@ export default function AdminCompositoresPage() {
             email: c.email,
             phone: c.phone || "No registrado",
             date: new Date(c.created_at || c.createdAt || Date.now()).toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" }),
-            status: c.status === "PENDING_APPROVAL" ? "PENDIENTE" : c.status === "APPROVED" ? "APROBADO" : c.status === "BLOCKED" ? "BLOQUEADO" : "RECHAZADO",
-            approvalAttempts: c.approval_attempts ? Number(c.approval_attempts) : 1,
+            status: c.status === "PENDING_APPROVAL" ? "PENDIENTE" : c.status === "APPROVED" ? "APROBADO" : c.status === "BLOCKED" ? "BLOQUEADO" : c.status === "DRAFT" ? "BORRADOR" : "RECHAZADO",
+            approvalAttempts: c.approval_attempts !== undefined ? Number(c.approval_attempts) : 0,
             rejectionReason: c.rejection_reason || null,
             bankName: c.bank_account?.bank_name || "No especificado",
             accountType: c.bank_account?.account_type || "Ahorros",
@@ -282,13 +282,15 @@ export default function AdminCompositoresPage() {
                       c.status === "PENDIENTE" ? "bg-amber-50 text-amber-800 border border-amber-200" :
                       c.status === "APROBADO" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" :
                       c.status === "BLOQUEADO" ? "bg-zinc-900 text-white border border-zinc-700" :
-                      "bg-rose-50 text-rose-700 border border-rose-200"
+                      c.status === "BORRADOR" ? "bg-slate-100 text-slate-700 border border-slate-300" :
+                      "bg-amber-50 text-amber-900 border border-amber-300"
                     }`}>
                       {c.status === "PENDIENTE" && <span className="material-symbols-outlined text-xs">hourglass_top</span>}
                       {c.status === "APROBADO" && <span className="material-symbols-outlined text-xs">check_circle</span>}
                       {c.status === "BLOQUEADO" && <span className="material-symbols-outlined text-xs">block</span>}
-                      {c.status === "RECHAZADO" && <span className="material-symbols-outlined text-xs">cancel</span>}
-                      {c.status}
+                      {c.status === "BORRADOR" && <span className="material-symbols-outlined text-xs">draw</span>}
+                      {c.status === "RECHAZADO" && <span className="material-symbols-outlined text-xs">edit_note</span>}
+                      {c.status === "BORRADOR" ? "BORRADOR / EN EDICIÓN" : c.status === "RECHAZADO" ? "CON SUGERENCIAS (EN CORRECCIÓN)" : c.status}
                     </span>
 
                     {/* Badge de Intentos de Aprobación */}
@@ -359,7 +361,7 @@ export default function AdminCompositoresPage() {
                       className="px-4 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-xl text-xs font-extrabold uppercase tracking-wider font-montserrat flex items-center justify-center gap-1.5 transition disabled:opacity-50"
                     >
                       <span className="material-symbols-outlined text-base">edit_note</span>
-                      Rechazar (Observaciones)
+                      Sugerencias / Observaciones
                     </button>
                     <button
                       onClick={() => {
@@ -376,19 +378,63 @@ export default function AdminCompositoresPage() {
                   </>
                 )}
 
+                {c.status === "BORRADOR" && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-semibold text-slate-500 bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-sm text-slate-400">edit_note</span>
+                      En edición por el autor (Aún no enviado a revisión)
+                    </span>
+                    <button
+                      onClick={() => handleApprove(c.id)}
+                      disabled={actionLoading === c.id}
+                      title="Autorizar directamente si el administrador conoce al maestro"
+                      className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold font-montserrat flex items-center gap-1 transition shadow-xs disabled:opacity-50"
+                    >
+                      <span className="material-symbols-outlined text-sm">check</span>
+                      Aprobar
+                    </button>
+                    <button
+                      onClick={() => {
+                        setRejectedId(c.id);
+                        setIsPermanentBlock(true);
+                        setRejectionReason("Solicitud bloqueada por administración.");
+                      }}
+                      disabled={actionLoading === c.id}
+                      className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold font-montserrat flex items-center gap-1 transition disabled:opacity-50"
+                    >
+                      <span className="material-symbols-outlined text-sm">block</span>
+                      Bloquear
+                    </button>
+                  </div>
+                )}
+
                 {c.status === "RECHAZADO" && (
-                  <button
-                    onClick={() => {
-                      setRejectedId(c.id);
-                      setIsPermanentBlock(true);
-                      setRejectionReason("Solicitud cerrada de forma definitiva tras evaluar intentos previos.");
-                    }}
-                    disabled={actionLoading === c.id}
-                    className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-900 text-white rounded-xl text-xs font-extrabold uppercase tracking-wider font-montserrat flex items-center justify-center gap-1.5 transition disabled:opacity-50"
-                  >
-                    <span className="material-symbols-outlined text-base">block</span>
-                    Bloquear Definitivo
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-300 px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-sm text-amber-700">hourglass_empty</span>
+                      Esperando corrección del autor (Intento #{c.approvalAttempts + 1})
+                    </span>
+                    <button
+                      onClick={() => handleApprove(c.id)}
+                      disabled={actionLoading === c.id}
+                      className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold font-montserrat flex items-center gap-1 transition shadow-xs disabled:opacity-50"
+                    >
+                      <span className="material-symbols-outlined text-sm">check</span>
+                      Aprobar
+                    </button>
+                    <button
+                      onClick={() => {
+                        setRejectedId(c.id);
+                        setIsPermanentBlock(true);
+                        setRejectionReason("Solicitud cerrada de forma definitiva tras evaluar intentos previos.");
+                      }}
+                      disabled={actionLoading === c.id}
+                      className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-900 text-white rounded-xl text-xs font-bold font-montserrat flex items-center gap-1 transition disabled:opacity-50"
+                    >
+                      <span className="material-symbols-outlined text-sm">block</span>
+                      Bloquear Definitivo
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -543,10 +589,10 @@ export default function AdminCompositoresPage() {
                       <h3 className="text-base font-black font-montserrat">
                         {isPermanentBlock 
                           ? "Bloqueo Definitivo de Acceso" 
-                          : "Rechazo con Observaciones"}
+                          : "Enviar Sugerencias de Corrección al Autor"}
                       </h3>
                       <p className={`text-xs ${isPermanentBlock ? "text-zinc-400" : "text-[#4C4546]"}`}>
-                        Compositor: <strong>{selectedComposer.name}</strong> • Intento #{selectedComposer.approvalAttempts}
+                        Compositor: <strong>{selectedComposer.name}</strong> • Intento Evaluado #{selectedComposer.approvalAttempts}
                       </p>
                     </div>
                   </div>
@@ -568,7 +614,7 @@ export default function AdminCompositoresPage() {
                   isPermanentBlock ? "bg-zinc-800/80 border border-zinc-700" : "bg-amber-50 border border-amber-200"
                 }`}>
                   <span className="font-semibold text-[11px]">
-                    {isPermanentBlock ? "Modo: Bloqueo Definitivo Permanente" : "Modo: Observaciones para Corrección"}
+                    {isPermanentBlock ? "Modo: Bloqueo Definitivo Permanente" : `Modo: Sugerencias de Corrección (Habilitará el reenvío para Intento #${(selectedComposer.approvalAttempts || 0) + 1})`}
                   </span>
                   <button
                     type="button"
@@ -586,7 +632,7 @@ export default function AdminCompositoresPage() {
                         : "bg-rose-600 text-white hover:bg-rose-700"
                     }`}
                   >
-                    {isPermanentBlock ? "Cambiar a Observaciones" : "Cambiar a Bloqueo"}
+                    {isPermanentBlock ? "Cambiar a Sugerencias" : "Cambiar a Bloqueo"}
                   </button>
                 </div>
 
@@ -602,7 +648,7 @@ export default function AdminCompositoresPage() {
                 <p className={`text-xs leading-relaxed ${isPermanentBlock ? "text-zinc-300" : "text-[#4C4546]"}`}>
                   {isPermanentBlock
                     ? "Esta acción deniega la postulación de forma PERMANENTE. Se notificará formalmente al autor por correo que su solicitud definitiva no ha sido aceptada y no podrá reenviar su perfil."
-                    : "Escribe las observaciones exactas que el compositor debe corregir (fotografía de retrato, biografía o datos bancarios). Le llegará un correo con estas observaciones y podrá corregir y reenviar."}
+                    : `Escribe las sugerencias u observaciones exactas que el compositor debe corregir (fotografía, biografía o datos bancarios). Se le notificará por correo, se volverá a habilitar su botón para enviar de nuevo a revisión para el Intento #${(selectedComposer.approvalAttempts || 0) + 1} y se bloqueará nuevamente en cuanto el autor lo envíe hasta tu próxima acción o aprobación.`}
                 </p>
 
                 {/* Confirmación explícita de Bloqueo Permanente */}
@@ -621,7 +667,7 @@ export default function AdminCompositoresPage() {
                 {/* Textarea */}
                 <div>
                   <label className={`block text-xs font-bold font-montserrat mb-1.5 ${isPermanentBlock ? "text-zinc-300" : "text-[#111C2D]"}`}>
-                    {isPermanentBlock ? "Motivo del bloqueo definitivo:" : "Observaciones a corregir (se notificarán al correo):"}
+                    {isPermanentBlock ? "Motivo del bloqueo definitivo:" : "Sugerencias u observaciones a corregir (se notificarán al correo):"}
                   </label>
                   <textarea
                     rows={4}
@@ -668,7 +714,7 @@ export default function AdminCompositoresPage() {
                     className={`px-5 py-2.5 font-extrabold text-xs uppercase tracking-wider rounded-xl transition font-montserrat shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50 ${
                       isPermanentBlock
                         ? "bg-rose-600 hover:bg-rose-700 text-white"
-                        : "bg-[#C1272D] hover:bg-rose-800 text-white"
+                        : "bg-[#0071BC] hover:bg-[#005c99] text-white"
                     }`}
                   >
                     <span className="material-symbols-outlined text-base">
@@ -678,7 +724,7 @@ export default function AdminCompositoresPage() {
                       ? "Procesando..."
                       : isPermanentBlock
                       ? (confirmingBlock ? "Sí, Proceder con el Bloqueo" : "Confirmar Bloqueo Definitivo")
-                      : "Enviar Observaciones al Autor"}
+                      : "Enviar Sugerencias al Autor"}
                   </button>
                 </div>
               </div>
