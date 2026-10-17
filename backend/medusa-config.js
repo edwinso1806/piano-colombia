@@ -5,6 +5,9 @@ loadEnv(process.env.NODE_ENV || 'development', process.cwd());
 module.exports = defineConfig({
   projectConfig: {
     databaseUrl: process.env.DATABASE_URL,
+    databaseDriverOptions: process.env.NODE_ENV === "production"
+      ? { connection: { ssl: { rejectUnauthorized: false } } }
+      : {},
     http: {
       storeCors: process.env.STORE_CORS || "http://localhost:3000,http://localhost:3001",
       adminCors: process.env.ADMIN_CORS || "http://localhost:3000,http://localhost:3001,http://localhost:9000,http://localhost:5173",
