@@ -41,30 +41,30 @@ export default function Header({ activePage }: HeaderProps) {
 
   return (
     <>
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-black/5 px-4 sm:px-8 py-3.5 flex justify-between items-center gap-6 w-full shadow-2xs">
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-black/5 px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3.5 flex justify-between items-center gap-2 sm:gap-4 md:gap-6 w-full shadow-2xs max-w-full overflow-x-clip">
         {/* Left Cluster: Logo Brand + Desktop Navigation */}
-        <div className="flex items-center gap-6 lg:gap-10 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-4 md:gap-6 lg:gap-10 shrink-0 min-w-0">
           {/* Hamburger Mobile Toggle */}
           <button
             type="button"
             onClick={() => setIsMobileMenuOpen(true)}
-            className="md:hidden p-2 text-[#111C2D] hover:bg-[#F0F3FF] active:bg-slate-200 rounded-xl transition shrink-0 cursor-pointer"
+            className="md:hidden p-1.5 sm:p-2 text-[#111C2D] hover:bg-[#F0F3FF] active:bg-slate-200 rounded-xl transition shrink-0 cursor-pointer"
             aria-label="Abrir menú de navegación"
           >
             <span className="material-symbols-outlined text-2xl">menu</span>
           </button>
 
           {/* Logo Stitch con enlace a Inicio */}
-          <Link href="/" className="flex items-center gap-2.5 group shrink-0" title="Piano Colombia - Inicio">
-            <div className="flex items-center gap-1 shrink-0">
-              <div className="h-6 w-1 bg-[#111C2D] rounded-full"></div>
-              <div className="h-8 w-1 bg-[#FBB03B] rounded-full"></div>
-              <div className="h-5 w-1 bg-[#0071BC] rounded-full"></div>
-              <div className="h-7 w-1 bg-[#111C2D] rounded-full"></div>
-              <div className="h-4.5 w-1 bg-[#C1272D] rounded-full"></div>
+          <Link href="/" className="flex items-center gap-2 sm:gap-2.5 group shrink-0" title="Piano Colombia - Inicio">
+            <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+              <div className="h-5 sm:h-6 w-1 bg-[#111C2D] rounded-full"></div>
+              <div className="h-7 sm:h-8 w-1 bg-[#FBB03B] rounded-full"></div>
+              <div className="h-4 sm:h-5 w-1 bg-[#0071BC] rounded-full"></div>
+              <div className="h-6 sm:h-7 w-1 bg-[#111C2D] rounded-full"></div>
+              <div className="h-3.5 sm:h-4.5 w-1 bg-[#C1272D] rounded-full"></div>
             </div>
             <div className="flex flex-col shrink-0">
-              <span className="font-montserrat text-sm sm:text-base font-black tracking-tight text-[#111C2D] leading-none group-hover:text-[#0071BC] transition-colors whitespace-nowrap">
+              <span className="font-montserrat text-xs sm:text-base font-black tracking-tight text-[#111C2D] leading-none group-hover:text-[#0071BC] transition-colors whitespace-nowrap">
                 PIANO COLOMBIA
               </span>
               <span className="text-[9px] font-extrabold text-[#4C4546] uppercase tracking-wider font-montserrat mt-0.5 hidden sm:block whitespace-nowrap">
@@ -90,23 +90,25 @@ export default function Header({ activePage }: HeaderProps) {
         </div>
 
         {/* Right Cluster: Action Buttons */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          <LanguageSwitcher />
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+          {/* Switcher de idioma: completo en tablets/escritorio, compacto táctil en móvil */}
+          <LanguageSwitcher className="hidden sm:inline-flex" />
+          <LanguageSwitcher compact className="sm:hidden" />
 
           {/* Botón Carrito de Compras */}
           <Link
             href="/carrito"
-            className={`relative px-3 sm:px-3.5 py-2 rounded-xl border text-xs font-bold font-montserrat flex items-center gap-1.5 transition ${
+            className={`relative p-2 sm:px-3.5 sm:py-2 rounded-xl border text-xs font-bold font-montserrat flex items-center gap-1.5 transition ${
               activePage === "carrito"
                 ? "bg-[#0071BC] text-white border-[#0071BC] shadow-xs"
                 : "bg-[#F0F3FF] text-[#111C2D] border-black/5 hover:bg-slate-200/60"
             }`}
             aria-label="Ver Carrito de Compras"
           >
-            <span className="material-symbols-outlined text-lg">shopping_cart</span>
+            <span className="material-symbols-outlined text-lg sm:text-base">shopping_cart</span>
             <span className="hidden md:inline">{t("nav.cart", "Carrito")}</span>
             {totalItems > 0 && (
-              <span className="w-5 h-5 rounded-full bg-[#C1272D] text-white text-[10px] font-black flex items-center justify-center font-montserrat shadow-2xs">
+              <span className="absolute -top-1 -right-1 sm:static sm:top-auto sm:right-auto w-4.5 h-4.5 sm:w-5 sm:h-5 rounded-full bg-[#C1272D] text-white text-[9px] sm:text-[10px] font-black flex items-center justify-center font-montserrat shadow-2xs">
                 {totalItems}
               </span>
             )}

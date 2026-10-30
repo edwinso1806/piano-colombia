@@ -6,10 +6,36 @@ import { useLanguage } from "@/context/LanguageContext"
 interface LanguageSwitcherProps {
   className?: string
   variant?: "light" | "dark" | "pill"
+  compact?: boolean
 }
 
-export default function LanguageSwitcher({ className = "", variant = "pill" }: LanguageSwitcherProps) {
+export default function LanguageSwitcher({
+  className = "",
+  variant = "pill",
+  compact = false,
+}: LanguageSwitcherProps) {
   const { language, setLanguage } = useLanguage()
+
+  // Modo compacto para pantallas móviles (1 solo botón toggle táctil que no satura el header)
+  if (compact) {
+    return (
+      <button
+        type="button"
+        onClick={() => setLanguage(language === "es" ? "en" : "es")}
+        className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-2xs cursor-pointer active:scale-95 ${
+          variant === "dark"
+            ? "bg-[#111C2D] border-slate-700 text-slate-300"
+            : "bg-[#F0F3FF] border-black/5 text-[#111C2D] hover:bg-slate-200/70"
+        } ${className}`}
+        title={language === "es" ? "Cambiar a Inglés (EN)" : "Switch to Spanish (ES)"}
+        aria-label="Cambiar idioma"
+      >
+        <span className="text-xs leading-none">{language === "es" ? "🇨🇴" : "🇺🇸"}</span>
+        <span className="font-montserrat font-extrabold text-[11px] leading-none">{language.toUpperCase()}</span>
+        <span className="material-symbols-outlined text-[13px] text-[#0071BC]">sync_alt</span>
+      </button>
+    )
+  }
 
   return (
     <div
@@ -49,3 +75,4 @@ export default function LanguageSwitcher({ className = "", variant = "pill" }: L
     </div>
   )
 }
+

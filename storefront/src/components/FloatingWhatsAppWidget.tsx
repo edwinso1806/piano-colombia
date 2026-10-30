@@ -69,7 +69,7 @@ export default function FloatingWhatsAppWidget() {
   return (
     <aside
       aria-label={label}
-      className="fixed bottom-6 right-6 z-50 font-sans"
+      className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 font-sans max-w-[calc(100vw-2rem)]"
     >
       {/* VENTANA EMERGENTE DE CHAT WHATSAPP ("LA VENTANA PARA EL CLIENTE") */}
       {isOpen && (
@@ -207,16 +207,16 @@ export default function FloatingWhatsAppWidget() {
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         title={isOpen ? (isEn ? "Minimize support" : "Minimizar soporte") : `${label} - Piano Colombia`}
-        className="flex items-center gap-2.5 bg-white hover:bg-emerald-50 text-[#111C2D] border border-emerald-500/40 rounded-full px-4 py-2.5 shadow-lg backdrop-blur-md transition-all duration-200 group hover:scale-105 cursor-pointer"
+        className="flex items-center gap-2 sm:gap-2.5 bg-white hover:bg-emerald-50 text-[#111C2D] border border-emerald-500/40 rounded-full px-3 sm:px-4 py-2 sm:py-2.5 shadow-lg backdrop-blur-md transition-all duration-200 group hover:scale-105 cursor-pointer"
       >
-        <span className="relative flex h-2.5 w-2.5">
+        <span className="relative flex h-2.5 w-2.5 shrink-0">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
           <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
         </span>
-        <span className="material-symbols-outlined text-emerald-600 text-lg group-hover:scale-110 transition-transform">
+        <span className="material-symbols-outlined text-emerald-600 text-lg group-hover:scale-110 transition-transform shrink-0">
           {isOpen ? "close" : "chat"}
         </span>
-        <span className="text-xs font-bold font-montserrat">
+        <span className="text-xs font-bold font-montserrat truncate max-w-[150px] sm:max-w-none">
           {label}
         </span>
       </button>

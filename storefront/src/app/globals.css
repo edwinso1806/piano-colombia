@@ -30,11 +30,18 @@
   --foreground: var(--pc-text-dark);
 }
 
+html {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
 body {
   background: var(--pc-canvas);
   color: var(--pc-text-dark);
   font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, sans-serif;
   overflow-x: hidden;
+  max-width: 100%;
+  width: 100%;
 }
 
 h1, h2, h3, h4, .font-adam, .font-montserrat {

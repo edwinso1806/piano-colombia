@@ -341,40 +341,40 @@ export default function Home() {
           <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-[#FBB03B]/20 blur-3xl pointer-events-none"></div>
           <div className="absolute top-1/2 -left-28 w-80 h-80 rounded-full bg-[#0071BC]/20 blur-3xl pointer-events-none"></div>
 
-          <div className="max-w-7xl mx-auto px-6">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
               
               {/* Columna Izquierda: Copywriting & CTAs */}
-              <div className="lg:col-span-7 flex flex-col gap-6">
+              <div className="lg:col-span-7 flex flex-col gap-5 sm:gap-6">
                 
                 {/* Overline Badge con Motivo Rítmico Tricolor */}
-                <div className="inline-flex items-center gap-2 self-start px-3.5 py-1.5 rounded-full bg-white border border-black/5 shadow-xs">
-                  <span className="flex items-center gap-1">
+                <div className="inline-flex items-center gap-2 self-start px-3 sm:px-3.5 py-1.5 rounded-full bg-white border border-black/5 shadow-xs max-w-full">
+                  <span className="flex items-center gap-1 shrink-0">
                     <span className="w-1.5 h-3.5 bg-[#111C2D] rounded-full"></span>
                     <span className="w-1.5 h-4.5 bg-[#FBB03B] rounded-full"></span>
                     <span className="w-1.5 h-3 bg-[#0071BC] rounded-full"></span>
                     <span className="w-1.5 h-4 bg-[#C1272D] rounded-full"></span>
                   </span>
-                  <span className="font-montserrat text-xs text-[#111C2D] uppercase tracking-wider font-extrabold">
+                  <span className="font-montserrat text-[11px] sm:text-xs text-[#111C2D] uppercase tracking-wider font-extrabold truncate">
                     {t("home.badge", "Archivo Urtext & Editorial Digital")}
                   </span>
                 </div>
 
                 {/* Gran Título Hero */}
-                <h1 className="font-montserrat text-4xl sm:text-5xl lg:text-[56px] font-black text-[#111C2D] leading-[1.08] tracking-tight">
+                <h1 className="font-montserrat text-3xl sm:text-5xl lg:text-[56px] font-black text-[#111C2D] leading-[1.12] sm:leading-[1.08] tracking-tight break-words">
                   {isEn ? (heroData.hero_title_en || t("home.hero_default_title")) : heroData.hero_title}
                 </h1>
 
                 {/* Subtítulo Descriptor */}
-                <p className="font-inter text-base sm:text-lg text-[#4C4546] max-w-xl leading-relaxed">
+                <p className="font-inter text-sm sm:text-base lg:text-lg text-[#4C4546] max-w-xl leading-relaxed">
                   {isEn ? (heroData.hero_subtitle_en || t("home.hero_default_subtitle")) : heroData.hero_subtitle}
                 </p>
 
                 {/* Botones CTA Principales */}
-                <div className="flex flex-wrap items-center gap-4 pt-2">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 pt-2 w-full">
                   <Link
                     href={heroData.btn1_url}
-                    className="group flex items-center gap-2 px-7 py-3.5 rounded-xl bg-[#FBB03B] text-[#111C2D] font-montserrat font-extrabold text-sm uppercase tracking-wider shadow-md hover:shadow-xl hover:bg-[#e09b2d] hover:scale-[1.02] active:scale-95 transition-all"
+                    className="group flex items-center justify-center gap-2 px-6 sm:px-7 py-3.5 rounded-xl bg-[#FBB03B] text-[#111C2D] font-montserrat font-extrabold text-xs sm:text-sm uppercase tracking-wider shadow-md hover:shadow-xl hover:bg-[#e09b2d] hover:scale-[1.02] active:scale-95 transition-all text-center"
                   >
                     <span>{isEn ? t("home.cta_explore_scores", "Explorar Partituras") : heroData.btn1_text}</span>
                     <span className="material-symbols-outlined text-lg text-[#111C2D] group-hover:translate-x-1 transition-transform">arrow_forward</span>
@@ -382,7 +382,7 @@ export default function Home() {
 
                   <Link
                     href={heroData.btn2_url}
-                    className="flex items-center gap-2 px-6 py-3.5 rounded-xl bg-white/90 backdrop-blur-md text-[#111C2D] border border-black/10 font-montserrat font-bold text-sm shadow-xs hover:bg-[#F0F3FF] hover:shadow-md transition-all"
+                    className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-white/90 backdrop-blur-md text-[#111C2D] border border-black/10 font-montserrat font-bold text-xs sm:text-sm shadow-xs hover:bg-[#F0F3FF] hover:shadow-md transition-all text-center"
                   >
                     <span className="material-symbols-outlined text-[#0071BC]">library_music</span>
                     <span>{isEn ? t("home.cta_meet_composers", "Conocer Compositores") : heroData.btn2_text}</span>
