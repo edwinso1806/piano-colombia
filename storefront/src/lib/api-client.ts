@@ -103,6 +103,7 @@ export async function getCatalogScores(filters?: {
 
     const res = await fetch(`${MEDUSA_URL}/store/scores?${params.toString()}`, {
       headers: defaultHeaders,
+      signal: AbortSignal.timeout(6000),
       next: { revalidate: 30 },
     })
 
@@ -185,6 +186,7 @@ export async function getComposersList(filters?: { is_featured?: boolean }) {
 
     const res = await fetch(`${MEDUSA_URL}/store/composers?${params.toString()}`, {
       headers: defaultHeaders,
+      signal: AbortSignal.timeout(6000),
       next: { revalidate: 60 },
     })
 
@@ -201,6 +203,7 @@ export async function getComposerBySlug(slug: string) {
   try {
     const res = await fetch(`${MEDUSA_URL}/store/composers/${slug}`, {
       headers: defaultHeaders,
+      signal: AbortSignal.timeout(6000),
       next: { revalidate: 10 },
     })
 

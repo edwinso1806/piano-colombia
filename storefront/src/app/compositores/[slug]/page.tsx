@@ -4,6 +4,8 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import CompositorDetailClient from "@/components/CompositorDetailClient";
 
+export const dynamic = "force-dynamic";
+
 export default async function CompositorDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const composer = await getComposerBySlug(slug);
