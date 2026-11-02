@@ -8,6 +8,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SaveScoreButton from "@/components/SaveScoreButton";
 import { getHeroCms, getCmsCategories, getStoreFeaturedComposers, getStoreFeaturedScores, getStoreBlogPosts, resolveMediaUrl } from "@/lib/api-client";
+import { getRealisticScorePriceUSD } from "@/lib/exchange-rate-service";
 import { useLanguage } from "@/context/LanguageContext";
 import { translateBlogCategory, formatReadTime } from "@/lib/localize-messages";
 
@@ -839,7 +840,8 @@ export default function Home() {
                     score.composer?.name ||
                     (score.composer?.first_name ? `${score.composer.first_name} ${score.composer.last_name || ""}`.trim() : "Piano Colombia");
                   const priceCOP = Number(score.price_cop ?? score.priceCOP ?? 0);
-                  const priceUSD = Number(score.price_usd ?? score.priceUSD ?? 0);
+                  const rawUSD = Number(score.price_usd ?? score.priceUSD ?? 0);
+                  const priceUSD = getRealisticScorePriceUSD(priceCOP, rawUSD);
                   const genre = score.genre || score.category || "PIANO SOLO";
                   const difficulty = score.difficulty || score.level || "INTERMEDIO";
                   const description = score.description_es || score.description || "";

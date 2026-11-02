@@ -467,7 +467,7 @@ export default function TiendaClient({
                           <span className="text-xs text-[#4C4546] font-bold">COP</span>
                         </div>
                         <span className="text-[11px] text-[#4C4546] font-medium block">
-                          (~${score.priceUSD} USD)
+                          (~${score.priceUSD >= 100 ? Number((score.priceUSD / 100).toFixed(2)) : score.priceUSD} USD)
                         </span>
                       </div>
 

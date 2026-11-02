@@ -74,3 +74,39 @@ export function convertUsdToCop(usdAmount: number, rate: number = DEFAULT_COP_US
   if (!usdAmount || usdAmount <= 0 || !rate || rate <= 0) return 0;
   return Math.round(usdAmount * rate);
 }
+
+/**
+ * Normaliza y calcula el precio en USD real de una partitura.
+ * Corrige valores en centavos (ej: 900 -> 9.00 USD) o valores de prueba desfasados,
+ * garantizando que la conversión sea matemáticamente fidedigna a la TRM oficial.
+ */
+export function getRealisticScorePriceUSD(
+  priceCOP: number,
+  rawPriceUSD?: number | null,
+  exchangeRate: number = DEFAULT_COP_USD_RATE
+): number {
+  const safeCop = Number(priceCOP) || 0;
+  const calculatedUsd = convertCopToUsd(safeCop > 0 ? safeCop : 45000, exchangeRate);
+
+  if (rawPriceUSD === undefined || rawPriceUSD === null || rawPriceUSD <= 0) {
+    return calculatedUsd;
+  }
+
+  let candidate = Number(rawPriceUSD);
+  if (isNaN(candidate) || candidate <= 0) {
+    return calculatedUsd;
+  }
+
+  // Si el valor guardado está en centavos (ej: 900 para $9.00 USD, 1100 para $11.00 USD)
+  if (candidate >= 100) {
+    candidate = Number((candidate / 100).toFixed(2));
+  }
+
+  // Validar si el precio en USD candidato guarda proporción con el precio en COP
+  const ratio = calculatedUsd > 0 ? candidate / calculatedUsd : 1;
+  if (ratio >= 0.4 && ratio <= 2.5) {
+    return candidate % 1 === 0 ? candidate : Number(candidate.toFixed(2));
+  }
+
+  return calculatedUsd % 1 === 0 ? calculatedUsd : Number(calculatedUsd.toFixed(2));
+}

@@ -38,10 +38,19 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
     })
     const composerMap = new Map(composers.map((c: any) => [c.id, c]))
 
-    const enrichedScores = scores.map((s: any) => ({
-      ...s,
-      composer: composerMap.get(s.composer_id) || null,
-    }))
+    const enrichedScores = scores.map((s: any) => {
+      let safeUsd = Number(s.price_usd) || 0
+      if (safeUsd >= 100) {
+        safeUsd = Math.round(safeUsd / 100)
+      } else if (safeUsd <= 0 && Number(s.price_cop) > 0) {
+        safeUsd = Math.round(Number(s.price_cop) / 3900)
+      }
+      return {
+        ...s,
+        price_usd: safeUsd,
+        composer: composerMap.get(s.composer_id) || null,
+      }
+    })
 
     return res.status(200).json({
       scores: enrichedScores,

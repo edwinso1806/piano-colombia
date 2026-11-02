@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { MOCK_SCORES } from "@/lib/mock-data";
 import { getCatalogScores, getCmsCategories, resolveMediaUrl } from "@/lib/api-client";
+import { getUsdCopExchangeRate, getRealisticScorePriceUSD } from "@/lib/exchange-rate-service";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SaveScoreButton from "@/components/SaveScoreButton";
@@ -84,33 +85,41 @@ export default async function TiendaPage({
     return qs ? `/tienda?${qs}` : "/tienda";
   };
 
-  // Consultar partituras y categorías reales desde la base de datos
-  const [liveScores, liveCategories] = await Promise.all([
+  // Consultar partituras, categorías reales y tasa de cambio TRM en vivo
+  const [{ rate: exchangeRate }, liveScores, liveCategories] = await Promise.all([
+    getUsdCopExchangeRate(),
     getCatalogScores(),
     getCmsCategories(),
   ]);
 
   const allScores = Array.isArray(liveScores) && liveScores.length > 0
-    ? liveScores.map((s: any) => ({
-        id: s.id,
-        title: s.title,
-        slug: s.slug || s.id,
-        composer: s.composer?.artistic_name || `${s.composer?.first_name || ""} ${s.composer?.last_name || ""}`.trim() || "Compositor Colombiano",
-        composerId: s.composer_id,
-        level: normalizeDifficulty(s.difficulty),
-        category: s.genre || "Piano Solo",
-        tags: s.tags || [],
-        priceCOP: Number(s.price_cop) || 45000,
-        priceUSD: Number(s.price_usd) || 12,
-        previewPages: (Array.isArray(s.preview_images) ? s.preview_images : (typeof s.preview_images === "string" ? [s.preview_images] : []))
-          .map((url: string) => resolveMediaUrl(url))
-          .filter(Boolean),
-        description: s.description_es || s.description || "Edición filológica y digital de alta calidad con licencias oficiales.",
-        description_es: s.description_es || s.description,
-        description_en: s.description_en || null,
-      }))
+    ? liveScores.map((s: any) => {
+        const priceCOP = Number(s.price_cop) || 45000;
+        const priceUSD = getRealisticScorePriceUSD(priceCOP, s.price_usd, exchangeRate);
+        return {
+          id: s.id,
+          title: s.title,
+          slug: s.slug || s.id,
+          composer: s.composer?.artistic_name || `${s.composer?.first_name || ""} ${s.composer?.last_name || ""}`.trim() || "Compositor Colombiano",
+          composerId: s.composer_id,
+          level: normalizeDifficulty(s.difficulty),
+          category: s.genre || "Piano Solo",
+          tags: s.tags || [],
+          priceCOP,
+          priceUSD,
+          price_cop: priceCOP,
+          price_usd: priceUSD,
+          previewPages: (Array.isArray(s.preview_images) ? s.preview_images : (typeof s.preview_images === "string" ? [s.preview_images] : []))
+            .map((url: string) => resolveMediaUrl(url))
+            .filter(Boolean),
+          description: s.description_es || s.description || "Edición filológica y digital de alta calidad con licencias oficiales.",
+          description_es: s.description_es || s.description,
+          description_en: s.description_en || null,
+        };
+      })
     : MOCK_SCORES.map((s) => ({
         ...s,
+        priceUSD: getRealisticScorePriceUSD(s.priceCOP, s.priceUSD, exchangeRate),
         level: normalizeDifficulty(s.level),
       }));
 

@@ -251,7 +251,8 @@ export default function MisDescargasPage() {
     async function loadDownloads() {
       setLoading(true);
       try {
-        const res = await fetch(`http://localhost:9000/store/downloads?email=${encodeURIComponent(customer!.email)}`, {
+        const backendUrl = (process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL || "http://localhost:9000").replace(/\/$/, "");
+        const res = await fetch(`${backendUrl}/store/downloads?email=${encodeURIComponent(customer!.email)}`, {
           headers: {
             "x-publishable-api-key": process.env.NEXT_PUBLIC_MEDUSA_PUBLISHABLE_KEY || "pk_0372bd6f8b5885e7dcfd759e152d7a9db36782d5eaace95f07e707f2e9f68ce3",
           },

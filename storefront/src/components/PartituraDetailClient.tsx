@@ -9,6 +9,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SaveScoreButton from "@/components/SaveScoreButton";
 import { resolveMediaUrl } from "@/lib/api-client";
+import { getRealisticScorePriceUSD } from "@/lib/exchange-rate-service";
 
 interface PartituraDetailClientProps {
   score: {
@@ -113,6 +114,9 @@ export default function PartituraDetailClient({ score }: PartituraDetailClientPr
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [isAlertActive, setIsAlertActive] = useState(false);
   const [clientTranslatedDesc, setClientTranslatedDesc] = useState<string | null>(null);
+  const [failedImageIndices, setFailedImageIndices] = useState<Record<number, boolean>>({});
+
+  const realisticUSD = getRealisticScorePriceUSD(score.priceCOP || 45000, score.priceUSD);
 
   const alertTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -138,7 +142,7 @@ export default function PartituraDetailClient({ score }: PartituraDetailClientPr
       category: (score.genre || score.category || "Piano Solo") as any,
       level: (score.difficulty || score.level || "Intermedio") as any,
       priceCOP: score.priceCOP || 45000,
-      priceUSD: score.priceUSD || 12,
+      priceUSD: realisticUSD,
       slug: score.slug || score.id,
       previewPages: previews,
       mediaUrl: resolveMediaUrl(score.audio_sample_url) || "",
@@ -260,12 +264,15 @@ export default function PartituraDetailClient({ score }: PartituraDetailClientPr
 
           {/* Contenedor del Preview Proporcional */}
           <div className="relative w-full max-w-xl mx-auto bg-[#F8F9FA] rounded-2xl overflow-hidden border border-black/10 shadow-[0_8px_30px_rgba(0,0,0,0.06)] flex flex-col justify-between">
-            {previews.length > 0 ? (
+            {previews.length > 0 && !failedImageIndices[selectedPageIndex] ? (
               <div className="relative w-full p-4 sm:p-6 bg-slate-100/50 flex items-center justify-center min-h-[380px] max-h-[600px]">
                 <img
                   src={previews[selectedPageIndex]}
                   alt={`${score.title} - Página ${selectedPageIndex + 1}`}
                   className="max-h-[550px] w-auto h-auto max-w-full object-contain rounded shadow-md select-none pointer-events-none"
+                  onError={() => {
+                    setFailedImageIndices((prev) => ({ ...prev, [selectedPageIndex]: true }));
+                  }}
                 />
               </div>
             ) : (
@@ -363,7 +370,7 @@ export default function PartituraDetailClient({ score }: PartituraDetailClientPr
                 <span className="text-xs text-[#4C4546] font-medium block">{t("catalog.price", "Precio")}</span>
                 <div className="text-2xl font-black font-montserrat text-[#111C2D]">
                   ${(score.priceCOP || 45000).toLocaleString("es-CO")} COP{" "}
-                  <span className="text-xs font-semibold text-[#4C4546]">(${score.priceUSD || 12} USD)</span>
+                  <span className="text-xs font-semibold text-[#4C4546]">(${realisticUSD} USD)</span>
                 </div>
               </div>
               <span className="text-xs px-3 py-1.5 bg-[#FBB03B]/20 text-[#111C2D] border border-[#FBB03B]/40 rounded-full font-extrabold font-montserrat">
@@ -438,7 +445,7 @@ export default function PartituraDetailClient({ score }: PartituraDetailClientPr
                     category: (score.genre || score.category || "Piano Solo") as any,
                     level: (score.difficulty || score.level || "Intermedio") as any,
                     priceCOP: score.priceCOP || 45000,
-                    priceUSD: score.priceUSD || 12,
+                    priceUSD: realisticUSD,
                     slug: score.slug || score.id,
                     previewPages: previews,
                     mediaUrl: score.audio_sample_url || "",
@@ -461,7 +468,7 @@ export default function PartituraDetailClient({ score }: PartituraDetailClientPr
                   category: score.genre || score.category || "Piano Solo",
                   level: score.difficulty || score.level || "Intermedio",
                   priceCOP: score.priceCOP || 45000,
-                  priceUSD: score.priceUSD || 12,
+                  priceUSD: realisticUSD,
                 }}
                 variant="button"
                 className="w-full py-3"

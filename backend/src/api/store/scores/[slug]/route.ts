@@ -28,9 +28,17 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
       composer = composers && composers.length > 0 ? composers[0] : null
     }
 
+    let safeUsd = Number(score.price_usd) || 0
+    if (safeUsd >= 100) {
+      safeUsd = Math.round(safeUsd / 100)
+    } else if (safeUsd <= 0 && Number(score.price_cop) > 0) {
+      safeUsd = Math.round(Number(score.price_cop) / 3900)
+    }
+
     return res.status(200).json({
       score: {
         ...score,
+        price_usd: safeUsd,
         composer,
       },
     })

@@ -1,5 +1,5 @@
 import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
-import { getFileStreamFromR2 } from "../../lib/r2-storage"
+import { getFileStreamFromR2, getFileBufferFromR2, getPresignedDownloadUrl } from "../../lib/r2-storage"
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib"
 import fs from "fs"
 import path from "path"
@@ -103,52 +103,88 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
       return res.status(400).json({ message: "Parámetro 'key' de archivo no especificado" })
     }
 
-    let cleanKey = decodeURIComponent(fileKey)
+    let cleanKey = decodeURIComponent(fileKey.trim())
       .replace(/^https?:\/\/[^\/]+/, "")
       .replace(/^\/store\/media\?key=/, "")
       .replace(/^\/media\?key=/, "")
       .replace(/^\//, "")
+      .trim()
+
+    if (cleanKey.includes("%")) {
+      try { cleanKey = decodeURIComponent(cleanKey) } catch {}
+    }
 
     const ext = path.extname(cleanKey).toLowerCase()
     const isAudio = [".mp3", ".wav", ".ogg", ".m4a", ".aac"].includes(ext)
     const isImage = [".png", ".jpg", ".jpeg", ".webp", ".gif"].includes(ext)
-
     const rangeHeader = req.headers.range as string | undefined
 
-    // 1. Intentar obtener el stream directamente desde Cloudflare R2 en la nube
-    try {
-      const { stream, contentType, contentLength, contentRange, statusCode } = await getFileStreamFromR2(cleanKey, rangeHeader)
+    let lastR2Error: any = null
 
-      const mimeType =
-        ext === ".mp3" ? "audio/mpeg" :
-        ext === ".wav" ? "audio/wav" :
-        ext === ".ogg" ? "audio/ogg" :
-        ext === ".m4a" ? "audio/mp4" :
-        ext === ".aac" ? "audio/aac" :
-        ext === ".png" ? "image/png" :
-        ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" :
-        ext === ".webp" ? "image/webp" :
-        (contentType && contentType !== "application/octet-stream" ? contentType : (isAudio ? "audio/mpeg" : "application/pdf"))
-
-      res.setHeader("Content-Type", mimeType)
-      res.setHeader("Content-Disposition", `inline; filename="${path.basename(cleanKey)}"`)
-      res.setHeader("Cache-Control", "public, max-age=31536000, immutable")
-
-      if (statusCode === 206 && contentRange) {
-        res.setHeader("Content-Range", contentRange)
-        if (contentLength) {
-          res.setHeader("Content-Length", contentLength.toString())
+    // 1. Para imágenes: redirect 302 a URL presignada directa en Cloudflare R2
+    // Esto garantiza que la CDN global de Cloudflare R2 sirva la imagen a máxima velocidad y sin sobrecargar Node.js
+    if (isImage && req.query.stream !== "true") {
+      try {
+        const presignedUrl = await getPresignedDownloadUrl(cleanKey, 86400)
+        if (presignedUrl) {
+          res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=86400")
+          return res.redirect(302, presignedUrl)
         }
-        res.status(206)
-      } else {
-        if (contentLength) {
-          res.setHeader("Content-Length", contentLength.toString())
-        }
-        res.status(200)
+      } catch (presignErr: any) {
+        console.warn(`[Media API] Falló redirect presignado para key="${cleanKey}":`, presignErr.message)
       }
+    }
 
-      return stream.pipe(res as any)
+    // 2. Intentar obtener el archivo directamente desde Cloudflare R2 (en buffer o stream)
+    try {
+      if (!rangeHeader) {
+        const { buffer, contentType } = await getFileBufferFromR2(cleanKey)
+        const mimeType =
+          ext === ".mp3" ? "audio/mpeg" :
+          ext === ".wav" ? "audio/wav" :
+          ext === ".ogg" ? "audio/ogg" :
+          ext === ".m4a" ? "audio/mp4" :
+          ext === ".aac" ? "audio/aac" :
+          ext === ".png" ? "image/png" :
+          ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" :
+          ext === ".webp" ? "image/webp" :
+          (contentType && contentType !== "application/octet-stream" ? contentType : (isAudio ? "audio/mpeg" : "application/pdf"))
+
+        res.setHeader("Content-Type", mimeType)
+        res.setHeader("Content-Length", buffer.length.toString())
+        res.setHeader("Content-Disposition", `inline; filename="${path.basename(cleanKey)}"`)
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable")
+        return res.status(200).send(buffer as any)
+      } else {
+        const { stream, contentType, contentLength, contentRange, statusCode } = await getFileStreamFromR2(cleanKey, rangeHeader)
+
+        const mimeType =
+          ext === ".mp3" ? "audio/mpeg" :
+          ext === ".wav" ? "audio/wav" :
+          ext === ".ogg" ? "audio/ogg" :
+          ext === ".m4a" ? "audio/mp4" :
+          ext === ".aac" ? "audio/aac" :
+          ext === ".png" ? "image/png" :
+          ext === ".jpg" || ext === ".jpeg" ? "image/jpeg" :
+          ext === ".webp" ? "image/webp" :
+          (contentType && contentType !== "application/octet-stream" ? contentType : (isAudio ? "audio/mpeg" : "application/pdf"))
+
+        res.setHeader("Content-Type", mimeType)
+        res.setHeader("Content-Disposition", `inline; filename="${path.basename(cleanKey)}"`)
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable")
+
+        if (statusCode === 206 && contentRange) {
+          res.setHeader("Content-Range", contentRange)
+          if (contentLength) res.setHeader("Content-Length", contentLength.toString())
+          res.status(206)
+        } else {
+          if (contentLength) res.setHeader("Content-Length", contentLength.toString())
+          res.status(200)
+        }
+        return stream.pipe(res as any)
+      }
     } catch (r2Err: any) {
+      lastR2Error = r2Err.message
       console.warn(`[Media API] Archivo key="${cleanKey}" no hallado en R2, intentando local:`, r2Err.message)
     }
 
@@ -199,6 +235,7 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
     if (isAudio || isImage) {
       return res.status(404).json({
         message: `El recurso multimedia solicitado (${cleanKey}) no fue encontrado en R2 ni en local.`,
+        r2_error: lastR2Error,
       })
     }
 

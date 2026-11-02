@@ -2,10 +2,16 @@ import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } fro
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import { Readable } from "stream"
 
-const R2_BUCKET = process.env.R2_BUCKET_NAME || "piano-colombia"
-const R2_ENDPOINT = process.env.R2_ENDPOINT || "https://311aa6723ba3d2d7cc679857993ed4ca.r2.cloudflarestorage.com"
-const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || "231cf76682855f0491ac7023790a3e70"
-const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || "bd8d4943df1bcc83cbef0dfe8edd737e52d5db2bf83fe642d1ca24bf01ceb2f4"
+function cleanConfig(val?: string, fallback: string = ""): string {
+  if (!val) return fallback
+  const cleaned = val.trim().replace(/^["']|["']$/g, "").trim()
+  return cleaned || fallback
+}
+
+export const R2_BUCKET = cleanConfig(process.env.R2_BUCKET_NAME || process.env.R2_BUCKET, "piano-colombia")
+export const R2_ENDPOINT = cleanConfig(process.env.R2_ENDPOINT, "https://311aa6723ba3d2d7cc679857993ed4ca.r2.cloudflarestorage.com").replace(/\/$/, "")
+export const R2_ACCESS_KEY_ID = cleanConfig(process.env.R2_ACCESS_KEY_ID, "231cf76682855f0491ac7023790a3e70")
+export const R2_SECRET_ACCESS_KEY = cleanConfig(process.env.R2_SECRET_ACCESS_KEY, "bd8d4943df1bcc83cbef0dfe8edd737e52d5db2bf83fe642d1ca24bf01ceb2f4")
 
 export const r2Client = new S3Client({
   region: "auto",
@@ -100,6 +106,43 @@ export async function getFileStreamFromR2(
 }
 
 /**
+ * Obtiene el buffer binario completo de un archivo en Cloudflare R2 sin dependencia de streams
+ */
+export async function getFileBufferFromR2(key: string): Promise<{
+  buffer: Buffer
+  contentType: string
+  contentLength: number
+}> {
+  const command = new GetObjectCommand({
+    Bucket: R2_BUCKET,
+    Key: key,
+  })
+
+  const response = await r2Client.send(command)
+  if (!response.Body) {
+    throw new Error(`Objeto R2 "${key}" no devolvió contenido`)
+  }
+
+  let buffer: Buffer
+  if (typeof (response.Body as any).transformToByteArray === "function") {
+    const bytes = await (response.Body as any).transformToByteArray()
+    buffer = Buffer.from(bytes)
+  } else {
+    const chunks: Buffer[] = []
+    for await (const chunk of response.Body as Readable) {
+      chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk)
+    }
+    buffer = Buffer.concat(chunks)
+  }
+
+  return {
+    buffer,
+    contentType: response.ContentType || "application/octet-stream",
+    contentLength: buffer.length,
+  }
+}
+
+/**
  * Genera una URL presignada privada para descarga temporal de partituras (evita enlaces compartidos no autorizados)
  */
 export async function getPresignedDownloadUrl(key: string, expiresInSeconds = 3600): Promise<string> {
@@ -110,4 +153,5 @@ export async function getPresignedDownloadUrl(key: string, expiresInSeconds = 36
 
   return await getSignedUrl(r2Client, command, { expiresIn: expiresInSeconds })
 }
+
 

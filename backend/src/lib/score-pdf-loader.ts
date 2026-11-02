@@ -1,22 +1,8 @@
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3"
 import { Client } from "pg"
 import fs from "fs"
 import path from "path"
 import { Readable } from "stream"
-
-const R2_BUCKET = process.env.R2_BUCKET_NAME || "piano-colombia"
-const R2_ENDPOINT = process.env.R2_ENDPOINT || "https://311aa6723ba3d2d7cc679857993ed4ca.r2.cloudflarestorage.com"
-const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || "231cf76682855f0491ac7023790a3e70"
-const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || "bd8d4943df1bcc83cbef0dfe8edd737e52d5db2bf83fe642d1ca24bf01ceb2f4"
-
-const r2Client = new S3Client({
-  region: "auto",
-  endpoint: R2_ENDPOINT,
-  credentials: {
-    accessKeyId: R2_ACCESS_KEY_ID,
-    secretAccessKey: R2_SECRET_ACCESS_KEY,
-  },
-})
+import { getFileBufferFromR2 } from "./r2-storage"
 
 function getPgClient() {
   return new Client({
@@ -68,17 +54,10 @@ export async function getScoreMasterPdfBuffer(scoreId: string): Promise<Buffer |
 
     // 1. Intentar descargar desde Cloudflare R2
     try {
-      const getCmd = new GetObjectCommand({
-        Bucket: R2_BUCKET,
-        Key: cleanKey,
-      })
-      const r2Res = await r2Client.send(getCmd)
-      if (r2Res.Body) {
-        const buf = await streamToBuffer(r2Res.Body as Readable)
-        if (buf && buf.length > 0) {
-          console.log(`✅ [score-pdf-loader] PDF maestro obtenido de R2 (${buf.length} bytes): ${cleanKey}`)
-          return buf
-        }
+      const { buffer: buf } = await getFileBufferFromR2(cleanKey)
+      if (buf && buf.length > 0) {
+        console.log(`✅ [score-pdf-loader] PDF maestro obtenido de R2 (${buf.length} bytes): ${cleanKey}`)
+        return buf
       }
     } catch (r2Err: any) {
       console.warn(`⚠️ [score-pdf-loader] Clave "${cleanKey}" no hallada en R2 (${r2Err.message}), probando local...`)

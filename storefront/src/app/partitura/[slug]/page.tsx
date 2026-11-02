@@ -1,4 +1,5 @@
 import { MOCK_SCORES, MOCK_COMPOSERS } from "@/lib/mock-data";
+import { getUsdCopExchangeRate, getRealisticScorePriceUSD } from "@/lib/exchange-rate-service";
 import PartituraDetailClient from "@/components/PartituraDetailClient";
 
 const MEDUSA_URL = process.env.NEXT_PUBLIC_MEDUSA_BACKEND_URL || "http://localhost:9000";
@@ -34,14 +35,20 @@ async function fetchScoreDetails(slug: string) {
           }
         }
 
+        const { rate: exchangeRate } = await getUsdCopExchangeRate();
+        const priceCOP = Number(data.score.price_cop) || 45000;
+        const priceUSD = getRealisticScorePriceUSD(priceCOP, data.score.price_usd, exchangeRate);
+
         return {
           id: data.score.id,
           title: data.score.title,
           slug: data.score.slug,
           genre: data.score.genre,
           difficulty: data.score.difficulty,
-          priceCOP: data.score.price_cop || 45000,
-          priceUSD: data.score.price_usd || 12,
+          priceCOP,
+          priceUSD,
+          price_cop: priceCOP,
+          price_usd: priceUSD,
           description: data.score.description_es || descriptionEn,
           description_es: data.score.description_es,
           description_en: descriptionEn,
@@ -58,16 +65,20 @@ async function fetchScoreDetails(slug: string) {
   }
 
   // Fallback a MOCK
+  const { rate: fallbackRate } = await getUsdCopExchangeRate().catch(() => ({ rate: 3900 }));
   const mockScore = MOCK_SCORES.find((s) => s.id === slug) || MOCK_SCORES[0];
   const mockComposer = MOCK_COMPOSERS.find((c) => c.id === mockScore.composerId) || MOCK_COMPOSERS[0];
+  const mockCOP = Number(mockScore.priceCOP) || 45000;
 
   return {
     id: mockScore.id,
     title: mockScore.title,
     category: mockScore.category,
     level: mockScore.level,
-    priceCOP: mockScore.priceCOP,
-    priceUSD: mockScore.priceUSD,
+    priceCOP: mockCOP,
+    priceUSD: getRealisticScorePriceUSD(mockCOP, mockScore.priceUSD, fallbackRate),
+    price_cop: mockCOP,
+    price_usd: getRealisticScorePriceUSD(mockCOP, mockScore.priceUSD, fallbackRate),
     description: mockScore.description,
     tonality: "Mi menor",
     pages_count: 8,
