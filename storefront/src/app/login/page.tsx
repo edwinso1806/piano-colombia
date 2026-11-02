@@ -521,6 +521,12 @@ function CustomerLoginForm() {
             return;
           }
 
+          console.log("🟢 [Google OAuth] Token recibido de Google:", tokenResponse);
+          setNotification({
+            type: "info",
+            message: isEn ? "Connecting to Piano Colombia server..." : "Conectando con el servidor de Piano Colombia...",
+          });
+
           try {
             // Obtener perfil verificado del usuario desde Google API
             const userinfoRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
@@ -534,6 +540,7 @@ function CustomerLoginForm() {
             }
 
             const googleUser = await userinfoRes.json();
+            console.log("👤 [Google OAuth] Perfil Google verificado:", googleUser.email);
             const email = googleUser.email;
             const name = googleUser.name || googleUser.given_name || email.split("@")[0];
             const googleId = googleUser.sub;

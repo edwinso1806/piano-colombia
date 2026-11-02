@@ -529,6 +529,7 @@ export async function loginWithGoogleApi(payload: {
     const res = await fetch(`${MEDUSA_URL}/store/auth/google`, {
       method: "POST",
       headers: defaultHeaders,
+      signal: AbortSignal.timeout(35000),
       body: JSON.stringify({
         email: payload.email,
         name: payload.name,
@@ -540,8 +541,19 @@ export async function loginWithGoogleApi(payload: {
     if (!res.ok) throw new Error(data.message || "Error en autenticación con Google")
     return data
   } catch (err: any) {
+    if (err.name === "TimeoutError" || err.message?.includes("timeout") || err.name === "AbortError") {
+      throw new Error(
+        getCurrentLanguage() === "en"
+          ? "The server took too long to respond (it may be waking up from sleep). Please try again in a moment."
+          : "El servidor tardó en responder (puede estar despertando de reposo). Por favor intenta de nuevo en unos segundos."
+      )
+    }
     if (err.message === "Failed to fetch" || err.message?.includes("fetch") || err.name === "TypeError") {
-      throw new Error("No se pudo conectar con el servidor de autenticación. Por favor intenta de nuevo.")
+      throw new Error(
+        getCurrentLanguage() === "en"
+          ? "Could not connect to the authentication server. Please check backend connection."
+          : "No se pudo conectar con el servidor de autenticación. Por favor intenta de nuevo."
+      )
     }
     throw err
   }
@@ -557,6 +569,7 @@ export async function loginWithGoogleComposerApi(payload: {
     const res = await fetch(`${MEDUSA_URL}/store/auth/composer/google`, {
       method: "POST",
       headers: defaultHeaders,
+      signal: AbortSignal.timeout(35000),
       body: JSON.stringify({
         email: payload.email,
         name: payload.name,
@@ -569,6 +582,13 @@ export async function loginWithGoogleComposerApi(payload: {
     if (!res.ok) throw new Error(data.message || (getCurrentLanguage() === "en" ? "Error authenticating composer with Google" : "Error en autenticación de compositor con Google"))
     return data
   } catch (err: any) {
+    if (err.name === "TimeoutError" || err.message?.includes("timeout") || err.name === "AbortError") {
+      throw new Error(
+        getCurrentLanguage() === "en"
+          ? "The server took too long to respond (it may be waking up from sleep). Please try again in a moment."
+          : "El servidor tardó en responder (puede estar despertando de reposo). Por favor intenta de nuevo en unos segundos."
+      )
+    }
     if (err.message === "Failed to fetch" || err.message?.includes("fetch") || err.name === "TypeError") {
       throw new Error(getCurrentLanguage() === "en" ? "Could not connect to the server. Please try again." : "No se pudo conectar con el servidor de autenticación. Por favor intenta de nuevo.")
     }
