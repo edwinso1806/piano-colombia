@@ -690,108 +690,199 @@ function CompositorDashboardContent() {
                 </div>
               )
             ) : (
-              <div className="w-full overflow-x-auto overscroll-x-contain">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-[#F0F3FF] text-[#4C4546] font-montserrat text-[11px] font-extrabold uppercase tracking-wider border-b border-black/5">
-                      <th className="py-4 px-6">{t("dashboard.table_title", "Título de la Obra")}</th>
-                      <th className="py-4 px-6">{t("dashboard.table_genre", "Género")} / {t("dashboard.table_difficulty", "Dificultad")}</th>
-                      <th className="py-4 px-6">{t("dashboard.table_price", "Precio")}</th>
-                      <th className="py-4 px-6">{t("dashboard.table_status", "Estado")}</th>
-                      <th className="py-4 px-6 text-right">{t("dashboard.table_actions", "Acciones")}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-black/5 text-xs text-[#111C2D]">
-                    {filteredScores.map((score) => (
-                      <tr key={score.id} className="hover:bg-[#F0F3FF]/40 transition group">
-                        <td className="py-4 px-6">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-[#111C2D] text-[#FBB03B] flex items-center justify-center shrink-0 font-bold">
-                              <span className="material-symbols-outlined text-xl">music_note</span>
-                            </div>
-                            <div>
-                              <h3 className="font-bold font-montserrat text-sm text-[#111C2D] group-hover:text-[#0071BC] transition-colors">
-                                {score.title}
-                              </h3>
-                              <span className="text-[11px] text-[#4C4546] block">
-                                {score.pages_count ? `${score.pages_count} ${t("dashboard.pages", "páginas")}` : "PDF Urtext"}
-                              </span>
-                            </div>
+              <div className="w-full">
+                {/* Vista Móvil: Tarjetas responsivas sin scroll horizontal */}
+                <div className="block md:hidden divide-y divide-black/5">
+                  {filteredScores.map((score) => (
+                    <div key={score.id} className="p-4 sm:p-5 space-y-3 hover:bg-[#F0F3FF]/40 transition">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-[#111C2D] text-[#FBB03B] flex items-center justify-center shrink-0 font-bold mt-0.5">
+                            <span className="material-symbols-outlined text-lg">music_note</span>
                           </div>
-                        </td>
+                          <div>
+                            <h3 className="font-bold font-montserrat text-sm text-[#111C2D] leading-snug">
+                              {score.title}
+                            </h3>
+                            <span className="text-[11px] text-[#4C4546] block">
+                              {score.pages_count ? `${score.pages_count} ${t("dashboard.pages", "páginas")}` : "PDF Urtext"}
+                            </span>
+                          </div>
+                        </div>
 
-                        <td className="py-4 px-6">
-                          <span className="font-bold text-[#111C2D] block">{score.genre || "Piano Solo"}</span>
-                          <span className="inline-block px-2 py-0.5 bg-[#F0F3FF] text-[#0071BC] text-[10px] font-bold rounded mt-0.5 font-montserrat">
-                            {score.difficulty || "Intermedio"}
-                          </span>
-                        </td>
-
-                        <td className="py-4 px-6 font-mono font-bold">
-                          <div>${Number(score.price_cop || 45000).toLocaleString(language === "en" ? "en-US" : "es-CO")} COP</div>
-                          {score.price_usd && (
-                            <span className="text-[10px] text-[#4C4546]">(${score.price_usd} USD)</span>
-                          )}
-                        </td>
-
-                        <td className="py-4 px-6">
+                        <div className="shrink-0">
                           {score.status === "APPROVED" && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-extrabold font-montserrat border border-emerald-200">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-extrabold font-montserrat border border-emerald-200">
                               <span className="material-symbols-outlined text-xs">verified</span>
-                              {t("dashboard.approved_in_store", "Aprobada & En Tienda")}
+                              {t("dashboard.approved_in_store", "Aprobada")}
                             </span>
                           )}
                           {score.status === "IN_REVIEW" && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-800 rounded-full text-[10px] font-extrabold font-montserrat border border-amber-200">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-800 rounded-full text-[10px] font-extrabold font-montserrat border border-amber-200">
                               <span className="material-symbols-outlined text-xs">hourglass_top</span>
                               {t("dashboard.filter_in_review", "En Revisión")}
                             </span>
                           )}
                           {score.status === "REJECTED" && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-50 text-rose-800 rounded-full text-[10px] font-extrabold font-montserrat border border-rose-200">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-rose-50 text-rose-800 rounded-full text-[10px] font-extrabold font-montserrat border border-rose-200">
                               <span className="material-symbols-outlined text-xs">edit_note</span>
-                              {t("dashboard.filter_rejected", "Requiere Corrección")}
+                              {t("dashboard.filter_rejected", "Corregir")}
                             </span>
                           )}
-                        </td>
+                        </div>
+                      </div>
 
-                        <td className="py-4 px-6 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            {score.status === "REJECTED" && (
-                              <button
-                                onClick={() => openEditModal(score)}
-                                className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs transition font-montserrat inline-flex items-center gap-1 shadow-sm"
-                              >
-                                <span className="material-symbols-outlined text-sm">edit_note</span>
-                                {t("dashboard.correct_score_btn", "Ver Observaciones & Corregir")}
-                              </button>
-                            )}
+                      <div className="flex items-center justify-between text-xs pt-1 border-t border-black/5">
+                        <div>
+                          <span className="font-bold text-[#111C2D]">{score.genre || "Piano Solo"}</span>
+                          <span className="inline-block ml-2 px-2 py-0.5 bg-[#F0F3FF] text-[#0071BC] text-[10px] font-bold rounded font-montserrat">
+                            {score.difficulty || "Intermedio"}
+                          </span>
+                        </div>
+                        <div className="font-mono font-bold text-xs text-[#111C2D] text-right">
+                          ${Number(score.price_cop || 45000).toLocaleString(language === "en" ? "en-US" : "es-CO")} COP
+                        </div>
+                      </div>
 
-                            {score.status === "IN_REVIEW" && (
-                              <button
-                                onClick={() => openEditModal(score)}
-                                className="px-3 py-1.5 bg-[#F0F3FF] hover:bg-slate-200/80 text-[#111C2D] rounded-xl font-bold text-xs transition font-montserrat inline-flex items-center gap-1 border border-black/5"
-                              >
-                                <span className="material-symbols-outlined text-sm">edit</span>
-                                {t("dashboard.edit_score_btn", "Editar")}
-                              </button>
-                            )}
+                      <div className="pt-2">
+                        {score.status === "REJECTED" && (
+                          <button
+                            onClick={() => openEditModal(score)}
+                            className="w-full py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs transition font-montserrat inline-flex items-center justify-center gap-1 shadow-sm"
+                          >
+                            <span className="material-symbols-outlined text-sm">edit_note</span>
+                            {t("dashboard.correct_score_btn", "Ver Observaciones & Corregir")}
+                          </button>
+                        )}
 
-                            {score.status === "APPROVED" && score.slug && (
-                              <Link
-                                href={`/partitura/${score.slug}`}
-                                className="px-3 py-1.5 bg-[#F0F3FF] hover:bg-slate-200/60 text-[#0071BC] rounded-xl font-bold text-xs transition font-montserrat inline-flex items-center gap-1 border border-black/5"
-                              >
-                                <span className="material-symbols-outlined text-sm">visibility</span>
-                                {t("dashboard.view_in_store", "Ver en Tienda")}
-                              </Link>
-                            )}
-                          </div>
-                        </td>
+                        {score.status === "IN_REVIEW" && (
+                          <button
+                            onClick={() => openEditModal(score)}
+                            className="w-full py-2 bg-[#F0F3FF] hover:bg-slate-200/80 text-[#111C2D] rounded-xl font-bold text-xs transition font-montserrat inline-flex items-center justify-center gap-1 border border-black/5"
+                          >
+                            <span className="material-symbols-outlined text-sm">edit</span>
+                            {t("dashboard.edit_score_btn", "Editar")}
+                          </button>
+                        )}
+
+                        {score.status === "APPROVED" && score.slug && (
+                          <Link
+                            href={`/partitura/${score.slug}`}
+                            className="w-full py-2 bg-[#F0F3FF] hover:bg-slate-200/60 text-[#0071BC] rounded-xl font-bold text-xs transition font-montserrat inline-flex items-center justify-center gap-1 border border-black/5"
+                          >
+                            <span className="material-symbols-outlined text-sm">visibility</span>
+                            {t("dashboard.view_in_store", "Ver en Tienda")}
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Vista Escritorio: Tabla completa */}
+                <div className="hidden md:block w-full overflow-x-auto overscroll-x-contain">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-[#F0F3FF] text-[#4C4546] font-montserrat text-[11px] font-extrabold uppercase tracking-wider border-b border-black/5">
+                        <th className="py-4 px-6">{t("dashboard.table_title", "Título de la Obra")}</th>
+                        <th className="py-4 px-6">{t("dashboard.table_genre", "Género")} / {t("dashboard.table_difficulty", "Dificultad")}</th>
+                        <th className="py-4 px-6">{t("dashboard.table_price", "Precio")}</th>
+                        <th className="py-4 px-6">{t("dashboard.table_status", "Estado")}</th>
+                        <th className="py-4 px-6 text-right">{t("dashboard.table_actions", "Acciones")}</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-black/5 text-xs text-[#111C2D]">
+                      {filteredScores.map((score) => (
+                        <tr key={score.id} className="hover:bg-[#F0F3FF]/40 transition group">
+                          <td className="py-4 px-6">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-xl bg-[#111C2D] text-[#FBB03B] flex items-center justify-center shrink-0 font-bold">
+                                <span className="material-symbols-outlined text-xl">music_note</span>
+                              </div>
+                              <div>
+                                <h3 className="font-bold font-montserrat text-sm text-[#111C2D] group-hover:text-[#0071BC] transition-colors">
+                                  {score.title}
+                                </h3>
+                                <span className="text-[11px] text-[#4C4546] block">
+                                  {score.pages_count ? `${score.pages_count} ${t("dashboard.pages", "páginas")}` : "PDF Urtext"}
+                                </span>
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="py-4 px-6">
+                            <span className="font-bold text-[#111C2D] block">{score.genre || "Piano Solo"}</span>
+                            <span className="inline-block px-2 py-0.5 bg-[#F0F3FF] text-[#0071BC] text-[10px] font-bold rounded mt-0.5 font-montserrat">
+                              {score.difficulty || "Intermedio"}
+                            </span>
+                          </td>
+
+                          <td className="py-4 px-6 font-mono font-bold">
+                            <div>${Number(score.price_cop || 45000).toLocaleString(language === "en" ? "en-US" : "es-CO")} COP</div>
+                            {score.price_usd && (
+                              <span className="text-[10px] text-[#4C4546]">(${score.price_usd} USD)</span>
+                            )}
+                          </td>
+
+                          <td className="py-4 px-6">
+                            {score.status === "APPROVED" && (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-extrabold font-montserrat border border-emerald-200">
+                                <span className="material-symbols-outlined text-xs">verified</span>
+                                {t("dashboard.approved_in_store", "Aprobada & En Tienda")}
+                              </span>
+                            )}
+                            {score.status === "IN_REVIEW" && (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-50 text-amber-800 rounded-full text-[10px] font-extrabold font-montserrat border border-amber-200">
+                                <span className="material-symbols-outlined text-xs">hourglass_top</span>
+                                {t("dashboard.filter_in_review", "En Revisión")}
+                              </span>
+                            )}
+                            {score.status === "REJECTED" && (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-rose-50 text-rose-800 rounded-full text-[10px] font-extrabold font-montserrat border border-rose-200">
+                                <span className="material-symbols-outlined text-xs">edit_note</span>
+                                {t("dashboard.filter_rejected", "Requiere Corrección")}
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="py-4 px-6 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              {score.status === "REJECTED" && (
+                                <button
+                                  onClick={() => openEditModal(score)}
+                                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs transition font-montserrat inline-flex items-center gap-1 shadow-sm"
+                                >
+                                  <span className="material-symbols-outlined text-sm">edit_note</span>
+                                  {t("dashboard.correct_score_btn", "Ver Observaciones & Corregir")}
+                                </button>
+                              )}
+
+                              {score.status === "IN_REVIEW" && (
+                                <button
+                                  onClick={() => openEditModal(score)}
+                                  className="px-3 py-1.5 bg-[#F0F3FF] hover:bg-slate-200/80 text-[#111C2D] rounded-xl font-bold text-xs transition font-montserrat inline-flex items-center gap-1 border border-black/5"
+                                >
+                                  <span className="material-symbols-outlined text-sm">edit</span>
+                                  {t("dashboard.edit_score_btn", "Editar")}
+                                </button>
+                              )}
+
+                              {score.status === "APPROVED" && score.slug && (
+                                <Link
+                                  href={`/partitura/${score.slug}`}
+                                  className="px-3 py-1.5 bg-[#F0F3FF] hover:bg-slate-200/60 text-[#0071BC] rounded-xl font-bold text-xs transition font-montserrat inline-flex items-center gap-1 border border-black/5"
+                                >
+                                  <span className="material-symbols-outlined text-sm">visibility</span>
+                                  {t("dashboard.view_in_store", "Ver en Tienda")}
+                                </Link>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>

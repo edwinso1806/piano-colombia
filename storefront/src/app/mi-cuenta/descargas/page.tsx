@@ -395,103 +395,162 @@ export default function MisDescargasPage() {
 
       {/* Customer Navigation Tabs Bar */}
       <section className="bg-white border-b border-black/5">
-        <div className="max-w-7xl mx-auto px-6">
-          {/* Breadcrumbs */}
-          <nav aria-label="Breadcrumb" className="py-3 flex items-center justify-between text-xs text-[#4C4546] font-medium">
-            <div className="flex items-center space-x-2">
-              <Link href="/" className="hover:text-[#0071BC] transition">{t("nav.home", "Inicio")}</Link>
-              <span>/</span>
-              <span className="text-[#111C2D] font-bold">{t("nav.my_account", "Mi Cuenta")}</span>
-              <span>/</span>
-              <span aria-current="page" className="text-[#0071BC] font-bold">
-                {activeTab === "descargas" && (isEn ? "My Purchased Scores" : "Mis Partituras Compradas")}
-                {activeTab === "pedidos" && (isEn ? "Order History & Invoices" : "Historial de Pedidos & Facturas")}
-                {activeTab === "colecciones" && (isEn ? "Saved Collections" : "Colecciones Guardadas")}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          {/* Breadcrumbs & User / Logout Header */}
+          <nav aria-label="Breadcrumb" className="py-2.5 sm:py-3 flex items-center justify-between gap-2 text-xs text-[#4C4546] font-medium border-b border-black/5">
+            <div className="flex items-center space-x-1.5 sm:space-x-2 truncate">
+              <Link href="/" className="hover:text-[#0071BC] transition shrink-0">{t("nav.home", "Inicio")}</Link>
+              <span className="shrink-0 text-slate-300">/</span>
+              <span className="text-[#111C2D] font-bold shrink-0">{t("nav.my_account", "Mi Cuenta")}</span>
+              <span className="shrink-0 text-slate-300">/</span>
+              <span aria-current="page" className="text-[#0071BC] font-bold truncate">
+                {activeTab === "descargas" && (isEn ? "Purchased Scores" : "Partituras")}
+                {activeTab === "pedidos" && (isEn ? "Orders & Invoices" : "Pedidos & Facturas")}
+                {activeTab === "colecciones" && (isEn ? "Saved Collections" : "Guardadas")}
               </span>
             </div>
 
-            {/* Badge Usuario Activo */}
-            <div className="hidden sm:flex items-center gap-2 text-xs">
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              <span className="font-bold text-[#111C2D] font-montserrat">{customer.fullName}</span>
-              <span className="text-[#4C4546]">({customer.email})</span>
+            {/* User Session & Logout - Always Visible, Never Overflowed */}
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 text-xs">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                <span className="font-bold text-[#111C2D] font-montserrat truncate max-w-[85px] sm:max-w-[140px] md:max-w-none">
+                  {customer.fullName}
+                </span>
+                <span className="hidden md:inline text-[#4C4546] text-[11px]">({customer.email})</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  logoutCustomer();
+                  window.location.href = "/";
+                }}
+                className="flex items-center gap-1 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 border border-red-200 transition font-montserrat shrink-0 cursor-pointer shadow-2xs active:scale-95"
+                title={t("nav.logout", "Cerrar Sesión")}
+              >
+                <span className="material-symbols-outlined text-sm">logout</span>
+                <span className="hidden sm:inline">{t("nav.logout", "Cerrar Sesión")}</span>
+                <span className="inline sm:hidden">{isEn ? "Exit" : "Salir"}</span>
+              </button>
             </div>
           </nav>
 
-          {/* Account Navigation Pills */}
-          <div className="flex items-center space-x-2 w-full overflow-x-auto overscroll-x-contain scrollbar-none pt-1 pb-3 text-xs font-semibold border-t border-black/5">
-            <button
-              type="button"
-              onClick={() => handleTabChange("descargas")}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-montserrat font-bold whitespace-nowrap transition cursor-pointer ${
-                activeTab === "descargas"
-                  ? "bg-[#111C2D] text-white shadow-sm"
-                  : "bg-slate-100/80 text-[#4C4546] hover:text-[#111C2D] hover:bg-slate-200/80"
-              }`}
-            >
-              <span className="material-symbols-outlined text-base text-[#FBB03B]">description</span>
-              {isEn ? "My Purchased Scores" : "Mis Partituras Compradas"}
-              <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${
-                activeTab === "descargas" ? "bg-white/20 text-white" : "bg-[#FBB03B]/25 text-[#111C2D]"
-              }`}>
-                {scoresList.length}
-              </span>
-            </button>
+          {/* Account Navigation Tabs - 3 column responsive segmented grid, 100% visible on any screen */}
+          <div className="py-2.5 sm:py-3">
+            <div className="grid grid-cols-3 gap-1 sm:gap-2 p-1 sm:p-1.5 bg-slate-100/90 rounded-2xl border border-black/5 w-full">
+              {/* Tab 1: Partituras Compradas */}
+              <button
+                type="button"
+                onClick={() => handleTabChange("descargas")}
+                className={`flex items-center justify-center gap-1 sm:gap-2 py-2 sm:py-2.5 px-1.5 sm:px-3 rounded-xl font-montserrat font-bold text-xs transition cursor-pointer select-none ${
+                  activeTab === "descargas"
+                    ? "bg-[#111C2D] text-white shadow-sm"
+                    : "text-[#4C4546] hover:text-[#111C2D] hover:bg-white/70"
+                }`}
+              >
+                <span className={`material-symbols-outlined text-base sm:text-lg shrink-0 ${
+                  activeTab === "descargas" ? "text-[#FBB03B]" : "text-[#4C4546]"
+                }`}>
+                  description
+                </span>
+                <span className="hidden lg:inline whitespace-nowrap">
+                  {isEn ? "My Purchased Scores" : "Mis Partituras Compradas"}
+                </span>
+                <span className="hidden sm:inline lg:hidden whitespace-nowrap">
+                  {isEn ? "Purchased Scores" : "Mis Partituras"}
+                </span>
+                <span className="inline sm:hidden whitespace-nowrap text-[11px]">
+                  {isEn ? "Scores" : "Partituras"}
+                </span>
+                <span
+                  className={`text-[10px] px-1.5 sm:px-2 py-0.2 sm:py-0.5 rounded-full font-black shrink-0 ${
+                    activeTab === "descargas"
+                      ? "bg-white/20 text-white"
+                      : "bg-[#FBB03B]/25 text-[#111C2D]"
+                  }`}
+                >
+                  {scoresList.length}
+                </span>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => handleTabChange("pedidos")}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-montserrat font-bold whitespace-nowrap transition cursor-pointer ${
-                activeTab === "pedidos"
-                  ? "bg-[#111C2D] text-white shadow-sm"
-                  : "bg-slate-100/80 text-[#4C4546] hover:text-[#111C2D] hover:bg-slate-200/80"
-              }`}
-            >
-              <span className="material-symbols-outlined text-base text-[#0071BC]">receipt_long</span>
-              {isEn ? "Order History & Invoices" : "Historial de Pedidos & Facturas"}
-              <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${
-                activeTab === "pedidos" ? "bg-white/20 text-white" : "bg-[#0071BC]/15 text-[#0071BC]"
-              }`}>
-                {scoresList.length}
-              </span>
-            </button>
+              {/* Tab 2: Historial de Pedidos */}
+              <button
+                type="button"
+                onClick={() => handleTabChange("pedidos")}
+                className={`flex items-center justify-center gap-1 sm:gap-2 py-2 sm:py-2.5 px-1.5 sm:px-3 rounded-xl font-montserrat font-bold text-xs transition cursor-pointer select-none ${
+                  activeTab === "pedidos"
+                    ? "bg-[#111C2D] text-white shadow-sm"
+                    : "text-[#4C4546] hover:text-[#111C2D] hover:bg-white/70"
+                }`}
+              >
+                <span className={`material-symbols-outlined text-base sm:text-lg shrink-0 ${
+                  activeTab === "pedidos" ? "text-[#0071BC]" : "text-[#4C4546]"
+                }`}>
+                  receipt_long
+                </span>
+                <span className="hidden lg:inline whitespace-nowrap">
+                  {isEn ? "Order History & Invoices" : "Historial de Pedidos & Facturas"}
+                </span>
+                <span className="hidden sm:inline lg:hidden whitespace-nowrap">
+                  {isEn ? "Order History" : "Pedidos & Facturas"}
+                </span>
+                <span className="inline sm:hidden whitespace-nowrap text-[11px]">
+                  {isEn ? "Orders" : "Pedidos"}
+                </span>
+                <span
+                  className={`text-[10px] px-1.5 sm:px-2 py-0.2 sm:py-0.5 rounded-full font-black shrink-0 ${
+                    activeTab === "pedidos"
+                      ? "bg-white/20 text-white"
+                      : "bg-[#0071BC]/15 text-[#0071BC]"
+                  }`}
+                >
+                  {scoresList.length}
+                </span>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => handleTabChange("colecciones")}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-montserrat font-bold whitespace-nowrap transition cursor-pointer ${
-                activeTab === "colecciones"
-                  ? "bg-[#C1272D] text-white shadow-sm"
-                  : "bg-slate-100/80 text-[#4C4546] hover:text-[#111C2D] hover:bg-slate-200/80"
-              }`}
-            >
-              <span className={`material-symbols-outlined text-base ${activeTab === "colecciones" ? "text-white" : "text-[#C1272D]"}`}>bookmark</span>
-              {isEn ? "Saved Collections" : "Colecciones Guardadas"}
-              <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${
-                activeTab === "colecciones" ? "bg-white/25 text-white" : "bg-[#C1272D]/15 text-[#C1272D]"
-              }`}>
-                {savedScores.length}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                logoutCustomer();
-                window.location.href = "/";
-              }}
-              className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 border border-red-200 transition font-montserrat whitespace-nowrap cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-sm">logout</span>
-              <span>{t("nav.logout", "Cerrar Sesión")}</span>
-            </button>
+              {/* Tab 3: Colecciones Guardadas */}
+              <button
+                type="button"
+                onClick={() => handleTabChange("colecciones")}
+                className={`flex items-center justify-center gap-1 sm:gap-2 py-2 sm:py-2.5 px-1.5 sm:px-3 rounded-xl font-montserrat font-bold text-xs transition cursor-pointer select-none ${
+                  activeTab === "colecciones"
+                    ? "bg-[#C1272D] text-white shadow-sm"
+                    : "text-[#4C4546] hover:text-[#111C2D] hover:bg-white/70"
+                }`}
+              >
+                <span className={`material-symbols-outlined text-base sm:text-lg shrink-0 ${
+                  activeTab === "colecciones" ? "text-white" : "text-[#C1272D]"
+                }`}>
+                  bookmark
+                </span>
+                <span className="hidden lg:inline whitespace-nowrap">
+                  {isEn ? "Saved Collections" : "Colecciones Guardadas"}
+                </span>
+                <span className="hidden sm:inline lg:hidden whitespace-nowrap">
+                  {isEn ? "Saved Collections" : "Guardadas"}
+                </span>
+                <span className="inline sm:hidden whitespace-nowrap text-[11px]">
+                  {isEn ? "Saved" : "Guardadas"}
+                </span>
+                <span
+                  className={`text-[10px] px-1.5 sm:px-2 py-0.2 sm:py-0.5 rounded-full font-black shrink-0 ${
+                    activeTab === "colecciones"
+                      ? "bg-white/25 text-white"
+                      : "bg-[#C1272D]/15 text-[#C1272D]"
+                  }`}
+                >
+                  {savedScores.length}
+                </span>
+              </button>
+            </div>
           </div>
         </div>
       </section>
 
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8 md:py-12 space-y-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 md:py-12 space-y-8">
         
         {/* ==========================================
                PESTAÑA 1: MIS PARTITURAS COMPRADAS
@@ -574,7 +633,7 @@ export default function MisDescargasPage() {
                 {filteredScores.map((score) => (
                   <article
                     key={score.id}
-                    className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] hover:shadow-lg transition-all duration-300 p-6 sm:p-7 relative overflow-hidden group"
+                    className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] hover:shadow-lg transition-all duration-300 p-4 sm:p-6 md:p-7 relative overflow-hidden group"
                   >
                     <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#FBB03B] via-[#0071BC] to-[#C1272D]"></div>
 
@@ -750,7 +809,7 @@ export default function MisDescargasPage() {
               </div>
             ) : (
               /* BASE DE DATOS SIN PARTITURAS COMPRADAS (USUARIO NUNCA HA COMPRADO) */
-              <div className="bg-white rounded-3xl border border-black/5 p-12 text-center space-y-4 shadow-xs">
+              <div className="bg-white rounded-3xl border border-black/5 p-6 sm:p-10 md:p-12 text-center space-y-4 shadow-xs">
                 <div className="w-16 h-16 rounded-2xl bg-[#F0F3FF] text-[#0071BC] flex items-center justify-center mx-auto">
                   <span className="material-symbols-outlined text-3xl">library_music</span>
                 </div>
@@ -774,17 +833,19 @@ export default function MisDescargasPage() {
                   </Link>
 
                   {savedScores.length > 0 && (
-                    <div className="inline-flex items-center gap-2 px-4 py-2.5 bg-red-50/70 border border-red-200/60 rounded-2xl text-xs text-[#111C2D]">
-                      <span className="material-symbols-outlined text-base text-[#C1272D]">bookmark</span>
-                      <span>
-                        {isEn
-                          ? `You have ${savedScores.length} saved score${savedScores.length > 1 ? "s" : ""} to purchase later.`
-                          : `Tienes ${savedScores.length} partitura${savedScores.length > 1 ? "s" : ""} guardada${savedScores.length > 1 ? "s" : ""} para comprar más adelante.`}
-                      </span>
+                    <div className="inline-flex flex-col sm:flex-row items-center gap-2 px-4 py-2.5 bg-red-50/70 border border-red-200/60 rounded-2xl text-xs text-[#111C2D] text-center sm:text-left max-w-full">
+                      <div className="flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-base text-[#C1272D]">bookmark</span>
+                        <span>
+                          {isEn
+                            ? `You have ${savedScores.length} saved score${savedScores.length > 1 ? "s" : ""} to purchase later.`
+                            : `Tienes ${savedScores.length} partitura${savedScores.length > 1 ? "s" : ""} guardada${savedScores.length > 1 ? "s" : ""} para comprar más adelante.`}
+                        </span>
+                      </div>
                       <button
                         type="button"
                         onClick={() => handleTabChange("colecciones")}
-                        className="ml-1 text-xs font-bold text-[#C1272D] hover:underline cursor-pointer"
+                        className="text-xs font-bold text-[#C1272D] hover:underline cursor-pointer"
                       >
                         {isEn ? `View saved (${savedScores.length}) →` : `Ver mis guardadas (${savedScores.length}) →`}
                       </button>
@@ -866,7 +927,91 @@ export default function MisDescargasPage() {
                   </div>
                 </div>
 
-                <div className="w-full overflow-x-auto overscroll-x-contain">
+                {/* Vista Móvil: Tarjetas responsivas sin desbordamiento horizontal */}
+                <div className="block md:hidden divide-y divide-black/5">
+                  {consolidatedPurchases.map((score) => {
+                    const hasDownloads = (score.downloadsLeft || 0) > 0;
+                    const totalAllowed = score.downloadsTotal || ((score.quantity || 1) * 5);
+                    const progress = totalAllowed > 0 ? Math.min(100, Math.max(0, ((score.downloadsLeft || 0) / totalAllowed) * 100)) : 0;
+
+                    return (
+                      <div key={score.id} className="p-4 sm:p-5 space-y-3 hover:bg-[#F0F3FF]/40 transition">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-1">
+                            <span className="font-mono font-bold text-[10px] text-[#4C4546] bg-[#F0F3FF] px-2 py-0.5 rounded border border-black/5">
+                              {score.id}
+                            </span>
+                            <h4 className="font-bold font-montserrat text-sm text-[#111C2D] leading-snug">
+                              {score.title}
+                            </h4>
+                            <p className="text-xs text-[#4C4546]">
+                              {isEn ? "Composer:" : "Compositor:"} <strong className="text-[#111C2D]">{score.composer}</strong>
+                            </p>
+                          </div>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-extrabold font-montserrat border border-emerald-200 shrink-0">
+                            <span className="material-symbols-outlined text-xs">check_circle</span>
+                            {isEn ? "Approved" : "Aprobado"}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs pt-1">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-[#0071BC] rounded-full text-[11px] font-black font-montserrat border border-blue-200 shadow-2xs">
+                            <span className="material-symbols-outlined text-xs">local_mall</span>
+                            {score.quantity} {score.quantity === 1 ? (isEn ? "Purchase" : "Compra") : (isEn ? "Compras" : "Compras")}
+                          </span>
+
+                          <div className="text-right">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-montserrat ${
+                              hasDownloads 
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200" 
+                                : "bg-slate-100 text-slate-500 border border-slate-200"
+                            }`}>
+                              {score.downloadsLeft || 0} {isEn ? "of" : "de"} {totalAllowed} {isEn ? "downloads" : "descargas"}
+                            </span>
+                            <div className="w-28 h-1.5 bg-[#F0F3FF] rounded-full overflow-hidden border border-black/5 mt-1 ml-auto">
+                              <div 
+                                className={`h-full rounded-full transition-all duration-300 ${hasDownloads ? "bg-emerald-500" : "bg-slate-300"}`}
+                                style={{ width: `${progress}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="pt-2">
+                          {hasDownloads ? (
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadPdf(score)}
+                              disabled={downloadingToken === score.token}
+                              className="w-full py-2.5 bg-[#F0F3FF] hover:bg-slate-200 text-[#0071BC] rounded-xl font-extrabold text-xs transition font-montserrat inline-flex items-center justify-center gap-1.5 border border-black/5 cursor-pointer disabled:opacity-60 shadow-2xs active:scale-95"
+                              title={isEn ? "Download official stamped PDF" : "Descargar PDF estampado oficial"}
+                            >
+                              {downloadingToken === score.token ? (
+                                <span className="w-4 h-4 border-2 border-[#0071BC] border-t-transparent rounded-full animate-spin"></span>
+                              ) : (
+                                <span className="material-symbols-outlined text-sm">download</span>
+                              )}
+                              <span>{isEn ? "Download Stamped PDF" : "Descargar PDF Estampado"}</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled
+                              className="w-full py-2.5 bg-slate-100 text-slate-400 rounded-xl font-bold text-xs font-montserrat inline-flex items-center justify-center gap-1.5 border border-slate-200 cursor-not-allowed opacity-60"
+                              title={isEn ? "Downloads exhausted (0 allowed)" : "Descargas agotadas (0 permitidas)"}
+                            >
+                              <span className="material-symbols-outlined text-sm">lock</span>
+                              <span>{isEn ? "Downloads Exhausted (0 allowed)" : "Descargas Agotadas (0 permitidas)"}</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Vista Escritorio: Tabla completa */}
+                <div className="hidden md:block w-full overflow-x-auto overscroll-x-contain">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-[#F0F3FF] text-[#4C4546] font-montserrat text-[11px] font-extrabold uppercase tracking-wider border-b border-black/5">
@@ -1171,7 +1316,7 @@ export default function MisDescargasPage() {
                 {filteredSavedScores.map((score) => (
                   <div
                     key={score.id || score.slug}
-                    className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] hover:shadow-lg transition-all duration-300 flex flex-col justify-between p-6 relative overflow-hidden group"
+                    className="bg-white rounded-2xl border border-black/5 shadow-[0_10px_30px_rgba(0,0,0,0.04)] hover:shadow-lg transition-all duration-300 flex flex-col justify-between p-4 sm:p-6 relative overflow-hidden group"
                   >
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
