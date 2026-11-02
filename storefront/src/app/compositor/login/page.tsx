@@ -95,6 +95,10 @@ export default function CompositorLoginPage() {
     }
 
     try {
+      let safetyTimeout: NodeJS.Timeout | null = setTimeout(() => {
+        setIsGoogleSubmitting(false);
+      }, 30000);
+
       const handleWindowFocus = () => {
         setTimeout(() => {
           setIsGoogleSubmitting((prev) => (prev ? false : prev));
@@ -107,11 +111,13 @@ export default function CompositorLoginPage() {
         client_id: clientIdToUse,
         scope: "email profile openid",
         error_callback: (err: any) => {
+          if (safetyTimeout) clearTimeout(safetyTimeout);
           console.warn("Google OAuth popup cerrado o cancelado por el usuario:", err);
           setIsGoogleSubmitting(false);
           window.removeEventListener("focus", handleWindowFocus);
         },
         callback: async (tokenResponse: any) => {
+          if (safetyTimeout) clearTimeout(safetyTimeout);
           window.removeEventListener("focus", handleWindowFocus);
 
           if (tokenResponse.error) {

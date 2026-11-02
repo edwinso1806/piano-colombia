@@ -483,6 +483,10 @@ function CustomerLoginForm() {
     }
 
     try {
+      let safetyTimeout: NodeJS.Timeout | null = setTimeout(() => {
+        setIsGoogleSubmitting(false);
+      }, 30000);
+
       // Fallback: Si el usuario cierra el popup de Google manualmente o hace clic fuera
       const handleWindowFocus = () => {
         setTimeout(() => {
@@ -496,11 +500,13 @@ function CustomerLoginForm() {
         client_id: clientIdToUse,
         scope: "email profile openid",
         error_callback: (err: any) => {
+          if (safetyTimeout) clearTimeout(safetyTimeout);
           console.warn("Google OAuth popup cerrado o cancelado por el usuario:", err);
           setIsGoogleSubmitting(false);
           window.removeEventListener("focus", handleWindowFocus);
         },
         callback: async (tokenResponse: any) => {
+          if (safetyTimeout) clearTimeout(safetyTimeout);
           window.removeEventListener("focus", handleWindowFocus);
 
           if (tokenResponse.error) {
