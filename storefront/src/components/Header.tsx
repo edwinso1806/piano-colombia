@@ -91,14 +91,13 @@ export default function Header({ activePage }: HeaderProps) {
 
         {/* Right Cluster: Action Buttons */}
         <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-          {/* Switcher de idioma: completo en tablets/escritorio, compacto táctil en móvil */}
-          <LanguageSwitcher className="hidden sm:inline-flex" />
-          <LanguageSwitcher compact className="sm:hidden" />
+          {/* Switcher de idioma único inteligente: se adapta automáticamente */}
+          <LanguageSwitcher mode="auto" />
 
           {/* Botón Carrito de Compras */}
           <Link
             href="/carrito"
-            className={`relative p-2 sm:px-3.5 sm:py-2 rounded-xl border text-xs font-bold font-montserrat flex items-center gap-1.5 transition ${
+            className={`relative p-2 sm:px-3.5 sm:py-2 rounded-xl border text-xs font-bold font-montserrat flex items-center gap-1.5 transition shrink-0 ${
               activePage === "carrito"
                 ? "bg-[#0071BC] text-white border-[#0071BC] shadow-xs"
                 : "bg-[#F0F3FF] text-[#111C2D] border-black/5 hover:bg-slate-200/60"
@@ -443,7 +442,7 @@ export default function Header({ activePage }: HeaderProps) {
               <span className="font-semibold flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-sm text-[#0071BC]">language</span> {t("nav.language", "Idioma")}:
               </span>
-              <LanguageSwitcher />
+              <LanguageSwitcher mode="pill" />
             </div>
             <div className="text-center pt-1 text-[10px] text-[#4C4546]">
               Soporte: <strong className="text-[#0071BC]">soporte@pianocolombia.com</strong>
