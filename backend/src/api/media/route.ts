@@ -121,9 +121,8 @@ export async function GET(req: MedusaRequest, res: MedusaResponse) {
 
     let lastR2Error: any = null
 
-    // 1. Para imágenes: redirect 302 a URL presignada directa en Cloudflare R2
-    // Esto garantiza que la CDN global de Cloudflare R2 sirva la imagen a máxima velocidad y sin sobrecargar Node.js
-    if (isImage && req.query.stream !== "true") {
+    // 1. Si se solicita explícitamente redirección 302 a URL presignada directa en Cloudflare R2:
+    if (req.query.redirect === "true") {
       try {
         const presignedUrl = await getPresignedDownloadUrl(cleanKey, 86400)
         if (presignedUrl) {

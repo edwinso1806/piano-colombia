@@ -8,10 +8,32 @@ function cleanConfig(val?: string, fallback: string = ""): string {
   return cleaned || fallback
 }
 
-export const R2_BUCKET = cleanConfig(process.env.R2_BUCKET_NAME || process.env.R2_BUCKET, "piano-colombia")
-export const R2_ENDPOINT = cleanConfig(process.env.R2_ENDPOINT, "https://311aa6723ba3d2d7cc679857993ed4ca.r2.cloudflarestorage.com").replace(/\/$/, "")
-export const R2_ACCESS_KEY_ID = cleanConfig(process.env.R2_ACCESS_KEY_ID, "231cf76682855f0491ac7023790a3e70")
-export const R2_SECRET_ACCESS_KEY = cleanConfig(process.env.R2_SECRET_ACCESS_KEY, "bd8d4943df1bcc83cbef0dfe8edd737e52d5db2bf83fe642d1ca24bf01ceb2f4")
+const CANONICAL_ENDPOINT = "https://311aa6723ba3d2d7cc679857993ed4ca.r2.cloudflarestorage.com"
+const CANONICAL_ACCESS_KEY = "231cf76682855f0491ac7023790a3e70"
+const CANONICAL_SECRET_KEY = "bd8d4943df1bcc83cbef0dfe8edd737e52d5db2bf83fe642d1ca24bf01ceb2f4"
+const CANONICAL_BUCKET = "piano-colombia"
+
+let endpoint = cleanConfig(process.env.R2_ENDPOINT, CANONICAL_ENDPOINT).replace(/\/$/, "")
+let accessKeyId = cleanConfig(process.env.R2_ACCESS_KEY_ID, CANONICAL_ACCESS_KEY)
+let secretAccessKey = cleanConfig(process.env.R2_SECRET_ACCESS_KEY, CANONICAL_SECRET_KEY)
+let bucketName = cleanConfig(process.env.R2_BUCKET_NAME || process.env.R2_BUCKET, CANONICAL_BUCKET)
+
+// Auto-heal si las variables de entorno de Render tienen la cuenta desactualizada o inválida (d99ad7... o 215fa...)
+if (
+  !endpoint ||
+  endpoint.includes("d99ad7d4fdf80738d82506b12f671c66") ||
+  accessKeyId.includes("215fa76451e220263309a474ddca592b") ||
+  endpoint.includes("<account_id>")
+) {
+  endpoint = CANONICAL_ENDPOINT
+  accessKeyId = CANONICAL_ACCESS_KEY
+  secretAccessKey = CANONICAL_SECRET_KEY
+}
+
+export const R2_BUCKET = bucketName
+export const R2_ENDPOINT = endpoint
+export const R2_ACCESS_KEY_ID = accessKeyId
+export const R2_SECRET_ACCESS_KEY = secretAccessKey
 
 export const r2Client = new S3Client({
   region: "auto",
