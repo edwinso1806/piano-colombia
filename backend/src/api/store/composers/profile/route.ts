@@ -177,9 +177,9 @@ export async function PUT(req: MedusaRequest, res: MedusaResponse) {
         artistic_name = COALESCE($3, artistic_name),
         phone = COALESCE($4, phone),
         region = COALESCE($5, region),
-        bio_es = $6,
-        bio_en = $7,
-        photo_url = COALESCE($8, photo_url),
+        bio_es = COALESCE($6, bio_es),
+        bio_en = COALESCE($7, bio_en),
+        photo_url = COALESCE(NULLIF($8, ''), photo_url),
         updated_at = NOW()
         ${statusUpdateClause}
       WHERE id = $9

@@ -119,6 +119,7 @@ export default function CompositorDashboardLayout({
         userName={activeName}
         userRoleOrTag={activeEmail}
         userInitials={initials}
+        userPhotoUrl={composer?.photo_url}
         avatarBg="bg-[#FBB03B] text-[#111C2D]"
         onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
         homeLink="/compositor/dashboard"

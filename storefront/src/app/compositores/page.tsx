@@ -1,4 +1,4 @@
-import { getComposersList } from "@/lib/api-client";
+import { getComposersList, resolveMediaUrl } from "@/lib/api-client";
 import { MOCK_COMPOSERS } from "@/lib/mock-data";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -19,7 +19,7 @@ export default async function CompositoresPage() {
     country: c.country || "Colombia",
     region: c.region || c.department || "",
     city: c.city || c.region || "Colombia",
-    photoUrl: c.photo_url || c.photoUrl || null,
+    photoUrl: resolveMediaUrl(c.photo_url || c.photoUrl || null),
     shortBio: c.bio_es ? c.bio_es.substring(0, 120) + "..." : (c.shortBio || "Compositor colombiano para piano."),
     shortBioEn: c.bio_en ? c.bio_en.substring(0, 120) + "..." : (c.shortBioEn || "Colombian piano composer."),
     scoreCount: c.scoreCount ?? c.approved_scores_count ?? 0,

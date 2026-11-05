@@ -10,7 +10,10 @@ import {
   updateScoreApi,
   uploadFileApi,
   getComposerPayoutsApi,
+  updateComposerProfileApi,
+  resolveMediaUrl,
 } from "@/lib/api-client";
+import { useAlert } from "@/context/AlertContext";
 import { generateScoreBlurredPreviews } from "@/lib/pdf-preview-generator";
 import {
   getUsdCopExchangeRate,
@@ -19,8 +22,9 @@ import {
 } from "@/lib/exchange-rate-service";
 
 function CompositorDashboardContent() {
-  const { composer } = useAuth();
+  const { composer, loginComposer } = useAuth();
   const { t, language } = useLanguage();
+  const { showAlert } = useAlert();
   const isEn = language === "en";
   const searchParams = useSearchParams();
 
@@ -62,6 +66,92 @@ function CompositorDashboardContent() {
   const [feedbackMsg, setFeedbackMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const editFileInputRef = useRef<HTMLInputElement>(null);
+  const dashboardPhotoInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+
+  const handleDashboardPhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      showAlert({
+        type: "error",
+        title: isEn ? "Invalid Format" : "Formato no válido",
+        message: isEn ? "Please select a JPG, PNG, or WebP image." : "Por favor selecciona un archivo de imagen válido (JPG, PNG o WebP).",
+      });
+      return;
+    }
+
+    if (file.size > 25 * 1024 * 1024) {
+      showAlert({
+        type: "error",
+        title: isEn ? "File Too Large" : "Archivo demasiado pesado",
+        message: isEn ? "The image must not exceed 25MB." : "La imagen no debe superar los 25MB.",
+      });
+      return;
+    }
+
+    setIsUploadingPhoto(true);
+
+    try {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = async () => {
+        try {
+          const uploadRes = await uploadFileApi({
+            base64: reader.result as string,
+            fileName: file.name,
+            fileType: file.type,
+            folder: "composers/photos",
+          });
+
+          if (uploadRes && uploadRes.url) {
+            const newUrl = uploadRes.url;
+            const saveRes = await updateComposerProfileApi({
+              id: composer?.id,
+              email: composer?.email,
+              photo_url: newUrl,
+            });
+
+            if (saveRes?.composer) {
+              loginComposer({
+                ...composer,
+                ...saveRes.composer,
+                photo_url: saveRes.composer.photo_url || newUrl,
+              });
+            } else if (composer) {
+              loginComposer({
+                ...composer,
+                photo_url: newUrl,
+              });
+            }
+
+            showAlert({
+              type: "success",
+              title: isEn ? "Photo Updated" : "Foto Guardada",
+              message: isEn ? "Your profile photo has been updated successfully!" : "¡Fotografía de autor actualizada y guardada con éxito!",
+            });
+          }
+        } catch (uploadErr: any) {
+          console.error("Error al subir foto:", uploadErr);
+          showAlert({
+            type: "error",
+            title: isEn ? "Upload Failed" : "Error al subir",
+            message: uploadErr.message || "Error al guardar foto en Cloudflare R2",
+          });
+        } finally {
+          setIsUploadingPhoto(false);
+        }
+      };
+    } catch (err: any) {
+      setIsUploadingPhoto(false);
+      showAlert({
+        type: "error",
+        title: isEn ? "Error" : "Error al procesar",
+        message: err.message,
+      });
+    }
+  };
 
   // Load TRM rate on mount
   useEffect(() => {
@@ -289,19 +379,51 @@ function CompositorDashboardContent() {
 
         <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
-            <div className="relative shrink-0">
-              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border-2 border-[#FBB03B] shadow-md bg-[#111C2D] flex items-center justify-center font-montserrat font-black text-2xl text-white">
+            <div className="relative shrink-0 group">
+              <div
+                onClick={() => dashboardPhotoInputRef.current?.click()}
+                className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border-2 border-[#FBB03B] shadow-md bg-[#111C2D] flex items-center justify-center font-montserrat font-black text-2xl text-white relative cursor-pointer"
+                title={isEn ? "Click to change profile picture" : "Haz clic para cambiar tu fotografía oficial"}
+              >
                 {composer?.photo_url ? (
-                  <img src={composer.photo_url} alt={activeName} className="w-full h-full object-cover" />
+                  <img src={resolveMediaUrl(composer.photo_url)} alt={activeName} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                 ) : (
                   <span>{initials}</span>
                 )}
+
+                {/* Overlay para cambiar foto */}
+                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-bold">
+                  {isUploadingPhoto ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-base">photo_camera</span>
+                      <span className="text-[9px] font-montserrat uppercase">{isEn ? "Change" : "Cambiar"}</span>
+                    </>
+                  )}
+                </div>
               </div>
-              <div className="absolute -bottom-1 -right-1 flex items-center justify-center p-1 bg-white rounded-full shadow-sm">
-                <span className="material-symbols-outlined text-[#0071BC] text-xl">
-                  {composer?.status === "APPROVED" ? "verified" : "hourglass_top"}
+
+              {/* Botón flotante cámara */}
+              <button
+                type="button"
+                onClick={() => dashboardPhotoInputRef.current?.click()}
+                disabled={isUploadingPhoto}
+                className="absolute -bottom-1 -right-1 flex items-center justify-center p-1.5 bg-white hover:bg-[#F0F3FF] rounded-full shadow-md border border-black/10 transition cursor-pointer"
+                title={isEn ? "Change profile picture" : "Cambiar foto de perfil"}
+              >
+                <span className="material-symbols-outlined text-[#0071BC] text-sm">
+                  photo_camera
                 </span>
-              </div>
+              </button>
+
+              <input
+                type="file"
+                ref={dashboardPhotoInputRef}
+                onChange={handleDashboardPhotoChange}
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+              />
             </div>
 
             <div className="flex flex-col min-w-0">

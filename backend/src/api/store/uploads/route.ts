@@ -59,7 +59,10 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
       contentType: fileType,
     })
 
-    const backendUrl = process.env.MEDUSA_BACKEND_URL || "http://localhost:9000"
+    const rawBackendUrl = (process.env.MEDUSA_BACKEND_URL || "").trim().replace(/\/$/, "")
+    const isLocal = !rawBackendUrl || rawBackendUrl.includes("localhost") || rawBackendUrl.includes("127.0.0.1")
+    const isProd = process.env.NODE_ENV === "production" || Boolean(process.env.RENDER) || Boolean(process.env.RENDER_EXTERNAL_URL)
+    const backendUrl = (!isLocal ? rawBackendUrl : (isProd ? "https://piano-colombia.onrender.com" : "http://localhost:9000"))
     const fileUrl = `${backendUrl}/media?key=${encodeURIComponent(key)}`
 
     return res.status(200).json({

@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAlert } from "@/context/AlertContext";
-import { getComposerProfileApi, updateComposerProfileApi, uploadFileApi } from "@/lib/api-client";
+import { getComposerProfileApi, updateComposerProfileApi, uploadFileApi, resolveMediaUrl } from "@/lib/api-client";
 
 export default function CompositorPerfilPage() {
   const { composer, loginComposer } = useAuth();
@@ -91,14 +91,6 @@ export default function CompositorPerfilPage() {
     }
 
     loadProfile();
-
-    const onFocus = () => {
-      loadProfile();
-    };
-    window.addEventListener("focus", onFocus);
-    return () => {
-      window.removeEventListener("focus", onFocus);
-    };
   }, [composer?.id, composer?.email]);
 
   // Sincronizar pestaña de biografía activa con el selector de idioma global
@@ -169,11 +161,46 @@ export default function CompositorPerfilPage() {
             });
 
             if (uploadRes && uploadRes.url) {
-              setPhotoUrl(uploadRes.url);
-              showAlert({
-                type: "success",
-                message: "¡Fotografía oficial subida a Cloudflare R2 exitosamente! Recuerda guardar tu perfil para confirmar los cambios.",
-              });
+              const newUrl = uploadRes.url;
+              setPhotoUrl(newUrl);
+
+              // Guardar inmediatamente en la base de datos para no obligar a scroll manual
+              try {
+                const saveRes = await updateComposerProfileApi({
+                  id: composer?.id,
+                  email: composer?.email,
+                  photo_url: newUrl,
+                });
+
+                if (saveRes?.composer) {
+                  loginComposer({
+                    ...composer,
+                    ...saveRes.composer,
+                    photo_url: saveRes.composer.photo_url || newUrl,
+                  });
+                } else if (composer) {
+                  loginComposer({
+                    ...composer,
+                    photo_url: newUrl,
+                  });
+                }
+
+                showAlert({
+                  type: "success",
+                  title: language === "en" ? "Photo Updated" : "Foto Guardada",
+                  message: language === "en" 
+                    ? "Official profile picture updated and saved successfully!" 
+                    : "¡Fotografía oficial guardada y actualizada con éxito en tu perfil!",
+                });
+              } catch (saveErr: any) {
+                console.error("Error al persistir foto:", saveErr);
+                showAlert({
+                  type: "warning",
+                  message: language === "en"
+                    ? "Photo uploaded. Please click 'Save Draft' at the bottom to confirm changes."
+                    : "Fotografía subida a Cloudflare R2. Haz clic en 'Guardar Borrador' al final de la página para confirmar.",
+                });
+              }
             }
           } catch (uploadErr: any) {
             console.error("Error al subir a Cloudflare R2:", uploadErr);
@@ -192,11 +219,42 @@ export default function CompositorPerfilPage() {
               folder: "composers/photos",
             });
             if (uploadRes && uploadRes.url) {
-              setPhotoUrl(uploadRes.url);
-              showAlert({
-                type: "success",
-                message: "¡Fotografía subida a Cloudflare R2 exitosamente!",
-              });
+              const newUrl = uploadRes.url;
+              setPhotoUrl(newUrl);
+
+              try {
+                const saveRes = await updateComposerProfileApi({
+                  id: composer?.id,
+                  email: composer?.email,
+                  photo_url: newUrl,
+                });
+
+                if (saveRes?.composer) {
+                  loginComposer({
+                    ...composer,
+                    ...saveRes.composer,
+                    photo_url: saveRes.composer.photo_url || newUrl,
+                  });
+                } else if (composer) {
+                  loginComposer({
+                    ...composer,
+                    photo_url: newUrl,
+                  });
+                }
+
+                showAlert({
+                  type: "success",
+                  title: language === "en" ? "Photo Updated" : "Foto Guardada",
+                  message: language === "en"
+                    ? "Profile picture updated and saved successfully!"
+                    : "¡Fotografía actualizada y guardada con éxito!",
+                });
+              } catch {
+                showAlert({
+                  type: "warning",
+                  message: "Foto subida a Cloudflare R2. Haz clic en 'Guardar Borrador' para confirmar.",
+                });
+              }
             }
           } catch (errFallback: any) {
             showAlert({ type: "error", message: "Error al guardar imagen en Cloudflare R2: " + errFallback.message });
@@ -514,7 +572,7 @@ export default function CompositorPerfilPage() {
                 
                 <div className="relative w-36 h-36 rounded-full overflow-hidden shadow-md mb-4 group border-2 border-[#FBB03B] bg-[#111C2D] flex items-center justify-center text-3xl font-montserrat font-black text-white">
                   {photoUrl ? (
-                    <img src={photoUrl} alt="Foto de perfil" className="w-full h-full object-cover" />
+                    <img src={resolveMediaUrl(photoUrl)} alt="Foto de perfil" className="w-full h-full object-cover" />
                   ) : (
                     <span>
                       {(artisticName || firstName || "PC").slice(0, 2).toUpperCase()}

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useLanguage } from "@/context/LanguageContext";
 import SaveScoreButton from "@/components/SaveScoreButton";
+import { resolveMediaUrl } from "@/lib/api-client";
 
 interface CompositorDetailClientProps {
   composer: {
@@ -47,7 +48,7 @@ export default function CompositorDetailClient({ composer }: CompositorDetailCli
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center gap-8">
           <div className="w-36 h-36 md:w-44 md:h-44 rounded-full bg-[#F0F3FF] border-4 border-[#FBB03B] flex items-center justify-center text-5xl font-montserrat font-black text-[#111C2D] shadow-md shrink-0 overflow-hidden">
             {composer.photo_url ? (
-              <img src={composer.photo_url} alt={composerName} className="w-full h-full object-cover" />
+              <img src={resolveMediaUrl(composer.photo_url)} alt={composerName} className="w-full h-full object-cover" />
             ) : (
               <span>{initials}</span>
             )}

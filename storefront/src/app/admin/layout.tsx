@@ -277,6 +277,7 @@ export default function AdminLayout({
         avatarBg="bg-[#C1272D]"
         onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
         homeLink={defaultHomeLink}
+        onLogout={handleLogout}
       />
 
       {/* Main Body with Sidebar & Content */}
