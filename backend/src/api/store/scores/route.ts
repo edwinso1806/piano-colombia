@@ -2,7 +2,13 @@ import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { SCORE_MODULE } from "../../../modules/score"
 import { COMPOSER_MODULE } from "../../../modules/composer"
 import { getAdminAndModeratorEmailsFromDB } from "../../../lib/admin-recipient-service"
-import { sendEmail, generateScoreSubmittedAdminNotificationHTML, extractLanguage, EMAIL_SUBJECTS } from "../../../lib/resend-mailer"
+import {
+  sendEmail,
+  generateScoreSubmittedAdminNotificationHTML,
+  extractLanguage,
+  EMAIL_SUBJECTS,
+  STOREFRONT_URL,
+} from "../../../lib/resend-mailer"
 
 export async function GET(req: MedusaRequest, res: MedusaResponse) {
   try {
@@ -165,18 +171,21 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
     try {
       const lang = extractLanguage(req)
       const adminRecipients = await getAdminAndModeratorEmailsFromDB(req)
-      const composerDisplayName = composerInfo?.artistic_name || composerInfo?.full_name || composer_name || "Compositor PC"
+      const composerFullName = `${composerInfo?.first_name || ""} ${composerInfo?.last_name || ""}`.trim()
+      const composerDisplayName = composerInfo?.artistic_name || composerFullName || composer_name || "Compositor PC"
       
+      console.log(`📧 [NEW SCORE] Notificando a ${adminRecipients.length} administradores sobre nueva partitura "${title}"`)
+
       for (const admin of adminRecipients) {
         const html = generateScoreSubmittedAdminNotificationHTML({
           adminName: admin.name,
-          composerName: composerInfo?.full_name || composerDisplayName,
+          composerName: composerFullName || composerDisplayName,
           artisticName: composerDisplayName,
           scoreTitle: title,
           genre,
           difficulty,
           priceCop: Number(price_cop),
-          adminDashboardUrl: "http://localhost:3000/admin/partituras",
+          adminDashboardUrl: `${STOREFRONT_URL}/admin/partituras`,
           lang,
         })
 

@@ -2,19 +2,36 @@ import nodemailer from "nodemailer"
 
 export type EmailLanguage = "es" | "en"
 
+export const STOREFRONT_URL =
+  process.env.STORE_URL ||
+  process.env.NEXT_PUBLIC_STORE_URL ||
+  process.env.NEXT_PUBLIC_STOREFRONT_URL ||
+  "https://piano-colombia-nu.vercel.app"
+
 interface MailPayload {
   to: string
   subject: string
   html: string
+  bcc?: string[]
 }
 
 let smtpTransporter: any = null
 
+export function getResendApiKey(): string {
+  if (process.env.RESEND_API_KEY && !process.env.RESEND_API_KEY.startsWith("re_demo")) {
+    return process.env.RESEND_API_KEY
+  }
+  if (process.env.SMTP_PASS && process.env.SMTP_PASS.startsWith("re_")) {
+    return process.env.SMTP_PASS
+  }
+  return process.env.RESEND_API_KEY || ""
+}
+
 function getSmtpTransporter() {
-  const host = process.env.SMTP_HOST
-  const port = parseInt(process.env.SMTP_PORT || "587", 10)
-  const user = process.env.SMTP_USER
-  const pass = process.env.SMTP_PASS
+  const host = process.env.SMTP_HOST || "smtp.resend.com"
+  const port = parseInt(process.env.SMTP_PORT || "465", 10)
+  const user = process.env.SMTP_USER || "resend"
+  const pass = process.env.SMTP_PASS || getResendApiKey()
   const secure = port === 587 ? false : (process.env.SMTP_SECURE === "true" || port === 465)
 
   if (!host || !user || !pass) {
@@ -36,66 +53,72 @@ function getSmtpTransporter() {
   return smtpTransporter
 }
 
-export async function sendEmail({ to, subject, html }: MailPayload) {
-  const transporter = getSmtpTransporter()
+export async function sendEmail({ to, subject, html, bcc }: MailPayload) {
+  const from = process.env.RESEND_FROM_EMAIL || process.env.SMTP_FROM || "Piano Colombia <notificaciones@pianocolombia.com>"
+  const replyTo = process.env.SMTP_REPLY_TO || "Piano Colombia <soporte@pianocolombia.com>"
+  const apiKey = getResendApiKey()
 
-  // 1. Prioridad: Servidor SMTP con Nodemailer
-  if (transporter) {
-    try {
-      const from = process.env.SMTP_FROM || process.env.SMTP_USER || "Piano Colombia <prestamosrm2026@gmail.com>"
-      const replyTo = process.env.SMTP_REPLY_TO || "Piano Colombia <soporte@pianocolombia.com>"
-      console.log(`📤 [SMTP] Enviando correo a: ${to} | Remitente: ${from} | Asunto: "${subject}"`)
-      const info = await transporter.sendMail({
-        from,
-        replyTo,
-        to,
-        subject,
-        html,
-      })
-      console.log(`✅ [SMTP] Correo enviado y aceptado por servidor SMTP para ${to} (MessageID: ${info.messageId})`)
-      return { success: true, messageId: info.messageId, provider: "smtp" }
-    } catch (error: any) {
-      console.error(`❌ [SMTP] Error enviando correo a ${to}:`, error.message, error.stack)
-      return { success: false, error: error.message, provider: "smtp" }
-    }
-  }
+  console.log(`📤 [EMAIL DISPATCH] Intentando envío de correo a: ${to} | Asunto: "${subject}"`)
 
-  // 2. Resend API
-  const apiKey = process.env.RESEND_API_KEY
+  // 1. Prioridad: Resend HTTPS REST API (Port 443 - Conexión directa HTTPS insensible a bloqueo de puertos SMTP)
   if (apiKey && !apiKey.startsWith("re_demo")) {
     try {
+      const payload: Record<string, any> = {
+        from,
+        reply_to: replyTo,
+        to: [to],
+        subject,
+        html,
+      }
+      if (bcc && bcc.length > 0) {
+        payload.bcc = bcc
+      }
+
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          from: process.env.RESEND_FROM_EMAIL || "Piano Colombia <notificaciones@pianocolombia.com>",
-          to: [to],
-          subject,
-          html,
-        }),
+        body: JSON.stringify(payload),
       })
 
-      if (!res.ok) {
-        const err = await res.json()
-        console.warn("Fallo enviando correo vía Resend API:", err)
-        return { success: false, error: err, provider: "resend" }
+      if (res.ok) {
+        const data = await res.json()
+        console.log(`✅ [Resend API] Correo entregado exitosamente a ${to} (ID: ${data.id}) | Asunto: "${subject}"`)
+        return { success: true, id: data.id, provider: "resend" }
+      } else {
+        const err = await res.json().catch(() => ({ status: res.status }))
+        console.warn(`⚠️ [Resend API] Error devuelto por Resend API para ${to}:`, err, "Intentando fallback SMTP...")
       }
-
-      const data = await res.json()
-      console.log(`✅ [Resend API] Correo enviado a ${to} (ID: ${data.id})`)
-      return { success: true, id: data.id, provider: "resend" }
     } catch (error: any) {
-      console.warn("Error en la conexión con Resend API:", error.message)
-      return { success: false, error: error.message, provider: "resend" }
+      console.warn(`⚠️ [Resend API] Error de conexión HTTPS con Resend API para ${to}:`, error.message, "Intentando fallback SMTP...")
     }
   }
 
-  // 3. Simulación informativa local si aún no hay credenciales configuradas
-  console.info(`ℹ️ [Email Simulado] Correo a '${to}' | Asunto: '${subject}'`)
-  return { success: true, simulated: true, to, subject, provider: "simulation" }
+  // 2. Fallback Secundario: Servidor SMTP con Nodemailer
+  const transporter = getSmtpTransporter()
+  if (transporter) {
+    try {
+      console.log(`📤 [SMTP Fallback] Intentando envío por SMTP a: ${to}`)
+      const info = await transporter.sendMail({
+        from,
+        replyTo,
+        to,
+        bcc,
+        subject,
+        html,
+      })
+      console.log(`✅ [SMTP] Correo enviado y aceptado por servidor SMTP para ${to} (MessageID: ${info.messageId})`)
+      return { success: true, messageId: info.messageId, provider: "smtp" }
+    } catch (error: any) {
+      console.error(`❌ [SMTP] Fallo también envío SMTP para ${to}:`, error.message)
+    }
+  }
+
+  // 3. Fallback de desarrollo / simulación
+  console.warn(`⚠️ [Email Fallback] No fue posible despachar a '${to}' mediante Resend API ni SMTP. Verifique credenciales.`)
+  return { success: false, simulated: true, to, subject, provider: "simulation", error: "Fallo en Resend API y SMTP" }
 }
 
 /**
@@ -191,6 +214,10 @@ export const EMAIL_SUBJECTS = {
   adminScoreSubmitted: {
     es: (scoreTitle: string) => `🎼 Nueva Partitura en Cola de Revisión: "${scoreTitle}"`,
     en: (scoreTitle: string) => `🎼 New Sheet Music in Review Queue: "${scoreTitle}"`,
+  },
+  adminScoreResubmitted: {
+    es: (scoreTitle: string) => `🎼 Partitura Subsanada y Reenviada a Revisión: "${scoreTitle}"`,
+    en: (scoreTitle: string) => `🎼 Corrected Sheet Music Resubmitted for Review: "${scoreTitle}"`,
   },
   welcomeCustomer: {
     es: "¡Bienvenido a Piano Colombia! Tu cuenta ha sido creada",
@@ -514,7 +541,7 @@ export function generatePasswordChangedEmailHTML({
 export function generateComposerApprovedHTML({
   composerName,
   artisticName,
-  loginUrl = "http://localhost:3000/compositor/login",
+  loginUrl = `${STOREFRONT_URL}/compositor/login`,
   lang = "es",
 }: {
   composerName: string
@@ -607,7 +634,7 @@ export function generateComposerRejectedHTML({
   composerName,
   artisticName,
   observations,
-  dashboardUrl = "http://localhost:3000/compositor/login",
+  dashboardUrl = `${STOREFRONT_URL}/compositor/dashboard/perfil`,
   lang = "es",
 }: {
   composerName: string
@@ -795,7 +822,7 @@ export function generateScoreApprovedHTML({
   composerName,
   artisticName,
   scoreTitle,
-  storeUrl = "http://localhost:3000/tienda",
+  storeUrl = `${STOREFRONT_URL}/tienda`,
   lang = "es",
 }: {
   composerName: string
@@ -881,7 +908,7 @@ export function generateScoreRejectedHTML({
   artisticName,
   scoreTitle,
   observations,
-  dashboardUrl = "http://localhost:3000/compositor/dashboard",
+  dashboardUrl = `${STOREFRONT_URL}/compositor/dashboard/partituras`,
   lang = "es",
 }: {
   composerName: string
@@ -990,7 +1017,7 @@ export function generateComposerPayoutNotificationHTML({
   accountNumberMasked,
   wompiTransferId,
   salesCount,
-  dashboardUrl = "http://localhost:3000/compositor/dashboard/pagos",
+  dashboardUrl = `${STOREFRONT_URL}/compositor/dashboard/pagos`,
   lang = "es",
 }: {
   composerName: string
@@ -1179,8 +1206,8 @@ export function generateNewAdminUserInvitationHTML({
 }) {
   const isEn = lang === "en"
   const activationUrl = activationToken
-    ? `http://localhost:3000/admin/activar-cuenta?email=${encodeURIComponent(userEmail)}&token=${encodeURIComponent(activationToken)}`
-    : `http://localhost:3000/admin/activar-cuenta?email=${encodeURIComponent(userEmail)}`
+    ? `${STOREFRONT_URL}/admin/activar-cuenta?email=${encodeURIComponent(userEmail)}&token=${encodeURIComponent(activationToken)}`
+    : `${STOREFRONT_URL}/admin/activar-cuenta?email=${encodeURIComponent(userEmail)}`
 
   const texts = isEn
     ? {
@@ -1428,7 +1455,7 @@ export function generateNewComposerAdminNotificationHTML({
         </div>
 
         <div style="text-align: center; margin: 28px 0 12px;">
-          <a href="http://localhost:3000/admin/compositores" target="_blank" style="display: inline-block; padding: 14px 28px; background: #FBB03B; color: #111C2D; font-weight: 900; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; text-decoration: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(251,176,59,0.3);">
+          <a href="${STOREFRONT_URL}/admin/compositores" target="_blank" style="display: inline-block; padding: 14px 28px; background: #FBB03B; color: #111C2D; font-weight: 900; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; text-decoration: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(251,176,59,0.3);">
             ${texts.ctaButton}
           </a>
         </div>
@@ -1592,7 +1619,7 @@ export function generateComposerProfileUpdatedAdminNotificationHTML({
         </div>
 
         <div style="text-align: center; margin: 28px 0 12px;">
-          <a href="http://localhost:3000/admin/compositores" target="_blank" style="display: inline-block; padding: 14px 28px; background: #FBB03B; color: #111C2D; font-weight: 900; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; text-decoration: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(251,176,59,0.3);">
+          <a href="${STOREFRONT_URL}/admin/compositores" target="_blank" style="display: inline-block; padding: 14px 28px; background: #FBB03B; color: #111C2D; font-weight: 900; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; text-decoration: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(251,176,59,0.3);">
             ${texts.ctaButton}
           </a>
         </div>
@@ -1618,7 +1645,7 @@ export function generateScoreSubmittedAdminNotificationHTML({
   genre,
   difficulty,
   priceCop,
-  adminDashboardUrl = "http://localhost:3000/admin/partituras",
+  adminDashboardUrl = `${STOREFRONT_URL}/admin/partituras`,
   lang = "es",
 }: {
   adminName?: string
@@ -1725,7 +1752,7 @@ export function generateScoreSubmittedAdminNotificationHTML({
 // -------------------------------------------------------------------------------------------
 export function generateWelcomeEmailHTML({
   userName,
-  catalogUrl = "http://localhost:3000/tienda",
+  catalogUrl = `${STOREFRONT_URL}/tienda`,
   lang = "es",
 }: {
   userName: string

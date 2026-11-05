@@ -6,6 +6,7 @@ import {
   generateComposerRejectedHTML,
   generateComposerBlockedHTML,
   EMAIL_SUBJECTS,
+  STOREFRONT_URL,
 } from "../../../../../lib/resend-mailer"
 
 function getPgClient() {
@@ -50,7 +51,23 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
 
     // Notificar al compositor por correo electrónico
     try {
-      const composerData = await composerModuleService.retrieveComposer(id)
+      let composerData = await composerModuleService.retrieveComposer(id).catch(() => null)
+      if (!composerData) {
+        const cClient = getPgClient()
+        try {
+          await cClient.connect()
+          const cRes = await cClient.query(
+            "SELECT id, first_name, last_name, artistic_name, email, preferred_language FROM composer WHERE id = $1 LIMIT 1;",
+            [id]
+          )
+          if (cRes.rows.length > 0) {
+            composerData = cRes.rows[0]
+          }
+        } finally {
+          await cClient.end().catch(() => {})
+        }
+      }
+
       if (composerData && composerData.email) {
         const composerFullName = `${composerData.first_name || ""} ${composerData.last_name || ""}`.trim()
         const artisticName = composerData.artistic_name || composerFullName
@@ -59,6 +76,7 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
         if (is_permanent_block) {
           await sendEmail({
             to: composerData.email,
+            bcc: [process.env.SUPPORT_EMAIL || "soporte@pianocolombia.com", "edwin.soto@globalbit.co"],
             subject: EMAIL_SUBJECTS.composerBlocked[composerLang],
             html: generateComposerBlockedHTML({
               composerName: composerFullName,
@@ -71,12 +89,13 @@ export async function POST(req: MedusaRequest, res: MedusaResponse) {
         } else {
           await sendEmail({
             to: composerData.email,
+            bcc: [process.env.SUPPORT_EMAIL || "soporte@pianocolombia.com", "edwin.soto@globalbit.co"],
             subject: EMAIL_SUBJECTS.composerRejected[composerLang],
             html: generateComposerRejectedHTML({
               composerName: composerFullName,
               artisticName,
               observations: rejectionReason,
-              dashboardUrl: "http://localhost:3000/compositor/dashboard/perfil",
+              dashboardUrl: `${STOREFRONT_URL}/compositor/dashboard/perfil`,
               lang: composerLang,
             }),
           })

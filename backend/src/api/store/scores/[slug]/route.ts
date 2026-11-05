@@ -2,7 +2,13 @@ import { MedusaRequest, MedusaResponse } from "@medusajs/framework/http"
 import { SCORE_MODULE } from "../../../../modules/score"
 import { COMPOSER_MODULE } from "../../../../modules/composer"
 import { getAdminAndModeratorEmailsFromDB } from "../../../../lib/admin-recipient-service"
-import { sendEmail, generateScoreSubmittedAdminNotificationHTML, extractLanguage, EMAIL_SUBJECTS } from "../../../../lib/resend-mailer"
+import {
+  sendEmail,
+  generateScoreSubmittedAdminNotificationHTML,
+  extractLanguage,
+  EMAIL_SUBJECTS,
+  STOREFRONT_URL,
+} from "../../../../lib/resend-mailer"
 
 export async function GET(req: MedusaRequest, res: MedusaResponse) {
   try {
@@ -112,7 +118,7 @@ export async function PUT(req: MedusaRequest, res: MedusaResponse) {
 
     const updatedScore = await scoreModuleService.updateScores(updatePayload)
 
-    // Notificar a moderadores y administradores de la modificación
+    // Notificar a moderadores y administradores de la modificación / subsanación
     try {
       let composerInfo: any = null
       if (existing.composer_id) {
@@ -120,24 +126,33 @@ export async function PUT(req: MedusaRequest, res: MedusaResponse) {
       }
       const lang = extractLanguage(req)
       const adminRecipients = await getAdminAndModeratorEmailsFromDB(req)
-      const composerDisplayName = composerInfo?.artistic_name || composerInfo?.full_name || "Compositor PC"
+      const composerFullName = `${composerInfo?.first_name || ""} ${composerInfo?.last_name || ""}`.trim()
+      const composerDisplayName = composerInfo?.artistic_name || composerFullName || "Compositor PC"
+      const scoreTitleFinal = updatePayload.title || existing.title
+      const isResubmission = existing.status === "REJECTED"
+
+      const subject = isResubmission
+        ? EMAIL_SUBJECTS.adminScoreResubmitted[lang](scoreTitleFinal)
+        : `${EMAIL_SUBJECTS.adminScoreSubmitted[lang](scoreTitleFinal)} (${lang === "en" ? "Modified" : "Modificada"})`
+
+      console.log(`📧 [SCORE EDITED] Notificando a ${adminRecipients.length} administradores sobre ${isResubmission ? "subsanación" : "edición"} de "${scoreTitleFinal}"`)
 
       for (const admin of adminRecipients) {
         const html = generateScoreSubmittedAdminNotificationHTML({
           adminName: admin.name,
-          composerName: composerInfo?.full_name || composerDisplayName,
+          composerName: composerFullName || composerDisplayName,
           artisticName: composerDisplayName,
-          scoreTitle: updatePayload.title || existing.title,
+          scoreTitle: scoreTitleFinal,
           genre: updatePayload.genre || existing.genre,
           difficulty: updatePayload.difficulty || existing.difficulty,
           priceCop: updatePayload.price_cop || existing.price_cop,
-          adminDashboardUrl: "http://localhost:3000/admin/partituras",
+          adminDashboardUrl: `${STOREFRONT_URL}/admin/partituras`,
           lang,
         })
 
         await sendEmail({
           to: admin.email,
-          subject: `${EMAIL_SUBJECTS.adminScoreSubmitted[lang](updatePayload.title || existing.title)} (${lang === "en" ? "Modified" : "Modificada"})`,
+          subject,
           html,
         }).catch((err) => console.warn(`Error enviando notificación de partitura editada a ${admin.email}:`, err.message))
       }

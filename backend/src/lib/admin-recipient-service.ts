@@ -50,7 +50,7 @@ export async function getAdminAndModeratorEmailsFromDB(req?: MedusaRequest): Pro
   }
 
   // 2. Correos adicionales configurados en variables de entorno (ej: ADMIN_NOTIFICATION_EMAILS)
-  const envEmails = process.env.ADMIN_NOTIFICATION_EMAILS
+  const envEmails = process.env.ADMIN_NOTIFICATION_EMAILS || "edwin.soto@globalbit.co"
   if (envEmails) {
     const list = envEmails.split(",").map(e => e.trim().toLowerCase()).filter(Boolean)
     for (const email of list) {
@@ -62,6 +62,16 @@ export async function getAdminAndModeratorEmailsFromDB(req?: MedusaRequest): Pro
         })
       }
     }
+  }
+
+  // 3. Destinatarios de soporte garantizados por regla de negocio
+  const defaultAdmin = (process.env.SUPPORT_EMAIL || "soporte@pianocolombia.com").toLowerCase().trim()
+  if (!recipientsMap.has(defaultAdmin)) {
+    recipientsMap.set(defaultAdmin, {
+      email: defaultAdmin,
+      name: "Administrador Piano Colombia",
+      role: "super_admin",
+    })
   }
 
   return Array.from(recipientsMap.values())

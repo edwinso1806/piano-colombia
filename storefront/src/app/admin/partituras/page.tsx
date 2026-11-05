@@ -86,10 +86,12 @@ export default function AdminPartiturasPage() {
     setActionLoading(true);
     setFeedback(null);
     try {
-      await approveScoreAdmin(score.id);
+      const res = await approveScoreAdmin(score.id);
       setFeedback({
         type: "success",
-        message: `✅ Partitura "${score.title}" aprobada y publicada en la tienda. Correo de notificación enviado al compositor.`,
+        message: res?.recipient
+          ? `✅ Partitura "${score.title}" aprobada y publicada en la tienda. Correo de confirmación enviado a ${res.recipient}.`
+          : `✅ Partitura "${score.title}" aprobada y publicada en la tienda. Correo de notificación enviado al compositor.`,
       });
       await fetchScores();
     } catch (err: any) {
@@ -116,10 +118,12 @@ export default function AdminPartiturasPage() {
     setActionLoading(true);
     setFeedback(null);
     try {
-      await rejectScoreAdmin(selectedScoreForReject.id, rejectionReason.trim());
+      const res = await rejectScoreAdmin(selectedScoreForReject.id, rejectionReason.trim());
       setFeedback({
         type: "success",
-        message: `⚠️ Partitura "${selectedScoreForReject.title}" rechazada. Se enviaron las observaciones por correo al autor para su subsanación.`,
+        message: res?.recipient
+          ? `⚠️ Partitura "${selectedScoreForReject.title}" rechazada. Se enviaron las observaciones por correo electrónico a ${res.recipient} para su subsanación.`
+          : `⚠️ Partitura "${selectedScoreForReject.title}" rechazada. Se enviaron las observaciones por correo al autor para su subsanación.`,
       });
       setSelectedScoreForReject(null);
       setRejectionReason("");
